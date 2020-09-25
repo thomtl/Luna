@@ -1,11 +1,17 @@
-#include <Luna/stivale2.hpp>
+#include <Luna/common.hpp>
+
+#include <Luna/misc/stivale2.hpp>
 
 #include <Luna/drivers/e9.hpp>
 #include <Luna/misc/format.hpp>
 
 
 void kernel_main(const stivale2_struct* info) {
-    format::format_to(E9::Writer{}, "Booting Luna, Copyright Thomas Woertman 2020\nBootloader: {:s} {:s}\n", info->bootloader_brand, info->bootloader_version);
+    print("Booting Luna, Copyright Thomas Woertman 2020\nBootloader: {:s} {:s}\n", info->bootloader_brand, info->bootloader_version);
+
+    stivale2::Parser boot_info{info};
+
+
 
     while(true)
         ;

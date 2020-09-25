@@ -270,3 +270,10 @@ namespace format
 		internal::format_int(format_output_it{out}, fmt, std::forward<Args>(args)...);
 	}
 } // namespace format
+
+#include <Luna/drivers/e9.hpp>
+
+template<typename... Args>
+void print(const char* fmt, Args&&... args){
+	return format::format_to(e9::Writer{}, fmt, std::forward<Args>(args)...);
+}
