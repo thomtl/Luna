@@ -26,7 +26,7 @@ namespace format
 	};
 
 	struct format_args {
-		char align, sign;
+		char align = ' ', sign = ' ';
 		bool alternate = false;
 		char type = ' ';
 	};
@@ -35,7 +35,7 @@ namespace format
 		
 		template<typename OutputIt, typename T>
 		void format_integer(format_output_it<OutputIt>& out, [[maybe_unused]] format_args args, T v){
-			if(args.type = ' ')
+			if(args.type == ' ')
 				args.type = 'd';
 			
 			if(!args.alternate)

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Luna/common.hpp>
+
 #include <std/type_traits.hpp>
 
 namespace std
@@ -81,4 +83,42 @@ namespace std
 
     template<typename T1, typename T2>
     struct tuple_size<pair<T1, T2>> : std::integral_constant<size_t, 2> {};
+
+    template<typename T>
+    class lazy_initializer {
+        public:
+        template<typename... Args>
+        T& init(Args&&... args){
+            if(_initialized)
+                return *get();
+
+            new (&_storage) T{std::forward<Args>(args)...};
+            _initialized = true;
+
+            return *get();
+        }
+
+        explicit operator bool() {
+            return _initialized;
+        }
+
+        T* operator ->(){
+            return get();
+        }
+
+        T& operator *(){
+            return *get();
+        }
+
+        T* get(){
+            if(_initialized)
+                return reinterpret_cast<T*>(&_storage);
+
+            PANIC("Tried to get() uninitialized variable");
+        }
+
+        public:
+        bool _initialized;
+        std::aligned_storage_t<sizeof(T), alignof(T)> _storage;
+    };
 } // namespace std

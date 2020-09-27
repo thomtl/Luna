@@ -2,9 +2,16 @@ project('Luna', 'cpp', version: '0.1.0')
 
 main_sources = files(
     'source/main.cpp',
+
+    'source/cpu/cpu.cpp',
     'source/cpu/pio.cpp',
+    'source/cpu/regs.cpp',
+
     'source/drivers/e9.cpp',
+
+    'source/misc/misc.cpp',
     'source/misc/stivale2.cpp',
+
     'source/std/string.cpp')
 
 cpp_includes = include_directories('include')

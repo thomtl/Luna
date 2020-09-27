@@ -23,4 +23,14 @@ namespace std
 
     template<typename T> struct is_lvalue_reference : std::false_type {};
     template<typename T> struct is_lvalue_reference<T&> : std::true_type {};
+
+    template<size_t L, size_t A>
+    struct aligned_storage {
+        struct type {
+            alignas(A) unsigned char data[L];
+        };
+    };
+
+    template<size_t L, size_t A = alignof(int)>
+    using aligned_storage_t = typename aligned_storage<L, A>::type;
 } // namespace std

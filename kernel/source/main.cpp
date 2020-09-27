@@ -1,16 +1,21 @@
 #include <Luna/common.hpp>
 
 #include <Luna/misc/stivale2.hpp>
-
-#include <Luna/drivers/e9.hpp>
 #include <Luna/misc/format.hpp>
 
+#include <std/minimal_vector.hpp>
+
+#include <Luna/cpu/cpu.hpp>
+
+std::minimal_vector<CpuData, 1> per_cpu_data{};
 
 void kernel_main(const stivale2_struct* info) {
     print("Booting Luna, Copyright Thomas Woertman 2020\nBootloader: {:s} {:s}\n", info->bootloader_brand, info->bootloader_version);
 
     stivale2::Parser boot_info{info};
 
+    auto& cpu_data = per_cpu_data.push_back({});
+    cpu_data.set();
 
 
     while(true)
