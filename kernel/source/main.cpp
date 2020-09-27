@@ -6,6 +6,7 @@
 #include <std/minimal_vector.hpp>
 
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/cpu/idt.hpp>
 
 std::minimal_vector<CpuData, 1> per_cpu_data{};
 
@@ -16,6 +17,11 @@ void kernel_main(const stivale2_struct* info) {
 
     cpu_data.set();
     cpu_data.gdt_table.init();
+
+    idt::init_table();
+    idt::load();
+
+    asm("int3");
 
     stivale2::Parser boot_info{info};
 

@@ -4,6 +4,7 @@ main_sources = files(
     'source/main.cpp',
 
     'source/cpu/cpu.cpp',
+    'source/cpu/idt.cpp',
     'source/cpu/pio.cpp',
     'source/cpu/regs.cpp',
 
@@ -15,6 +16,13 @@ main_sources = files(
     'source/std/string.cpp')
 
 cpp_includes = include_directories('include')
+
+nasm_sources = files(
+    'source/cpu/irqs.asm')
+
+nasm = find_program('nasm')
+nasm_gen = generator(nasm, output: '@BASENAME@.o', arguments: ['-f', 'elf64', '-g', '-F', 'dwarf', '@INPUT@', '-o', '@OUTPUT@'])
+nasm_objects = nasm_gen.process(nasm_sources)
 
 extra_warning_flags = ['-Wreorder', '-Wdeprecated-copy-dtor', '-Wno-unknown-pragmas', '-Wduplicated-cond', '-Wduplicated-branches',
                        '-Wlogical-op', '-Wno-non-virtual-dtor', '-Werror', '-Wno-address']
@@ -44,4 +52,4 @@ add_global_arguments(cpp_flags, language: 'cpp')
 add_global_link_arguments(ld_flags, language: 'cpp')
 
 
-executable('luna.bin', main_sources, include_directories: cpp_includes, link_depends: ld_script)
+executable('luna.bin', main_sources, nasm_objects, include_directories: cpp_includes, link_depends: ld_script)
