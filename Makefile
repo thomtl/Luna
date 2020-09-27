@@ -12,8 +12,6 @@ configure:
 	parted -s luna.hdd mklabel msdos
 	parted -s luna.hdd mkpart primary 2048s 100%
 
-	
-
 	./build/limine/limine-install ./build/limine/limine.bin luna.hdd
 	
 
@@ -25,5 +23,5 @@ kernel:
 	echfs-utils -m -p0 luna.hdd import build/kernel/luna.bin boot/luna.bin
 
 run: kernel
-	qemu-system-x86_64 -smp 4 -hda luna.hdd -debugcon file:/dev/stdout -monitor stdio -no-reboot -no-shutdown
+	qemu-system-x86_64 -enable-kvm -smp 4 -hda luna.hdd -debugcon file:/dev/stdout -monitor stdio -no-reboot -no-shutdown
 
