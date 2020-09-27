@@ -11,12 +11,13 @@ std::minimal_vector<CpuData, 1> per_cpu_data{};
 
 void kernel_main(const stivale2_struct* info) {
     print("Booting Luna, Copyright Thomas Woertman 2020\nBootloader: {:s} {:s}\n", info->bootloader_brand, info->bootloader_version);
+    
+    auto& cpu_data = per_cpu_data.push_back({});
+
+    cpu_data.set();
+    cpu_data.gdt_table.init();
 
     stivale2::Parser boot_info{info};
-
-    auto& cpu_data = per_cpu_data.push_back({});
-    cpu_data.set();
-
 
     while(true)
         ;

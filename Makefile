@@ -25,5 +25,5 @@ kernel:
 	echfs-utils -m -p0 luna.hdd import build/kernel/luna.bin boot/luna.bin
 
 run: kernel
-	qemu-system-x86_64 -smp 4 -hda luna.hdd -debugcon file:/dev/stdout -monitor stdio
+	qemu-system-x86_64 -smp 4 -hda luna.hdd -debugcon file:/dev/stdout -monitor stdio -no-reboot -no-shutdown
 
