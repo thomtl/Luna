@@ -15,8 +15,8 @@ void pmm::init(stivale2::Parser& parser) {
         if(entry.type == STIVALE2_MMAP_USABLE) {
             memory_size += entry.length;
 
-            auto base = align_up(entry.base, 0x1000);
-            auto size = align_down(entry.length - (base - entry.base), 0x1000);
+            auto base = align_up(entry.base, block_size);
+            auto size = align_down(entry.length - (base - entry.base), block_size);
             auto top = base + size;
 
             entry.base = base;
@@ -29,7 +29,7 @@ void pmm::init(stivale2::Parser& parser) {
 
     print("pmm: Detected {} MiBs of usable RAM\n", memory_size / 1024 / 1024);
 
-    bitmap_size = (highest_page / 0x1000) / 8;
+    bitmap_size = (highest_page / block_size) / 8;
     print("pmm: Highest usable address: {:#x} => Bitmap size: {:#x} bytes\n", highest_page, bitmap_size);
 
     bool bitmap_constructed = false;
@@ -40,7 +40,7 @@ void pmm::init(stivale2::Parser& parser) {
         if(entry.base > bitmap_size) {
             bitmap = std::span<uint8_t>{(uint8_t*)entry.base + phys_mem_map, bitmap_size};
 
-            auto aligned_bitmap_size = align_up(bitmap_size, 0x1000);
+            auto aligned_bitmap_size = align_up(bitmap_size, block_size);
             entry.length -= aligned_bitmap_size;
             entry.base += aligned_bitmap_size;
 
@@ -57,7 +57,7 @@ void pmm::init(stivale2::Parser& parser) {
         if(entry.type != STIVALE2_MMAP_USABLE)
             continue;
 
-        for(size_t i = 0; i < entry.length; i += 0x1000) {
+        for(size_t i = 0; i < entry.length; i += block_size) {
             free_block(entry.base + i);
         }
     }
@@ -70,7 +70,7 @@ uintptr_t pmm::alloc_block() {
                 if(!(bitmap[i] & (1 << j))){
                     // Found free entry
                     bitmap[i] |= (1 << j); // Mark entry as reserved
-                    return ((i * 8) + j) * 0x1000;
+                    return ((i * 8) + j) * block_size;
                 }
             }
         }
@@ -80,7 +80,7 @@ uintptr_t pmm::alloc_block() {
 }
 
 void pmm::free_block(uintptr_t block) {
-    auto frame = (block / 0x1000);
+    auto frame = (block / block_size);
 
     bitmap[frame / 8] &= ~(1 << (frame % 8));
 }
