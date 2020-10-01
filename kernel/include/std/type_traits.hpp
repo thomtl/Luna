@@ -9,6 +9,14 @@ namespace std
     template<typename T>
     using remove_reference_t = typename remove_reference<T>::type;
 
+    template<typename T> struct remove_cv { typedef T type; };
+    template<typename T> struct remove_cv<const T> { typedef T type; };
+    template<typename T> struct remove_cv<volatile T> { typedef T type; };
+    template<typename T> struct remove_cv<const volatile T> { typedef T type; };
+
+    template<typename T>
+    using remove_cv_t = typename remove_cv<T>::type;
+
     template<typename T, T v>
     struct integral_constant {
         static constexpr T value = v;
@@ -23,6 +31,19 @@ namespace std
 
     template<typename T> struct is_lvalue_reference : std::false_type {};
     template<typename T> struct is_lvalue_reference<T&> : std::true_type {};
+
+    template<typename T> struct is_const : std::false_type {};
+    template<typename T> struct is_const<const T> : std::true_type {};
+
+    template<typename T> struct is_reference : std::false_type {};
+    template<typename T> struct is_reference<T&> : std::true_type {};
+    template<typename T> struct is_reference<T&&> : std::true_type {};
+
+    template<typename T>
+    struct is_function : std::integral_constant<bool, !std::is_const<const T>::value && !std::is_reference<T>::value> {};
+
+    template<typename T>
+    inline constexpr bool is_function_v = is_function<T>::value;
 
     template<size_t L, size_t A>
     struct aligned_storage {
