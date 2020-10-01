@@ -10,6 +10,8 @@ main_sources = files(
 
     'source/drivers/e9.cpp',
 
+    'source/mm/pmm.cpp',
+
     'source/misc/misc.cpp',
     'source/misc/stivale2.cpp',
 

@@ -4,17 +4,22 @@
 #include <Luna/3rdparty/stivale2.h>
 
 #include <std/utility.hpp>
+#include <std/span.hpp>
 
 namespace stivale2
 {
+    const char* mmap_type_to_string(uint32_t type);
+
     struct Parser {
         Parser(const stivale2_struct* info);
 
         void* acpi_rsdp() const;
-        std::pair<const stivale2_mmap_entry*, size_t> mmap() const;
+        const std::span<stivale2_mmap_entry>& mmap() const;
+        std::span<stivale2_mmap_entry>& mmap();
 
         private:
-        const stivale2_struct* info;
+        const stivale2_struct* _info;
+        std::span<stivale2_mmap_entry> _mmap;
 
         const stivale2_tag* get_tag(uint64_t id) const;
     };

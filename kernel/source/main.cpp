@@ -8,6 +8,8 @@
 #include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/idt.hpp>
 
+#include <Luna/mm/pmm.hpp>
+
 std::minimal_vector<CpuData, 1> per_cpu_data{};
 
 void kernel_main(const stivale2_struct* info) {
@@ -21,9 +23,9 @@ void kernel_main(const stivale2_struct* info) {
     idt::init_table();
     idt::load();
 
-    asm("int3");
-
     stivale2::Parser boot_info{info};
+
+    pmm::init(boot_info);
 
     while(true)
         ;
