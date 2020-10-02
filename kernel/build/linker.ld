@@ -1,6 +1,7 @@
 SECTIONS {
     . = 0xffffffff80100000;
 
+    _kernel_start = .;
     .stivalehdr : ALIGN(4K) {
         *(.stivalehdr)
     }
@@ -24,4 +25,5 @@ SECTIONS {
         *(.bss*)
         *(COMMON)
     }
+    _kernel_end = .;
 }

@@ -44,7 +44,7 @@ const stivale2_tag* stivale2::Parser::get_tag(uint64_t id) const {
         if(tag->identifier == id)
             return tag;
 
-        tag = (stivale2_tag*)tag->next;
+        tag = (stivale2_tag*)(tag->next + phys_mem_map);
     }
 
     return nullptr;

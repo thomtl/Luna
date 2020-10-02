@@ -5,12 +5,14 @@ main_sources = files(
 
     'source/cpu/cpu.cpp',
     'source/cpu/idt.cpp',
+    'source/cpu/paging.cpp',
     'source/cpu/pio.cpp',
     'source/cpu/regs.cpp',
 
     'source/drivers/e9.cpp',
 
     'source/mm/pmm.cpp',
+    'source/mm/vmm.cpp',
 
     'source/misc/misc.cpp',
     'source/misc/stivale2.cpp',
