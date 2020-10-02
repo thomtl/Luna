@@ -1,10 +1,15 @@
 #include <Luna/mm/pmm.hpp>
 #include <Luna/misc/format.hpp>
 
+#include <Luna/cpu/cpu.hpp>
+#include <std/mutex.hpp>
+
 static std::span<uint8_t> bitmap;
 static size_t bitmap_size;
+static TicketLock pmm_lock{};
 
 void pmm::init(stivale2::Parser& parser) {
+    std::lock_guard guard{pmm_lock};
     size_t memory_size = 0, highest_page = 0;
 
     print("pmm: Stivale Memory Map:\n");
@@ -64,6 +69,8 @@ void pmm::init(stivale2::Parser& parser) {
 }
 
 uintptr_t pmm::alloc_block() {
+    std::lock_guard guard{pmm_lock};
+
     for(size_t i = 0; i < bitmap.size(); i++) {
         if(bitmap[i] != ~0){
             for(size_t j = 0; j < 8; j++) {
@@ -80,6 +87,8 @@ uintptr_t pmm::alloc_block() {
 }
 
 void pmm::free_block(uintptr_t block) {
+    std::lock_guard guard{pmm_lock};
+
     auto frame = (block / block_size);
 
     bitmap[frame / 8] &= ~(1 << (frame % 8));

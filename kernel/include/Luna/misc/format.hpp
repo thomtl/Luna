@@ -3,8 +3,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include <Luna/cpu/cpu.hpp>
+
 #include <std/string.hpp>
 #include <std/utility.hpp>
+#include <std/mutex.hpp>
 
 namespace format
 {
@@ -275,5 +278,8 @@ namespace format
 
 template<typename... Args>
 void print(const char* fmt, Args&&... args){
+	static TicketLock printer_lock{};
+	std::lock_guard guard{printer_lock};
+
 	return format::format_to(e9::Writer{}, fmt, std::forward<Args>(args)...);
 }
