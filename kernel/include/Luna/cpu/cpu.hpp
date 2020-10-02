@@ -28,6 +28,6 @@ struct TicketLock {
     }
 
     private:
-    uint32_t serving;
-    uint32_t next_ticket;
+    uint64_t serving;
+    uint64_t next_ticket;
 };

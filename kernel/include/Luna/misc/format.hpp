@@ -5,6 +5,8 @@
 
 #include <Luna/cpu/cpu.hpp>
 
+#include <Luna/drivers/e9.hpp>
+
 #include <std/string.hpp>
 #include <std/utility.hpp>
 #include <std/mutex.hpp>
@@ -273,8 +275,6 @@ namespace format
 		internal::format_int(format_output_it{out}, fmt, std::forward<Args>(args)...);
 	}
 } // namespace format
-
-#include <Luna/drivers/e9.hpp>
 
 template<typename... Args>
 void print(const char* fmt, Args&&... args){
