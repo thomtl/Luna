@@ -19,7 +19,7 @@ struct TicketLock {
 
     void lock() {
         auto ticket = __atomic_fetch_add(&next_ticket, 1, __ATOMIC_SEQ_CST);
-        while(!__atomic_compare_exchange(&serving, &ticket, &ticket, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
+        while(__atomic_load_n(&serving, __ATOMIC_SEQ_CST) != ticket)
             asm("pause");
     }
 
