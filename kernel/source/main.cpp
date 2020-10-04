@@ -10,6 +10,7 @@
 
 #include <Luna/mm/pmm.hpp>
 #include <Luna/mm/vmm.hpp>
+#include <Luna/mm/hmm.hpp>
 
 std::minimal_vector<CpuData, 1> per_cpu_data{};
 
@@ -39,6 +40,11 @@ void kernel_main(const stivale2_struct* info) {
                 kernel_vmm.map(i, i + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
     kernel_vmm.set();
     print("vmm: Set kernel page tables\n");
+
+    hmm::init();
+    print("hmm: Initialized SLAB allocator\n");
+
+
 
     while(true)
         ;

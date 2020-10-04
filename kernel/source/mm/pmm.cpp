@@ -9,7 +9,6 @@ static size_t bitmap_size;
 static TicketLock pmm_lock{};
 
 void pmm::init(stivale2::Parser& parser) {
-    std::lock_guard guard{pmm_lock};
     size_t memory_size = 0, highest_page = 0;
 
     print("pmm: Stivale Memory Map:\n");
@@ -38,16 +37,16 @@ void pmm::init(stivale2::Parser& parser) {
     print("pmm: Highest usable address: {:#x} => Bitmap size: {:#x} bytes\n", highest_page, bitmap_size);
 
     bool bitmap_constructed = false;
+    uintptr_t bitmap_base = 0, bitmap_aligned_size = 0;
     for(auto& entry : parser.mmap()) {
         if(entry.type != STIVALE2_MMAP_USABLE)
             continue;
 
-        if(entry.base > bitmap_size) {
+        if(entry.length >= bitmap_size) {
             bitmap = std::span<uint8_t>{(uint8_t*)entry.base + phys_mem_map, bitmap_size};
 
-            auto aligned_bitmap_size = align_up(bitmap_size, block_size);
-            entry.length -= aligned_bitmap_size;
-            entry.base += aligned_bitmap_size;
+            bitmap_base = entry.base;
+            bitmap_aligned_size = align_up(bitmap_size, pmm::block_size);
 
             for(auto& e : bitmap)
                 e = ~0;
@@ -66,6 +65,9 @@ void pmm::init(stivale2::Parser& parser) {
             free_block(entry.base + i);
         }
     }
+
+    for(uintptr_t addr = bitmap_base; addr < (bitmap_base + bitmap_aligned_size); addr += pmm::block_size)
+        reserve_block(addr);
 }
 
 uintptr_t pmm::alloc_block() {
@@ -92,4 +94,12 @@ void pmm::free_block(uintptr_t block) {
     auto frame = (block / block_size);
 
     bitmap[frame / 8] &= ~(1 << (frame % 8));
+}
+
+void pmm::reserve_block(uintptr_t block) {
+    std::lock_guard guard{pmm_lock};
+
+    auto frame = (block / block_size);
+
+    bitmap[frame / 8] |= (1 << (frame % 8));
 }

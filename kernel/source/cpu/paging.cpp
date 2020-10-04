@@ -4,6 +4,8 @@
 
 static std::pair<uintptr_t, uintptr_t> create_table(){
     auto pa = pmm::alloc_block();
+    if(!pa)
+        PANIC("Couldn't allocate block for paging structures");
     auto va = pa + phys_mem_map;
 
     memset((void*)va, 0, pmm::block_size);

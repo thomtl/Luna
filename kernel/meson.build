@@ -13,6 +13,7 @@ main_sources = files(
 
     'source/mm/pmm.cpp',
     'source/mm/vmm.cpp',
+    'source/mm/hmm.cpp',
 
     'source/misc/misc.cpp',
     'source/misc/stivale2.cpp',
