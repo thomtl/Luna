@@ -1,49 +1,33 @@
 #pragma once
 
+#include <std/bits/traits.hpp>
+#include <std/bits/declval.hpp>
+
 namespace std
 {
-    template<typename T> struct remove_reference { typedef T type; };
-    template<typename T> struct remove_reference<T&> { typedef T type; };
-    template<typename T> struct remove_reference<T&&> { typedef T type; };
+    namespace detail
+    {
+        template<typename>
+        using true_type_for = std::true_type;
 
-    template<typename T>
-    using remove_reference_t = typename remove_reference<T>::type;
+        template<typename T>
+        auto test_returnable(int) -> true_type_for<T()>;
 
-    template<typename T> struct remove_cv { typedef T type; };
-    template<typename T> struct remove_cv<const T> { typedef T type; };
-    template<typename T> struct remove_cv<volatile T> { typedef T type; };
-    template<typename T> struct remove_cv<const volatile T> { typedef T type; };
+        template<typename>
+        auto test_returnable(...) -> std::false_type;
 
-    template<typename T>
-    using remove_cv_t = typename remove_cv<T>::type;
+        template<typename From, typename To>
+        auto test_nonvoid_convertible(int) -> true_type_for<decltype(std::declval<void(&)(To)>()(std::declval<From>()))>;
 
-    template<typename T, T v>
-    struct integral_constant {
-        static constexpr T value = v;
-        using value_type = T;
-        using type = integral_constant; // using injected-class-name
-        constexpr operator value_type() const noexcept { return value; }
-        constexpr value_type operator()() const noexcept { return value; } //since c++14
-    };
+        template<typename, typename>
+        auto test_nonvoid_convertible(...) -> std::false_type;
+    } // namespace detail
+    
+    template<typename From, typename To>
+    struct is_convertible : std::integral_constant<bool, (decltype(detail::test_returnable<To>(0))::value && decltype(detail::test_nonvoid_convertible<From, To>(0))::value) || (std::is_void<From>::value && std::is_void<To>::value)> {};
 
-    using true_type = integral_constant<bool, true>;
-    using false_type = integral_constant<bool, false>;
-
-    template<typename T> struct is_lvalue_reference : std::false_type {};
-    template<typename T> struct is_lvalue_reference<T&> : std::true_type {};
-
-    template<typename T> struct is_const : std::false_type {};
-    template<typename T> struct is_const<const T> : std::true_type {};
-
-    template<typename T> struct is_reference : std::false_type {};
-    template<typename T> struct is_reference<T&> : std::true_type {};
-    template<typename T> struct is_reference<T&&> : std::true_type {};
-
-    template<typename T>
-    struct is_function : std::integral_constant<bool, !std::is_const<const T>::value && !std::is_reference<T>::value> {};
-
-    template<typename T>
-    inline constexpr bool is_function_v = is_function<T>::value;
+    template<typename From, typename To>
+    inline constexpr bool is_convertible_v = is_convertible<From, To>::value;
 
     template<size_t L, size_t A>
     struct aligned_storage {

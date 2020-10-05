@@ -12,6 +12,8 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
+#include <Luna/drivers/acpi.hpp>
+
 std::minimal_vector<CpuData, 1> per_cpu_data{};
 
 void kernel_main(const stivale2_struct* info) {
@@ -43,9 +45,10 @@ void kernel_main(const stivale2_struct* info) {
 
     hmm::init();
     print("hmm: Initialized SLAB allocator\n");
+    
+    acpi::init(boot_info);
 
-
-
+    print("luna: Done with kernel_main\n");
     while(true)
         ;
 }

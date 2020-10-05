@@ -3,6 +3,7 @@
 #include <Luna/common.hpp>
 
 #include <std/type_traits.hpp>
+#include <std/bits/declval.hpp>
 
 namespace std
 {

@@ -13,13 +13,14 @@ namespace stivale2
     struct Parser {
         Parser(const stivale2_struct* info);
 
-        void* acpi_rsdp() const;
+        uintptr_t acpi_rsdp() const;
         const std::span<stivale2_mmap_entry>& mmap() const;
         std::span<stivale2_mmap_entry>& mmap();
 
         private:
         const stivale2_struct* _info;
         std::span<stivale2_mmap_entry> _mmap;
+        uintptr_t _rsdp;
 
         const stivale2_tag* get_tag(uint64_t id) const;
     };

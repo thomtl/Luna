@@ -173,7 +173,7 @@ namespace format
 	struct formatter<char> {
 		template<typename OutputIt>
 		static void format(format_output_it<OutputIt>& it, [[maybe_unused]] format_args args, char item){
-			if(args.type = ' ')
+			if(args.type == ' ')
 				args.type = 'c';
 
 			if(args.type == 'c')

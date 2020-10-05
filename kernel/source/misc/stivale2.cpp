@@ -20,14 +20,17 @@ stivale2::Parser::Parser(const stivale2_struct* info): _info{info} {
 
         _mmap = std::span<stivale2_mmap_entry>{&(tag->memmap[0]), tag->entries};
     }
+
+    {
+        auto* tag = (stivale2_struct_tag_rsdp*)get_tag(STIVALE2_STRUCT_TAG_RSDP_ID);
+        ASSERT(tag);
+
+        _rsdp = tag->rsdp;
+    }
 }
 
-void* stivale2::Parser::acpi_rsdp() const {
-    const auto* tag = (const stivale2_struct_tag_rsdp*)get_tag(STIVALE2_STRUCT_TAG_RSDP_ID);
-    if(tag)
-        return (void*)tag->rsdp;
-
-    return nullptr;
+uintptr_t stivale2::Parser::acpi_rsdp() const {
+    return _rsdp;
 }
 
 const std::span<stivale2_mmap_entry>& stivale2::Parser::mmap() const {

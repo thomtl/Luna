@@ -10,6 +10,7 @@ main_sources = files(
     'source/cpu/regs.cpp',
 
     'source/drivers/e9.cpp',
+    'source/drivers/acpi.cpp',
 
     'source/mm/pmm.cpp',
     'source/mm/vmm.cpp',
@@ -33,7 +34,7 @@ extra_warning_flags = ['-Wreorder', '-Wdeprecated-copy-dtor', '-Wno-unknown-prag
                        '-Wlogical-op', '-Wno-non-virtual-dtor', '-Werror', '-Wno-address']
 
 flags_c_common = ['-m64', '-march=x86-64', '-fno-PIC', '-Wall', '-Wextra', '-ffreestanding', '-mno-red-zone', 
-                  '-nostdlib', '-mcmodel=kernel', '-fno-omit-frame-pointer', '-g', '-O2',
+                  '-nostdlib', '-mcmodel=kernel', '-fno-omit-frame-pointer', '-g', '-O2', '-fconcepts-diagnostics-depth=2',
                   '-mno-mmx', '-mno-sse', '-mno-sse2', '-mno-sse3', '-mno-sse4', '-mno-sse4.1', '-mno-sse4.2', '-mno-sse4a']
 
 cpp_flags = []
