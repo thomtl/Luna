@@ -43,12 +43,7 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
 
         // There's no existing LargeAlloc for us, so make a new one, there is only free space in the last pool entry
         auto* last = _start;
-        while(1) {
-            if(last->next)
-                last = last->next;
-            else
-                break;
-        }
+        for(; last->next; last = last->next);
 
         auto create_new_large_alloc = [this, n_pages, length, alignment, effective_size](Pool* pool) -> uintptr_t {
             for(size_t i = 0; i < pool->n_items; i++) {
@@ -89,12 +84,7 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
 
         // There's no existing SLAB for us, so make a new one, there is only free space in the last pool entry
         auto* last = _start;
-        while(1) {
-            if(last->next)
-                last = last->next;
-            else
-                break;
-        }
+        for(; last->next; last = last->next);
     
         auto create_new_slab_and_alloc = [this, length, alignment](Pool* pool) -> uintptr_t {
             for(size_t i = 0; i < pool->n_items; i++) {
@@ -148,6 +138,51 @@ void hmm::Allocator::free(uintptr_t addr) {
     PANIC("Was not able to find SLAB or LargeAlloc corresponding to address");
 }
 
+uintptr_t hmm::Allocator::realloc(uintptr_t old, size_t size, size_t alignment){
+    if(old == 0 && size == 0)
+        return 0;
+    
+    if(size == 0) {
+        free(old);
+        return 0;
+    }
+
+    if(old == 0)
+        return alloc(size, alignment);
+
+    size_t old_size = 0;
+    bool found_old_size = false;
+    for(auto* curr = _start; curr; curr = curr->next) {
+        for(size_t i = 0; i < curr->n_items; i++) {
+            if(curr->items[i].type == Pool::PoolItem::PoolItemType::Slab) {
+                if(curr->items[i].slab.contains(old)) {
+                    old_size = curr->items[i].slab.entry_size();
+                    found_old_size = true;
+                    goto end;
+                }
+            } else if(curr->items[i].type == Pool::PoolItem::PoolItemType::LargeAlloc) {
+                if(curr->items[i].large_allocation.address == old) {
+                    ASSERT(!curr->items[i].large_allocation.free);
+                    
+                    old_size = curr->items[i].large_allocation.size;
+                    found_old_size = true;
+                    goto end;
+                }
+            }
+        }
+    }
+    end:
+    ASSERT(found_old_size);
+
+    auto ret = alloc(size, alignment);
+    if(ret) {
+        memcpy((void*)ret, (void*)old, old_size);
+        free(old);
+    }
+
+    return ret;
+}
+
 hmm::Allocator::Pool* hmm::Allocator::alloc_pool(){
     auto* pool = (Pool*)allocate_page();
     for(size_t i = 0; i < pool->n_items; i++)
@@ -170,6 +205,12 @@ uintptr_t hmm::alloc(size_t length, size_t alignment) {
     std::lock_guard guard{global_allocator_lock};
 
     return global_allocator->alloc(length, alignment);
+}
+
+uintptr_t hmm::realloc(uintptr_t old, size_t size, size_t alignment) {
+    std::lock_guard guard{global_allocator_lock};
+
+    return global_allocator->realloc(old, size, alignment);
 }
 
 void hmm::free(uintptr_t addr) {

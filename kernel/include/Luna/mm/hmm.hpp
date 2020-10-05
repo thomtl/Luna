@@ -61,6 +61,10 @@ namespace hmm {
             return (length == _length) && (align == _align); // TODO: Some kind of more lenient is_suitable
         }
 
+        size_t entry_size() const {
+            return _length;
+        }
+
         private:
         Entry* get_entry(size_t i){
             return (Entry*)(_slab + (i * _entry_size));
@@ -103,12 +107,14 @@ namespace hmm {
 
         Allocator();
         uintptr_t alloc(size_t length, size_t alignment);
+        uintptr_t realloc(uintptr_t old, size_t size, size_t alignment);
         void free(uintptr_t addr);
 
     };
 
     void init();
     uintptr_t alloc(size_t length, size_t alignment);
+    uintptr_t realloc(uintptr_t old, size_t size, size_t alignment);
     void free(uintptr_t addr);
 
     template<typename T, typename... Args>

@@ -22,3 +22,13 @@ extern "C" void* memset(void* s, int c, size_t n) {
 
     return s;
 }
+
+extern "C" void* memcpy(void* dst, const void* src, size_t n) {
+    uint8_t* _dst = (uint8_t*)dst;
+    const uint8_t* _src = (const uint8_t*)src;
+
+    for(size_t i = 0; i < n; i++)
+        _dst[i] = _src[i];
+    
+    return dst;
+}
