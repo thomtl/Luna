@@ -127,6 +127,9 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
 }
 
 void hmm::Allocator::free(uintptr_t addr) {
+    if(!addr)
+        return;
+    
     for(auto* curr = _start; curr; curr = curr->next) {
         for(size_t i = 0; i < curr->n_items; i++) {
             if(curr->items[i].type == Pool::PoolItem::PoolItemType::Slab) {

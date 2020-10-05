@@ -1,6 +1,7 @@
 project('Luna', 'cpp', version: '0.1.0')
 
 main_sources = files(
+    'source/cpp_support.cpp',
     'source/main.cpp',
 
     'source/cpu/cpu.cpp',

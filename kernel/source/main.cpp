@@ -15,7 +15,16 @@
 
 #include <Luna/drivers/acpi.hpp>
 
+#include <std/mutex.hpp>
+
 std::minimal_vector<CpuData, 1> per_cpu_data{};
+
+static CpuData& allocate_cpu_data() {
+    static TicketLock lock{};
+    std::lock_guard guard{lock};
+
+    return per_cpu_data.push_back({});
+}
 
 void kernel_main_ap(stivale2_smp_info* info);
 
@@ -27,7 +36,7 @@ void kernel_main(const stivale2_struct* info) {
     stivale2::Parser boot_info{(stivale2_struct*)((uintptr_t)info + phys_mem_map)};
     pmm::init(boot_info);
 
-    auto& cpu_data = per_cpu_data.push_back({});
+    auto& cpu_data = allocate_cpu_data();
     cpu_data.set();
     cpu_data.gdt_table.init();
 
@@ -65,6 +74,12 @@ void kernel_main_ap(stivale2_smp_info* info){
 
     vmm::init_ap();
     vmm::kernel_vmm::get_instance().set();
+
+    auto& cpu_data = allocate_cpu_data();
+    cpu_data.set();
+    cpu_data.gdt_table.init();
+
+    idt::load();
 
     while(1)
         ;

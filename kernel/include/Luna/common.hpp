@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 #include <Luna/misc/misc.hpp>
-#include <std/cpp_support.hpp>
+#include <Luna/cpp_support.hpp>
 
 #define PANIC(msg) panic(__FILE__, __PRETTY_FUNCTION__, __LINE__, msg)
 

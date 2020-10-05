@@ -9,7 +9,7 @@ namespace std
 {
     template<typename T>
     constexpr typename std::remove_reference<T>::type&& move(T&& t) noexcept {
-        return static_cast<typename std::remove_reference_t<T>::type&&>(t);
+        return static_cast<typename std::remove_reference_t<T>&&>(t);
     }
 
     template<typename T>

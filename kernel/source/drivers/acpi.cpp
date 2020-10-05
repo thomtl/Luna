@@ -5,7 +5,7 @@
 
 #include <Luna/misc/format.hpp>
 
-#include <std/span.hpp>
+#include <std/vector.hpp>
 
 static bool do_checksum(const void* addr, size_t size) {
     uint8_t sum = 0;
@@ -36,7 +36,7 @@ static acpi::SDTHeader* map_table(uintptr_t pa) {
     return header;
 }
 
-static std::span<acpi::SDTHeader*> acpi_tables;
+static std::vector<acpi::SDTHeader*> acpi_tables;
 
 void acpi::init(const stivale2::Parser& parser) {
     auto& vmm = vmm::kernel_vmm::get_instance();
@@ -59,7 +59,6 @@ void acpi::init(const stivale2::Parser& parser) {
     ASSERT(do_checksum(tables));
 
     size_t n_entries = (tables->length - sizeof(SDTHeader)) / ((rsdp->revision > 0) ? 8 : 4);
-    acpi_tables = std::span<acpi::SDTHeader*>{(SDTHeader**)hmm::alloc(sizeof(SDTHeader*) * n_entries, alignof(SDTHeader*)), n_entries}; // TODO use new
 
     print("acpi: {:s} detected, with {:d} tables\n", ((rsdp->revision > 0) ? "ACPI 2 or higher" : "ACPI 1"), n_entries);
     for(size_t i = 0; i < n_entries; i++) {
@@ -67,7 +66,7 @@ void acpi::init(const stivale2::Parser& parser) {
         auto* h = map_table(pa);
         ASSERT(do_checksum(h));
 
-        acpi_tables[i] = h;
+        acpi_tables.push_back(h);
 
         print("    - {}{}{}{}: Revision: {:d}, OEMID \"{}{}{}{}{}{}\", at {:#x}\n", h->sig[0], h->sig[1], h->sig[2], h->sig[3], (uint64_t)h->revision, h->oemid[0], h->oemid[1], h->oemid[2], h->oemid[3], h->oemid[4], h->oemid[5], pa);
     }
