@@ -17,11 +17,13 @@ namespace stivale2
         const std::span<stivale2_mmap_entry>& mmap() const;
         std::span<stivale2_mmap_entry>& mmap();
 
+        stivale2_tag* get_tag(uint64_t id);
+        const stivale2_tag* get_tag(uint64_t id) const;
+
         private:
         const stivale2_struct* _info;
         std::span<stivale2_mmap_entry> _mmap;
         uintptr_t _rsdp;
 
-        const stivale2_tag* get_tag(uint64_t id) const;
     };
 } // namespace stivale2

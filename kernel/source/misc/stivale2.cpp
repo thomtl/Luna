@@ -42,7 +42,19 @@ std::span<stivale2_mmap_entry>& stivale2::Parser::mmap() {
 }
 
 const stivale2_tag* stivale2::Parser::get_tag(uint64_t id) const {
-    const auto* tag = (const stivale2_tag*)_info->tags;
+    const auto* tag = (const stivale2_tag*)(_info->tags + phys_mem_map);
+    while(tag) {
+        if(tag->identifier == id)
+            return tag;
+
+        tag = (stivale2_tag*)(tag->next + phys_mem_map);
+    }
+
+    return nullptr;
+}
+
+stivale2_tag* stivale2::Parser::get_tag(uint64_t id) {
+    auto* tag = (stivale2_tag*)(_info->tags + phys_mem_map);
     while(tag) {
         if(tag->identifier == id)
             return tag;

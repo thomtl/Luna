@@ -8,6 +8,7 @@ main_sources = files(
     'source/cpu/paging.cpp',
     'source/cpu/pio.cpp',
     'source/cpu/regs.cpp',
+    'source/cpu/smp.cpp',
 
     'source/drivers/e9.cpp',
     'source/drivers/acpi.cpp',

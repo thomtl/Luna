@@ -69,6 +69,12 @@ extern "C" void isr_handler(idt::regs* regs) {
         auto& exception = exceptions[int_number];
         print("Exception #{} ({}) has occurred\n", exception.mnemonic, exception.message);
 
+
+        uint64_t cr2;
+        asm("mov %%cr2, %0" : "=r"(cr2));
+        const auto r = *regs;
+        print("RIP: {:#x}, CR2: {:#x}, Err: {:#b}\n", r.rip, cr2, r.error_code);
+
         while(1)
             ;
     } else {
