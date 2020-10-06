@@ -118,7 +118,7 @@ namespace acpi {
     };
 
     void init(const stivale2::Parser& parser);
-    void* get_table(const char* sig, size_t index);
+    SDTHeader* get_table(const char* sig, size_t index);
     
     template<Table T>
     T* get_table(size_t index = 0) {

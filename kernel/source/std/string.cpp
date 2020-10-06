@@ -23,6 +23,20 @@ extern "C" void* memset(void* s, int c, size_t n) {
     return s;
 }
 
+extern "C" int memcmp(const void* s1, const void* s2, size_t n) {
+    const uint8_t* a = (const uint8_t*)s1;
+    const uint8_t* b = (const uint8_t*)s2;
+
+    for(size_t i = 0; i < n; i++) {
+        if(a[i] < b[i])
+            return -1;
+        else if(b[i] < a[i])
+            return 1;
+    }
+
+    return 0;
+}
+
 extern "C" void* memcpy(void* dst, const void* src, size_t n) {
     uint8_t* _dst = (uint8_t*)dst;
     const uint8_t* _src = (const uint8_t*)src;

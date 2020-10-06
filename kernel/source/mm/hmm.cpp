@@ -82,6 +82,7 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
                     if(curr->items[i].slab.is_suitable(length, alignment))
                         return curr->items[i].slab.alloc();
 
+
         // There's no existing SLAB for us, so make a new one, there is only free space in the last pool entry
         auto* last = _start;
         for(; last->next; last = last->next);

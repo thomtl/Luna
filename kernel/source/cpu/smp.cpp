@@ -18,7 +18,7 @@ void smp::start_cpus(stivale2::Parser& boot_info, void (*f)(stivale2_smp_info*))
     }
 
     auto cpu_count = smp->cpu_count;
-    print("smp: Detected {} CPUs, with {:s}\n", cpu_count, x2apic ? "x2APIC" : " xAPIC");
+    print("smp: Detected {} CPUs, with {:s}\n", cpu_count, x2apic ? "x2APIC" : "xAPIC");
 
     for(size_t i = 0; i < smp->cpu_count; i++) {
         auto& cpu = smp->smp_info[i];

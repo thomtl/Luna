@@ -25,5 +25,5 @@ kernel:
 
 run: kernel
 	# -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
-	qemu-system-x86_64 -enable-kvm -smp 4 -hda luna.hdd -debugcon file:/dev/stdout -monitor stdio -no-reboot -no-shutdown
+	qemu-system-x86_64 -enable-kvm -machine q35 -smp 4 -hda luna.hdd -debugcon file:/dev/stdout -monitor stdio -no-reboot -no-shutdown
 

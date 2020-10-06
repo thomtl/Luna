@@ -11,8 +11,9 @@ main_sources = files(
     'source/cpu/regs.cpp',
     'source/cpu/smp.cpp',
 
-    'source/drivers/e9.cpp',
     'source/drivers/acpi.cpp',
+    'source/drivers/e9.cpp',
+    'source/drivers/laihost.cpp',
 
     'source/mm/pmm.cpp',
     'source/mm/vmm.cpp',
@@ -36,14 +37,14 @@ extra_warning_flags = ['-Wreorder', '-Wdeprecated-copy-dtor', '-Wno-unknown-prag
                        '-Wlogical-op', '-Wno-non-virtual-dtor', '-Werror', '-Wno-address']
 
 flags_c_common = ['-m64', '-march=x86-64', '-fno-PIC', '-Wall', '-Wextra', '-ffreestanding', '-mno-red-zone', 
-                  '-nostdlib', '-mcmodel=kernel', '-fno-omit-frame-pointer', '-g', '-O2', '-fconcepts-diagnostics-depth=2',
+                  '-nostdlib', '-mcmodel=kernel', '-fno-omit-frame-pointer', '-g', '-O2',
                   '-mno-mmx', '-mno-sse', '-mno-sse2', '-mno-sse3', '-mno-sse4', '-mno-sse4.1', '-mno-sse4.2', '-mno-sse4a']
 
 cpp_flags = []
 cpp_flags += flags_c_common
 cpp_flags += extra_warning_flags
 
-cpp_flags += ['-std=c++20', '-fno-exceptions', '-fno-rtti', '-fuse-cxa-atexit']
+cpp_flags += ['-std=c++20', '-fno-exceptions', '-fno-rtti', '-fuse-cxa-atexit', '-fconcepts-diagnostics-depth=2']
 
 c_flags = []
 c_flags += flags_c_common
@@ -60,4 +61,9 @@ add_global_arguments(cpp_flags, language: 'cpp')
 add_global_link_arguments(ld_flags, language: 'cpp')
 
 
-executable('luna.bin', main_sources, nasm_objects, include_directories: cpp_includes, link_depends: ld_script)
+lai = subproject('lai')
+lai_dep = lai.get_variable('dependency')
+
+deps = [lai_dep]
+
+executable('luna.bin', main_sources, nasm_objects, dependencies: deps, include_directories: cpp_includes, link_depends: ld_script)

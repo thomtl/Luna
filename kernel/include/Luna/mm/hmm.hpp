@@ -25,6 +25,7 @@ namespace hmm {
             auto value_size = align_up(length, align);
             _entry_size = value_size > sizeof(Entry) ? value_size : sizeof(Entry); // Make sure there is at least space for the freelist
             _n_entries = slab_size / _entry_size;
+            _free_entries = _n_entries;
 
             for(size_t i = 0; i < _n_entries - 1; i++)
                 get_entry(i)->next_free = get_entry(i + 1); // _slab[i].next_free = &_slab[i + 1];
@@ -39,6 +40,8 @@ namespace hmm {
             auto* free = _free;
             _free = free->next_free;
 
+            _free_entries--;
+
             return (uintptr_t)free->mem;
         }
 
@@ -49,6 +52,8 @@ namespace hmm {
 
             entry->next_free = _free;
             _free = entry;
+
+            _free_entries++;
         }
 
         bool contains(uintptr_t addr) {
@@ -58,7 +63,7 @@ namespace hmm {
         }
 
         bool is_suitable(uintptr_t length, uintptr_t align) {
-            return (length == _length) && (align == _align); // TODO: Some kind of more lenient is_suitable
+            return (length == _length) && (align == _align) && (_free_entries > 0); // TODO: Some kind of more lenient is_suitable
         }
 
         size_t entry_size() const {
@@ -73,7 +78,7 @@ namespace hmm {
         uint8_t* _slab;
         Entry* _free;
 
-        size_t _entry_size, _n_entries;
+        size_t _entry_size, _n_entries, _free_entries;
         uintptr_t _length, _align;
     };
 

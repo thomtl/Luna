@@ -1,0 +1,3 @@
+[submodule "kernel/subprojects/lai"]
+	path = kernel/subprojects/lai
+	url = https://github.com/qword-os/lai
