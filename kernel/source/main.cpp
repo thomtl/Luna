@@ -62,7 +62,10 @@ void kernel_main(const stivale2_struct* info) {
     print("hmm: Initialized SLAB allocator\n");
     
     acpi::init(boot_info);
+
     pci::init();
+
+    acpi::init_sci();
 
     smp::start_cpus(boot_info, kernel_main_ap);
 

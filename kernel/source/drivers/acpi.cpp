@@ -8,6 +8,8 @@
 #include <std/vector.hpp>
 
 #include <lai/core.h>
+#include <lai/drivers/ec.h>
+#include <lai/helpers/sci.h>
 
 static bool do_checksum(const void* addr, size_t size) {
     uint8_t sum = 0;
@@ -40,6 +42,43 @@ static acpi::SDTHeader* map_table(uintptr_t pa) {
 
 static uint8_t revision;
 static std::vector<acpi::SDTHeader*> acpi_tables;
+
+acpi::SDTHeader* acpi::get_table(const char* sig, size_t index) {
+    // Only 2 tables are not found in the {R, X}SDT, the DSDT and FACS, which are both found through the FADT, so special case these
+    if(strncmp(sig, "DSDT", 4) == 0) {
+        auto* fadt = acpi::get_table<acpi::Fadt>();
+        uintptr_t dsdt_pa = 0;
+        if(fadt->x_dsdt && revision > 0)
+            dsdt_pa = fadt->x_dsdt;
+        else
+            dsdt_pa = fadt->dsdt;
+        
+        return map_table(dsdt_pa);
+    } else if(strncmp(sig, "FACS", 4) == 0) {
+        auto* fadt = acpi::get_table<acpi::Fadt>();
+        uintptr_t facs_pa = 0;
+        if(fadt->x_firmware_ctrl && revision > 0)
+            facs_pa = fadt->x_firmware_ctrl;
+        else
+            facs_pa = fadt->firmware_ctrl;
+        
+        return map_table(facs_pa);
+    } else {
+        size_t n = 0;
+        for(auto* h : acpi_tables) {
+            if(strncmp(h->sig, sig, 4) == 0) {
+                if(n != index)
+                    n++;
+                else
+                    return h;
+            }
+        }
+    }
+    
+    return nullptr;
+}
+
+static void init_ec();
 
 void acpi::init(const stivale2::Parser& parser) {
     auto& vmm = vmm::kernel_vmm::get_instance();
@@ -78,39 +117,50 @@ void acpi::init(const stivale2::Parser& parser) {
 
     lai_set_acpi_revision(rsdp->revision);
     lai_create_namespace();
+    init_ec();
 }
 
-acpi::SDTHeader* acpi::get_table(const char* sig, size_t index) {
-    // Only 2 tables are not found in the {R, X}SDT, the DSDT and FACS, which are both found through the FADT, so special case these
-    if(strncmp(sig, "DSDT", 4) == 0) {
-        auto* fadt = acpi::get_table<acpi::Fadt>();
-        uintptr_t dsdt_pa = 0;
-        if(fadt->x_dsdt && revision > 0)
-            dsdt_pa = fadt->x_dsdt;
-        else
-            dsdt_pa = fadt->dsdt;
-        
-        return map_table(dsdt_pa);
-    } else if(strncmp(sig, "FACS", 4) == 0) {
-        auto* fadt = acpi::get_table<acpi::Fadt>();
-        uintptr_t facs_pa = 0;
-        if(fadt->x_firmware_ctrl && revision > 0)
-            facs_pa = fadt->x_firmware_ctrl;
-        else
-            facs_pa = fadt->firmware_ctrl;
-        
-        return map_table(facs_pa);
-    } else {
-        size_t n = 0;
-        for(auto* h : acpi_tables) {
-            if(strncmp(h->sig, sig, 4) == 0) {
-                if(n != index)
-                    n++;
-                else
-                    return h;
+void acpi::init_sci() {
+    // TODO: Hook SCI
+
+    lai_enable_acpi(1);
+}
+
+static void init_ec() {
+    LAI_CLEANUP_STATE lai_state_t state;
+    lai_init_state(&state);
+
+    LAI_CLEANUP_VAR lai_variable_t ec_pnp_id = {};
+    lai_eisaid(&ec_pnp_id, ACPI_EC_PNP_ID);
+
+    struct lai_ns_iterator it = {};
+    lai_nsnode_t* node;
+    while((node = lai_ns_iterate(&it))) {
+        if(lai_check_device_pnp_id(node, &ec_pnp_id, &state))
+            continue;
+
+        auto* ec = new lai_ec_driver{};
+        lai_init_ec(node, ec);
+
+        struct lai_ns_child_iterator child_it = LAI_NS_CHILD_ITERATOR_INITIALIZER(node);
+        lai_nsnode_t* child_node;
+        while((child_node = lai_ns_child_iterate(&child_it)))
+            if(lai_ns_get_node_type(child_node) == LAI_NODETYPE_OPREGION)
+                if(lai_ns_get_opregion_address_space(child_node) == ACPI_OPREGION_EC)
+                    lai_ns_override_opregion(child_node, &lai_ec_opregion_override, ec);
+
+        auto* reg = lai_resolve_path(node, "_REG");
+        if(reg) {
+            LAI_CLEANUP_VAR lai_variable_t r0 = {};
+            LAI_CLEANUP_VAR lai_variable_t r1 = {};
+
+            r0.type = LAI_INTEGER; r0.integer = 3;
+            r1.type = LAI_INTEGER; r1.integer = 1;
+
+            if(auto e = lai_eval_largs(nullptr, node, &state, &r0, &r1, nullptr); e != LAI_ERROR_NONE) {
+                print("acpi: Failed to evaluate EC _REG(EmbeddedControl, 1)\n");
+                continue;
             }
         }
     }
-    
-    return nullptr;
 }

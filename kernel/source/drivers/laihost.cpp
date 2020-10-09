@@ -66,5 +66,8 @@ extern "C" {
     uint8_t laihost_pci_readb(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint8_t>(seg, bus, slot, func, offset); }
     uint16_t laihost_pci_readw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint16_t>(seg, bus, slot, func, offset); }
     uint32_t laihost_pci_readd(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint32_t>(seg, bus, slot, func, offset); }
-    // TODO: PCI functions, Sleeping
+    
+    void laihost_sleep(uint64_t) {
+        // TODO
+    }
 }
