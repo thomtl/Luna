@@ -6,6 +6,7 @@
 #include <Luna/cpu/cpu.hpp>
 
 #include <Luna/drivers/e9.hpp>
+#include <Luna/drivers/uart.hpp>
 
 #include <std/string.hpp>
 #include <std/utility.hpp>
@@ -281,5 +282,5 @@ void print(const char* fmt, Args&&... args){
 	static TicketLock printer_lock{};
 	std::lock_guard guard{printer_lock};
 
-	return format::format_to(e9::Writer{}, fmt, std::forward<Args>(args)...);
+	return format::format_to(uart::Writer{uart::com1_base}, fmt, std::forward<Args>(args)...);
 }
