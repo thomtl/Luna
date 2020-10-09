@@ -116,6 +116,21 @@ namespace acpi {
         GenericAddressStructure sleep_status_reg;
         uint64_t hypervisor_id;
     };
+    static_assert(Table<Fadt>);
+
+    struct [[gnu::packed]] Mcfg {
+        static constexpr const char* signature = "MCFG";
+        SDTHeader header;
+        uint64_t reserved;
+        struct [[gnu::packed]] Allocation {
+            uint64_t base;
+            uint16_t segment;
+            uint8_t start_bus;
+            uint8_t end_bus;
+            uint32_t reserved;
+        } allocations[];
+    };
+    static_assert(Table<Mcfg>);
 
     void init(const stivale2::Parser& parser);
     SDTHeader* get_table(const char* sig, size_t index);

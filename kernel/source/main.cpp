@@ -14,6 +14,7 @@
 #include <Luna/mm/hmm.hpp>
 
 #include <Luna/drivers/acpi.hpp>
+#include <Luna/drivers/pci.hpp>
 
 #include <std/mutex.hpp>
 
@@ -61,6 +62,7 @@ void kernel_main(const stivale2_struct* info) {
     print("hmm: Initialized SLAB allocator\n");
     
     acpi::init(boot_info);
+    pci::init();
 
     smp::start_cpus(boot_info, kernel_main_ap);
 

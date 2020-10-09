@@ -3,6 +3,7 @@
 #include <Luna/cpu/pio.hpp>
 
 #include <Luna/drivers/acpi.hpp>
+#include <Luna/drivers/pci.hpp>
 
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
@@ -58,6 +59,12 @@ extern "C" {
     uint16_t laihost_inw(uint16_t port) { return pio::inw(port); }
     uint32_t laihost_ind(uint16_t port) { return pio::ind(port); }
 
+    void laihost_pci_writeb(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset, uint8_t value) { pci::write<uint8_t>(seg, bus, slot, func, offset, value); }
+    void laihost_pci_writew(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset, uint16_t value) { pci::write<uint16_t>(seg, bus, slot, func, offset, value); }
+    void laihost_pci_writed(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset, uint32_t value) { pci::write<uint32_t>(seg, bus, slot, func, offset, value); }
 
+    uint8_t laihost_pci_readb(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint8_t>(seg, bus, slot, func, offset); }
+    uint16_t laihost_pci_readw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint16_t>(seg, bus, slot, func, offset); }
+    uint32_t laihost_pci_readd(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint32_t>(seg, bus, slot, func, offset); }
     // TODO: PCI functions, Sleeping
 }

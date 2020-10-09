@@ -54,6 +54,14 @@ namespace std
             return *ret;
         }
 
+        template<typename... Args>
+        reference emplace_back(Args&&... args) {
+            ensure_capacity(_size + 1);
+            T* ret = new (&_elements[_size]) T(std::forward<Args>(args)...);
+            _size++;
+            return *ret;
+        }
+
         const_reference operator[](size_t index) const { return _elements[index]; }
         reference operator[](size_t index) { return _elements[index]; }
 
