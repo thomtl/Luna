@@ -6,6 +6,7 @@ main_sources = files(
 
     'source/cpu/cpu.cpp',
     'source/cpu/idt.cpp',
+    'source/cpu/lapic.cpp',
     'source/cpu/paging.cpp',
     'source/cpu/pio.cpp',
     'source/cpu/regs.cpp',
