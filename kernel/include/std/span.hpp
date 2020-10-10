@@ -30,6 +30,9 @@ namespace std
         explicit(extent != std::dynamic_extent)
         constexpr span(It first, size_type count): _data{std::to_address(first)}, _size{count} {}
 
+        template<size_t N>
+        constexpr span(element_type (&arr)[N]): _data{arr}, _size{N} {}
+
         iterator begin() {
             return _data;
         }

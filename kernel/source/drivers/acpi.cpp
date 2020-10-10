@@ -122,7 +122,15 @@ void acpi::init(const stivale2::Parser& parser) {
     lai_set_acpi_revision(rsdp->revision);
     lai_create_namespace();
     init_ec();
+
     
+    if(auto* osc = lai_resolve_path(nullptr, "_SB_._OSC"); osc) {
+        constexpr uint8_t uuid[16] = {0x08, 0x11, 0xB0, 0x6E, 0x4A, 0x27, 0x44, 0xF9, 0x8D, 0x60, 0x3C, 0xBB, 0xC2, 0x2E, 0x7B, 0x48};
+        uint32_t capabilities[2] = {0x0, 0x0}; // Request no features
+        std::span<uint32_t> caps{capabilities};
+
+        ASSERT(eval_osc(osc, false, 1, uuid, caps));
+    }
 }
 
 static void handle_sci([[maybe_unused]] idt::regs*) {
@@ -184,4 +192,45 @@ static void init_ec() {
             }
         }
     }
+}
+
+bool acpi::eval_osc(lai_nsnode_t* node, bool query, uint32_t revision, const uint8_t uuid[16], std::span<uint32_t>& buffer) {
+    ASSERT(node);
+    ASSERT(buffer.data());
+
+    LAI_CLEANUP_STATE lai_state_t state;
+    lai_init_state(&state);
+
+    buffer[0] &= ~1;
+    buffer[0] |= query; // Query or Request features
+
+    LAI_CLEANUP_VAR lai_variable_t r0 = {}; lai_create_buffer(&r0, 16); memcpy(lai_exec_buffer_access(&r0), uuid, 16);
+    LAI_CLEANUP_VAR lai_variable_t r1 = {}; r1.type = LAI_INTEGER; r1.integer = revision;
+    LAI_CLEANUP_VAR lai_variable_t r2 = {}; r2.type = LAI_INTEGER; r2.integer = buffer.size();
+    LAI_CLEANUP_VAR lai_variable_t r3 = {}; lai_create_buffer(&r3, buffer.size_bytes()); memcpy(lai_exec_buffer_access(&r3), buffer.data(), buffer.size_bytes());
+    LAI_CLEANUP_VAR lai_variable_t ret = {};
+
+    if(auto e = lai_eval_largs(&ret, node, &state, 4, &r0, &r1, &r2, &r3, nullptr); e != LAI_ERROR_NONE)
+        return false;
+
+    ASSERT(lai_exec_buffer_size(&ret) == lai_exec_buffer_size(&r3));
+    const auto* ret_buf = (uint32_t*)lai_exec_buffer_access(&ret);
+    
+    if(ret_buf[0] & (1 << 1)) {
+        print("acpi: Failed to evaluate _OSC, FW was unable to perform the request\n");
+        return false;
+    }
+
+    if(ret_buf[0] & (1 << 2)) {
+        print("acpi: Failed to evaluate _OSC, Unrecognized UUID\n");
+        return false;
+    }
+
+    if(ret_buf[0] & (1 << 3)) {
+        print("acpi: Failed to evaluate _OSC, Unrecognized Revision\n");
+        return false;
+    }
+
+    memcpy(buffer.data(), ret_buf, lai_exec_buffer_size(&ret)); // Copy returned data back into the span
+    return true;
 }

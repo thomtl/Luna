@@ -5,6 +5,9 @@
 
 #include <std/concepts.hpp>
 #include <std/vector.hpp>
+#include <std/span.hpp>
+
+#include <lai/core.h>
 
 namespace acpi {
     struct [[gnu::packed]] Rsdp {
@@ -147,6 +150,8 @@ namespace acpi {
     void init(const stivale2::Parser& parser);
     void init_sci();
     SDTHeader* get_table(const char* sig, size_t index);
+
+    bool eval_osc(lai_nsnode_t* node, bool query, uint32_t revision, const uint8_t uuid[16], std::span<uint32_t>& buffer);
     
     template<Table T>
     T* get_table(size_t index = 0) {
