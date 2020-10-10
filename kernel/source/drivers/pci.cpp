@@ -112,6 +112,34 @@ void pci::init() {
         print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}\n", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(9), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(11));
 }
 
+pci::Device& pci::device_by_class(uint8_t class_code, uint8_t subclass_code, uint8_t prog_if, size_t i) {
+    size_t curr = 0;
+    for(auto& device : devices) {
+        if(device.read<uint8_t>(9) == class_code && subclass_code == device.read<uint8_t>(10) && device.read<uint8_t>(11) == prog_if) {
+            if(curr != i)
+                curr++;
+            else
+                return device;
+        }
+    }
+    
+    PANIC("Couldn't find device");
+}
+
+pci::Device& pci::device_by_id(uint16_t vid, uint16_t did, size_t i) {
+    size_t curr = 0;
+    for(auto& device : devices) {
+        if(device.read<uint16_t>(0) == vid && device.read<uint16_t>(2) == did) {
+            if(curr != i)
+                curr++;
+            else
+                return device;
+        }
+    }
+    
+    PANIC("Couldn't find device");
+}
+
 uint32_t pci::read_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset, size_t width) {
     ASSERT(offset < pmm::block_size);
 
