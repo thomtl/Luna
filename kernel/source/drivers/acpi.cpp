@@ -118,9 +118,6 @@ void acpi::init(const stivale2::Parser& parser) {
     lai_set_acpi_revision(rsdp->revision);
     lai_create_namespace();
     init_ec();
-}
-
-void acpi::init_sci() {
     // TODO: Hook SCI
 
     lai_enable_acpi(1);

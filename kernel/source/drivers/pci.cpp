@@ -68,7 +68,7 @@ size_t eval_aml_method(lai_nsnode_t* node, const char* name, lai_state_t* state)
     if(!handle)
         return 0;
 
-    if(auto e = lai_eval(&var, node, state); e != LAI_ERROR_NONE)
+    if(auto e = lai_eval(&var, handle, state); e != LAI_ERROR_NONE)
         PANIC("Failed to evaluate PCI AML method");
 
     uint64_t ret = 0;
@@ -112,6 +112,32 @@ void pci::init() {
         print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}\n", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(9), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(11));
 }
 
-const std::vector<pci::Device>& pci::get_devices() {
-    return devices;
+uint32_t pci::read_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset, size_t width) {
+    ASSERT(offset < pmm::block_size);
+
+    auto* mcfg = acpi::get_table<acpi::Mcfg>();
+    ASSERT(mcfg);
+
+    const auto alloc = get_mcfg_allocation(mcfg, seg, bus);
+    auto addr = get_mcfg_device_addr(alloc, bus, slot, func);
+
+    if(width == 4) return *(volatile uint32_t*)(addr + offset);
+    else if(width == 2) return *(volatile uint16_t*)(addr + offset);
+    else if(width == 1) return *(volatile uint8_t*)(addr + offset);
+    else PANIC("Invalid width");
+}
+
+void pci::write_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset, uint32_t v, size_t width) {
+    ASSERT(offset < pmm::block_size);
+
+    auto* mcfg = acpi::get_table<acpi::Mcfg>();
+    ASSERT(mcfg);
+    
+    const auto alloc = get_mcfg_allocation(mcfg, seg, bus);
+    auto addr = get_mcfg_device_addr(alloc, bus, slot, func);
+
+    if(width == 4) *(volatile uint32_t*)(addr + offset) = v;
+    else if(width == 2) *(volatile uint16_t*)(addr + offset) = v & 0xFFFF;
+    else if(width == 1) *(volatile uint8_t*)(addr + offset) = v & 0xFF;
+    else PANIC("Invalid width");
 }

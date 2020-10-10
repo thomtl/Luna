@@ -18,41 +18,29 @@ namespace pci {
         template<PciConfigValue T>
         T read(size_t offset) const {
             ASSERT(offset < pmm::block_size);
-            return *(T*)(mmio_base + offset);
+            return *(volatile T*)(mmio_base + offset);
         }
 
         template<PciConfigValue T>
         void write(size_t offset, T value) const {
             static_assert(std::same_as<T, uint8_t> || std::same_as<T, uint16_t> || std::same_as<T, uint32_t>);
             ASSERT(offset < pmm::block_size);
-            *(T*)(mmio_base + offset) = value;
+            *(volatile T*)(mmio_base + offset) = value;
         }
     };
 
     void init();
-    const std::vector<Device>& get_devices();
-
+    
+    uint32_t read_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset, size_t width);
+    void write_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset, uint32_t v, size_t width);
 
     template<PciConfigValue T>
     T read(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset) {
-        ASSERT(offset < pmm::block_size);
-        
-        for(const auto& device : get_devices())
-            if(device.seg == seg && device.bus == bus && device.slot == slot && device.func == func)
-                return device.read<T>(offset);
-
-        PANIC("Was not able to find Device");
+        return read_raw(seg, bus, slot, func, offset, sizeof(T));
     }
 
     template<PciConfigValue T>
     void write(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset, T value) {
-        static_assert(std::same_as<T, uint8_t> || std::same_as<T, uint16_t> || std::same_as<T, uint32_t>);
-        ASSERT(offset < pmm::block_size);
-        
-        for(const auto& device : get_devices())
-            if(device.seg == seg && device.bus == bus && device.slot == slot && device.func == func)
-                return device.write<T>(offset, value);
-
-        PANIC("Was not able to find Device");
+        write_raw(seg, bus, slot, func, offset, value, sizeof(T));
     }
 } // namespace pci

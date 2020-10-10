@@ -65,8 +65,6 @@ void kernel_main(const stivale2_struct* info) {
 
     pci::init();
 
-    acpi::init_sci();
-
     smp::start_cpus(boot_info, kernel_main_ap);
 
     print("luna: Done with kernel_main\n");

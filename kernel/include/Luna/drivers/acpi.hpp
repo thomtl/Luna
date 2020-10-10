@@ -134,7 +134,6 @@ namespace acpi {
     static_assert(Table<Mcfg>);
 
     void init(const stivale2::Parser& parser);
-    void init_sci();
     SDTHeader* get_table(const char* sig, size_t index);
     
     template<Table T>
