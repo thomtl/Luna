@@ -102,7 +102,7 @@ namespace hmm {
             static constexpr size_t n_items = (pmm::block_size - sizeof(Pool*)) / sizeof(PoolItem);
             PoolItem items[n_items];
         };
-        static_assert(sizeof(Pool) <= pmm::block_size);
+        static_assert(sizeof(Pool) < pmm::block_size);
 
         Pool* alloc_pool();
 

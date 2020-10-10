@@ -12,6 +12,9 @@
 static uintptr_t heap_loc = 0xFFFF'FFFE'0000'0000; // TODO: Move this below kernel_vbase sometime?
 static uintptr_t allocate_page(){
     auto pa = pmm::alloc_block();
+    if(!pa)
+        PANIC("Couldn't allocate block for heap");
+    
     auto va = heap_loc;
     heap_loc += pmm::block_size;
 
@@ -33,7 +36,7 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
         for(auto* curr = _start; curr; curr = curr->next) {
             for(size_t i = 0; i < curr->n_items; i++) {
                 if(curr->items[i].type == Pool::PoolItem::PoolItemType::LargeAlloc) {
-                    if(curr->items[i].large_allocation.free && curr->items[i].large_allocation.size >= n_pages) { // First fit
+                    if(curr->items[i].large_allocation.free && curr->items[i].large_allocation.size >= (n_pages * pmm::block_size)) { // First fit
                         curr->items[i].large_allocation.free = false;
                         return curr->items[i].large_allocation.address;
                     }
