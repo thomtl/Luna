@@ -1,6 +1,7 @@
 #include <Luna/cpu/idt.hpp>
 #include <Luna/cpu/gdt.hpp>
 
+static idt::handler handlers[idt::n_table_entries] = {};
 static idt::entry table[idt::n_table_entries] = {};
 static idt::pointer table_pointer{};
 
@@ -23,6 +24,10 @@ void idt::init_table() {
 
 void idt::load() {
     table_pointer.set();
+}
+
+void idt::set_handler(uint8_t vector, const handler& h) {
+    handlers[vector] = h;
 }
 
 struct {
@@ -65,22 +70,37 @@ struct {
 
 extern "C" void isr_handler(idt::regs* regs) {
     auto int_number = regs->int_num & 0xFF;
+
     if(int_number < 32) {
         auto& exception = exceptions[int_number];
-        print("Exception #{} ({}) has occurred\n", exception.mnemonic, exception.message);
-
+        print("Unhandled Exception #{} ({}) has occurred\n", exception.mnemonic, exception.message);
 
         uint64_t cr2;
         asm("mov %%cr2, %0" : "=r"(cr2));
-        const auto r = *regs;
-        print("RIP: {:#x}, CR2: {:#x}, Err: {:#b}\n", r.rip, cr2, r.error_code);
 
-        while(1)
-            ;
-    } else {
-        print("IRQ{} has occurred\n", int_number);
+        uint64_t cr3;
+        asm("mov %%cr3, %0" : "=r"(cr3));
+
+        const auto r = *regs;
+        
+        print("ERR: {:#x}, RIP: {:#x}, RFLAGS: {:#x}\n", (uint64_t)r.error_code, r.rip, r.rflags);
+        print("RAX: {:#x}, RBX: {:#x}, RCX: {:#x}, RDX: {:#x}\n", r.rax, r.rbx, r.rcx, r.rdx);
+        print("RSI: {:#x}, RDI: {:#x}, RBP: {:#x}, RSP: {:#x}\n", r.rsi, r.rdi, r.rbp, r.rsp);
+        print("R8: {:#x}, R9: {:#x}, R10: {:#x}, R11: {:#x}\n", r.r8, r.r9, r.r10, r.r11);
+        print("R12: {:#x}, R13: {:#x}, R14: {:#x}, R15: {:#x}\n", r.r12, r.r13, r.r14, r.r15);
+        print("CS: {:#x}, SS: {:#x}, DS: {:#x}\n", r.cs, r.ss, r.ds);
+        print("CR2: {:#x}, CR3: {:#x}\n", cr2, cr3);
 
         while(1)
             ;
     }
+
+    if(handlers[int_number].f)
+        handlers[int_number].f(regs);
+
+    if(handlers[int_number].is_irq)
+        get_cpu().lapic.eoi();
+
+    if(!handlers[int_number].should_iret && !handlers[int_number].is_irq)
+        asm("cli; hlt");
 }

@@ -43,6 +43,13 @@ namespace idt
 
     constexpr size_t n_table_entries = 256;
 
+    struct handler {
+        void (*f)(regs*);
+        bool is_irq = false;
+        bool should_iret = false;
+    };
+
     void init_table();
     void load();
+    void set_handler(uint8_t vector, const handler& h);
 } // namespace idt
