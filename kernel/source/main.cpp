@@ -66,11 +66,13 @@ void kernel_main(const stivale2_struct* info) {
 
     acpi::init(boot_info);
     ioapic::init();
+    acpi::init_sci();
 
     pci::init();
 
     smp::start_cpus(boot_info, kernel_main_ap);
 
+    asm("sti");
     print("luna: Done with kernel_main\n");
     while(true)
         ;
@@ -89,6 +91,7 @@ void kernel_main_ap(stivale2_smp_info* info){
 
     idt::load();
 
+    asm("sti");
     while(1)
         ;
 }

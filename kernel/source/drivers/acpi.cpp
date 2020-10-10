@@ -1,5 +1,9 @@
 #include <Luna/drivers/acpi.hpp>
 
+#include <Luna/cpu/idt.hpp>
+
+#include <Luna/drivers/ioapic.hpp>
+
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
@@ -118,9 +122,29 @@ void acpi::init(const stivale2::Parser& parser) {
     lai_set_acpi_revision(rsdp->revision);
     lai_create_namespace();
     init_ec();
-    // TODO: Hook SCI
+    
+}
+
+static void handle_sci([[maybe_unused]] idt::regs*) {
+    print("acpi: Unhandled SCI, Event: {:#x}\n", lai_get_sci_event());
+}
+
+void acpi::init_sci() {
+    MadtParser madt{};
+
+    auto* fadt = get_table<Fadt>();
+    ASSERT(fadt);
+
+    uint16_t sci_int = fadt->sci_int;
+    if(!madt.has_legacy_pic()) // If no PIC sci_int is a GSI so we need to map it, it is Level, Active Low
+        ioapic::set(sci_int, sci_int + 0x20, ioapic::regs::DeliveryMode::Fixed, ioapic::regs::DestinationMode::Physical, (1 << 13) | (1 << 15), get_cpu().lapic_id);
+
+    idt::set_handler(sci_int + 0x20, idt::handler{.f = handle_sci, .is_irq = true, .should_iret = true});
+    ioapic::unmask(sci_int);
 
     lai_enable_acpi(1);
+
+    print("acpi: Enabled SCI on IRQ {:d}\n", sci_int);
 }
 
 static void init_ec() {
