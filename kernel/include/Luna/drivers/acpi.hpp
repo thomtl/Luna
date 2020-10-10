@@ -16,6 +16,7 @@ namespace acpi {
 
     struct [[gnu::packed]] Xsdp {
         Rsdp rsdp;
+        uint32_t length;
         uint64_t xsdt;
         uint8_t ext_checksum;
         uint8_t reserved[3];
