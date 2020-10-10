@@ -21,6 +21,12 @@ namespace std
         using const_iterator = const_pointer;
 
         constexpr vector(): _elements{nullptr}, _size{0}, _capacity{0} {}
+        vector(const std::vector<T>& src) {
+            ensure_capacity(src.size());
+            for(const auto& e : src)
+                push_back(e);
+        }
+
         vector(vector&&) = delete;
         vector& operator=(vector other) = delete;
 

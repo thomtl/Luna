@@ -14,6 +14,7 @@
 #include <Luna/mm/hmm.hpp>
 
 #include <Luna/drivers/acpi.hpp>
+#include <Luna/drivers/ioapic.hpp>
 #include <Luna/drivers/pci.hpp>
 
 #include <std/mutex.hpp>
@@ -38,8 +39,8 @@ void kernel_main(const stivale2_struct* info) {
     pmm::init(boot_info);
 
     auto& cpu_data = allocate_cpu_data();
-    cpu_data.set();
     cpu_data.gdt_table.init();
+    cpu_data.set();
 
     idt::init_table();
     idt::load();
@@ -62,8 +63,10 @@ void kernel_main(const stivale2_struct* info) {
     print("hmm: Initialized SLAB allocator\n");
 
     cpu_data.lapic.init();
-    
+
     acpi::init(boot_info);
+    ioapic::init();
+
     pci::init();
 
     smp::start_cpus(boot_info, kernel_main_ap);
@@ -80,8 +83,9 @@ void kernel_main_ap(stivale2_smp_info* info){
     vmm::kernel_vmm::get_instance().set();
 
     auto& cpu_data = allocate_cpu_data();
-    cpu_data.set();
     cpu_data.gdt_table.init();
+    cpu_data.set();
+    cpu_data.lapic.init();
 
     idt::load();
 

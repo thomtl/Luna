@@ -35,6 +35,14 @@ void lapic::Lapic::init() {
     if(!x2apic)
         vmm::kernel_vmm::get_instance().map(mmio_base_pa, mmio_base, paging::mapPagePresent | paging::mapPageWrite);
 
+    uint32_t id = 0;
+    if(x2apic)
+        id = read(regs::id);
+    else
+        id = (read(regs::id) >> 24) & 0xFF;
+
+    get_cpu().lapic_id = id;
+
     write(regs::tpr, 0); // Enable all interrupt classes
     write(regs::spurious, 0x1FF); // Spurious IRQ is 0xFF and enable the LAPIC
 

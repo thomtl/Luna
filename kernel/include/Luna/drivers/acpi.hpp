@@ -4,6 +4,7 @@
 #include <Luna/misc/stivale2.hpp>
 
 #include <std/concepts.hpp>
+#include <std/vector.hpp>
 
 namespace acpi {
     struct [[gnu::packed]] Rsdp {
@@ -133,6 +134,16 @@ namespace acpi {
     };
     static_assert(Table<Mcfg>);
 
+    struct [[gnu::packed]] Madt {
+        static constexpr const char* signature = "APIC";
+        SDTHeader header;
+        uint32_t lapic_addr;
+        uint32_t flags;
+    };
+    static_assert(Table<Madt>);
+    
+    
+
     void init(const stivale2::Parser& parser);
     SDTHeader* get_table(const char* sig, size_t index);
     
@@ -140,4 +151,65 @@ namespace acpi {
     T* get_table(size_t index = 0) {
         return (T*)get_table(T::signature, index);
     }
+
+    struct [[gnu::packed]] MadtEntryHeader {
+        uint8_t type;
+        uint8_t length;
+    };
+
+    template<typename T>
+    concept MadtEntry = requires(T t) {
+        { T::type } -> std::convertible_to<uint8_t>;
+        { t.header } -> std::convertible_to<MadtEntryHeader>;
+    };
+
+    struct [[gnu::packed]] IoapicMadtEntry {
+        static constexpr uint8_t type = 1;
+        MadtEntryHeader header;
+        uint8_t id;
+        uint8_t reserved;
+        uint32_t addr;
+        uint32_t gsi_base;
+    };
+    
+    struct [[gnu::packed]] ISOMadtEntry {
+        static constexpr uint8_t type = 2;
+        MadtEntryHeader header;
+        uint8_t bus;
+        uint8_t src;
+        uint32_t gsi;
+        uint16_t flags;
+    };
+
+    struct MadtParser {
+        MadtParser() {
+            madt = get_table<Madt>();
+            ASSERT(madt);
+        }
+
+        bool has_legacy_pic() {
+            return madt->flags & 1;
+        }
+
+        template<MadtEntry T>
+        std::vector<T> get_entries_of_type() {
+            std::vector<T> ret{};
+
+            auto entries_size = (madt->header.length - sizeof(Madt));
+            auto entries = (uintptr_t)madt + sizeof(Madt);
+            uint64_t offset = 0;
+            while(offset < entries_size) {
+                auto* item = (MadtEntryHeader*)(entries + offset);
+                if(item->type == T::type)
+                    ret.push_back(*(T*)(item));
+
+                offset += item->length;
+            }
+
+            return ret;
+        }
+
+        private:
+        Madt* madt;
+    };
 } // namespace acpi
