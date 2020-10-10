@@ -36,6 +36,28 @@ static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus
     if(dev.read<uint16_t>(0) == 0xFFFF)
         return;
 
+    auto status = dev.read<uint16_t>(6);
+    if(status & (1 << 4)) { // Capability list
+        auto next = dev.read<uint8_t>(0x34);
+
+        while(next) {
+            auto id = dev.read<uint8_t>(next);
+
+            switch (id) {
+                case pci::msi::id:
+                    dev.msi.supported = true;
+                    dev.msi.offset = next;
+                    break;
+                case pci::msix::id:
+                    dev.msix.supported = true;
+                    dev.msix.offset = next;
+                    break;
+            }
+
+            next = dev.read<uint8_t>(next + 1);
+        }
+    }
+
     devices.emplace_back(std::move(dev));
 }
 
@@ -108,8 +130,16 @@ void pci::init() {
     }
 
     print("pci: Enumerated devices:\n");
-    for(auto& device : devices)
-        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}\n", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(9), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(11));
+    for(auto& device : devices) {
+        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(9), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(11));
+
+        if(device.msi.supported)
+            print(" MSI");
+        if(device.msix.supported)
+            print(" MSI-X");
+        
+        print("\n");
+    }
 }
 
 pci::Device& pci::device_by_class(uint8_t class_code, uint8_t subclass_code, uint8_t prog_if, size_t i) {
@@ -168,4 +198,42 @@ void pci::write_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_
     else if(width == 2) *(volatile uint16_t*)(addr + offset) = v & 0xFFFF;
     else if(width == 1) *(volatile uint8_t*)(addr + offset) = v & 0xFF;
     else PANIC("Invalid width");
+}
+
+static void install_msi(pci::Device& device, uint8_t vector) {
+    ASSERT(device.msi.supported);
+    ASSERT(device.msi.offset != 0);
+
+    pci::msi::Control control{};
+    pci::msi::Data data{};
+    pci::msi::Address address{};
+
+    control.raw = device.read<uint16_t>(device.msi.offset + pci::msi::control);
+    ASSERT((1 << control.mmc) < 32); // Assert count is sane
+
+    address.raw = device.read<uint32_t>(device.msi.offset + pci::msi::addr);
+    data.raw = device.read<uint32_t>(device.msi.offset + (control.c64 ? pci::msi::data_64 : pci::msi::data_32));
+
+    data.vector = vector;
+    data.delivery_mode = 0;
+
+    address.base_address = 0xFEE;
+    address.destination_id = get_cpu().lapic_id;
+
+    device.write<uint32_t>(device.msi.offset + pci::msi::addr, address.raw);
+    device.write<uint32_t>(device.msi.offset + (control.c64 ? pci::msi::data_64 : pci::msi::data_32), data.raw);
+
+    control.enable = 1;
+    control.mme = 0; // Enable 1 IRQ
+
+    device.write<uint16_t>(device.msi.offset + pci::msi::control, control.raw);
+}
+
+void pci::Device::enable_irq(uint8_t vector) {
+    if(msix.supported)
+        PANIC("TODO: Support MSI-X");
+    else if(msi.supported)
+        install_msi(*this, vector);
+    else
+        PANIC("No IRQ routing support");
 }
