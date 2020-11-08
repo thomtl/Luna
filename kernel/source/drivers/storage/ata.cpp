@@ -5,7 +5,26 @@
 
 std::vector<ata::Device> devices;
 
+std::pair<uint32_t, uint32_t> pi_read_capacity(ata::Device& device) {
+    ASSERT(device.driver.atapi);
 
+    ata::ATAPICommand cmd{};
+
+    cmd.write = false;
+    auto* packet = (ata::packet_commands::read_capacity::packet*)cmd.packet;
+
+    packet->command = ata::packet_commands::read_capacity::command;
+
+    ata::packet_commands::read_capacity::response res{};
+
+    std::span<uint8_t> xfer{(uint8_t*)&res, sizeof(res)};
+    device.driver.atapi_cmd(device.driver.userptr, cmd, xfer);
+
+    uint32_t block_size = bswap32(res.block_size);
+    uint32_t lba = bswap32(res.lba);
+
+    return {lba, block_size};
+}
 
 void identify_drive(ata::Device& device) {
     ata::ATACommand cmd{};
@@ -52,11 +71,21 @@ void identify_drive(ata::Device& device) {
             device.n_sectors = *(uint64_t*)(xfer.data() + 120);
 
         device.sector_size = 512; // TODO: Don't assume this but send the command to enumerate it
+        device.inserted = true;
     } else {
-        // TODO: Send PIReadCapacity command
+        const auto [lba, sector_size] = pi_read_capacity(device);
+
+        device.n_sectors = lba;
+        device.sector_size = sector_size;
+
+        device.inserted = (lba != 0 && sector_size != 0);
     }
 
-    print("     Number of Sectors {} [{} MiB]\n", device.n_sectors, (device.n_sectors * device.sector_size) / 1024 / 1024);
+    if(device.inserted) {
+        print("     Number of Sectors {} [{} MiB]\n", device.n_sectors, (device.n_sectors * device.sector_size) / 1024 / 1024);
+    } else {
+        print("     Device is not inserted\n");
+    }
 }
 
 
@@ -64,6 +93,11 @@ void ata::register_device(ata::DriverDevice& dev) {
     auto& device = devices.emplace_back();
     device.driver = dev;
 
-    print("ata: Registered Device\n");
+    print("ata: Registered {} Device\n", dev.atapi ? "ATAPI" : "ATA");
+
+    ASSERT(dev.ata_cmd);
+    if(dev.atapi)
+        ASSERT(dev.atapi_cmd);
+
     identify_drive(device);
 }

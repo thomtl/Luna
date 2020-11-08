@@ -17,3 +17,7 @@ constexpr uintptr_t align_up(uintptr_t n, uintptr_t a) {
 constexpr size_t div_ceil(size_t a, size_t b) {
     return (a + b - 1) / b;
 }
+
+constexpr uint32_t bswap32(uint32_t v) {
+    return (uint32_t)((v >> 24) & 0xFF) | ((v << 8) & 0xFF0000) | ((v >> 8) & 0xFF00) | ((v << 24) & 0xFF000000);
+}

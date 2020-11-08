@@ -100,6 +100,14 @@ ahci::Controller::Controller(pci::Device& device): device{device} {
             port->send_ata_cmd(cmd, xfer.data(), xfer.size());
         };
 
+        if(device.atapi) { // Only enable the atapi cmd function if the device is actually atapi
+            device.atapi_cmd = [](void* userptr, const ata::ATAPICommand& cmd, std::span<uint8_t>& xfer) {
+                auto* port = (Controller::Port*)userptr;
+
+                port->send_atapi_cmd(cmd, xfer.data(), xfer.size());
+            };
+        }
+
         ata::register_device(device);
     }
 
@@ -208,6 +216,54 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     fis.lba_3 = (cmd.lba >> 24) & 0xFF;
     fis.lba_4 = (cmd.lba >> 32) & 0xFF;
     fis.lba_5 = (cmd.lba >> 40) & 0xFF;
+
+    ASSERT(transfer_len < pmm::block_size);
+
+    auto pa = pmm::alloc_block();
+    iommu::map(controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
+
+    table->prdts[0].flags.byte_count = Prdt::calculate_bytecount(transfer_len);
+    table->prdts[0].low = pa & 0xFFFFFFFF;
+    table->prdts[0].high = (pa >> 32) & 0xFFFFFFFF;
+
+    wait_ready();
+
+    regs->ci |= (1 << index);
+
+    while(regs->ci & (1 << index)) {
+        if(regs->is & (1 << 30)) {
+            if(regs->tfd & (1 << 0)) {
+                auto err = regs->tfd >> 8;
+                print("ahci: Error on CMD, code {}\n", err);
+                return;
+            }
+        }
+    }
+
+    memcpy((void*)data, (void*)(pa + phys_mem_map), transfer_len);
+}
+
+void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len) {
+    size_t n_prdts = div_ceil(transfer_len, 0x3FFFFF);
+    const auto [index, table] = allocate_command(n_prdts);
+
+    ASSERT(index != ~0);
+
+    region->command_headers[index].flags.prdtl = n_prdts;
+    region->command_headers[index].flags.write = cmd.write;
+    region->command_headers[index].flags.cfl = 5; // h2d register is 5 dwords
+    region->command_headers[index].flags.atapi = 1;
+
+    auto& fis = *(H2DRegisterFIS*)table->fis;
+    fis.type = FISTypeH2DRegister;
+    fis.flags.c = 1;
+
+    fis.command = ata::commands::SendPacket;
+    fis.features = 1;
+    fis.control = 0x8;
+    fis.dev_head = 0xA0;
+
+    memcpy(table->packet, cmd.packet, 16);
 
     ASSERT(transfer_len < pmm::block_size);
 
