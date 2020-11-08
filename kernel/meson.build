@@ -12,6 +12,9 @@ main_sources = files(
     'source/cpu/regs.cpp',
     'source/cpu/smp.cpp',
 
+    'source/drivers/intel/sl_paging.cpp',
+    'source/drivers/intel/vt_d.cpp',
+
     'source/drivers/acpi.cpp',
     'source/drivers/ioapic.cpp',
     'source/drivers/laihost.cpp',
@@ -36,7 +39,7 @@ nasm_gen = generator(nasm, output: '@BASENAME@.o', arguments: ['-f', 'elf64', '-
 nasm_objects = nasm_gen.process(nasm_sources)
 
 extra_warning_flags = ['-Wreorder', '-Wdeprecated-copy-dtor', '-Wno-unknown-pragmas', '-Wduplicated-cond', '-Wduplicated-branches',
-                       '-Wlogical-op', '-Wno-non-virtual-dtor', '-Werror', '-Wno-address']
+                       '-Wlogical-op', '-Wno-non-virtual-dtor', '-Werror', '-Wno-address', '-Wno-volatile']
 
 flags_c_common = ['-m64', '-march=x86-64', '-fno-PIC', '-Wall', '-Wextra', '-ffreestanding', '-mno-red-zone', 
                   '-nostdlib', '-mcmodel=kernel', '-fno-omit-frame-pointer', '-g', '-O2',

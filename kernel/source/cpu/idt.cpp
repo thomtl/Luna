@@ -20,6 +20,9 @@ void idt::init_table() {
 
     table_pointer.table = (uint64_t)&table;
     table_pointer.size = (sizeof(entry) * idt::n_table_entries) - 1;
+
+    for(size_t i = 0; i < 32; i++)
+        handlers[i].is_reserved = true; // Reserve Exceptions
 }
 
 void idt::load() {
@@ -28,6 +31,22 @@ void idt::load() {
 
 void idt::set_handler(uint8_t vector, const handler& h) {
     handlers[vector] = h;
+}
+
+uint8_t idt::allocate_vector() {
+    // Skip IRQ255, since thats used for Spurious IRQs
+    for(size_t i = idt::n_table_entries - 2; i > 0u; i--) {
+        if(!handlers[i].is_reserved) {
+            handlers[i].is_reserved = true;
+            return i;
+        }
+    }
+
+    PANIC("Couldn't allocate IDT vector");
+}
+
+void idt::reserve_vector(uint8_t vector) {
+    handlers[vector].is_reserved = true;
 }
 
 struct {
@@ -96,7 +115,7 @@ extern "C" void isr_handler(idt::regs* regs) {
     }
 
     if(handlers[int_number].f)
-        handlers[int_number].f(regs);
+        handlers[int_number].f(regs, handlers[int_number].userptr);
 
     if(handlers[int_number].is_irq)
         get_cpu().lapic.eoi();

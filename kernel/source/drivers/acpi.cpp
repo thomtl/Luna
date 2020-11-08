@@ -133,7 +133,7 @@ void acpi::init(const stivale2::Parser& parser) {
     }
 }
 
-static void handle_sci([[maybe_unused]] idt::regs*) {
+static void handle_sci([[maybe_unused]] idt::regs*, [[maybe_unused]] void*) {
     print("acpi: Unhandled SCI, Event: {:#x}\n", lai_get_sci_event());
 }
 
@@ -147,7 +147,7 @@ void acpi::init_sci() {
     if(!madt.has_legacy_pic()) // If no PIC sci_int is a GSI so we need to map it, it is Level, Active Low
         ioapic::set(sci_int, sci_int + 0x20, ioapic::regs::DeliveryMode::Fixed, ioapic::regs::DestinationMode::Physical, (1 << 13) | (1 << 15), get_cpu().lapic_id);
 
-    idt::set_handler(sci_int + 0x20, idt::handler{.f = handle_sci, .is_irq = true, .should_iret = true});
+    idt::set_handler(sci_int + 0x20, idt::handler{.f = handle_sci, .is_irq = true, .should_iret = true, .userptr = nullptr});
     ioapic::unmask(sci_int);
 
     lai_enable_acpi(1);

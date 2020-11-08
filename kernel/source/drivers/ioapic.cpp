@@ -1,6 +1,7 @@
 #include <Luna/drivers/ioapic.hpp>
 
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/cpu/idt.hpp>
 
 #include <Luna/drivers/acpi.hpp>
 
@@ -80,6 +81,7 @@ void ioapic::init() {
             for(const auto iso : isos) {
                 if(iso.src == i) {
                     set(iso.gsi, iso.src + 0x20, regs::DeliveryMode::Fixed, regs::DestinationMode::Physical, iso.flags, get_cpu().lapic_id);
+                    idt::reserve_vector(iso.src + 0x20);
                     mask(iso.gsi);
                     found = true;
                     break;
@@ -88,6 +90,7 @@ void ioapic::init() {
 
             if(!found) {
                 set(i, i + 0x20, regs::DeliveryMode::Fixed, regs::DestinationMode::Physical, 0, get_cpu().lapic_id);
+                idt::reserve_vector(i + 0x20);
                 mask(i);
             }
         }
