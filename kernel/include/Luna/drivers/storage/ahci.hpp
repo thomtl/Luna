@@ -138,7 +138,7 @@ namespace ahci
 
     class Controller {
         public:
-        Controller(pci::Device& device);
+        Controller(pci::Device* device);
 
         struct Port {
             uint8_t port;
@@ -171,10 +171,12 @@ namespace ahci
         volatile Hba* regs;
         uint8_t n_allocated_ports, n_command_slots;
         bool a64;
-        pci::Device device;
+        pci::Device* device;
 
         friend struct Port;
 
         std::vector<Port> ports;
     };
+
+    void init();
 } // namespace ahci

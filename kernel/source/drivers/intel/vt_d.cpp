@@ -224,11 +224,11 @@ vt_d::IOMMU::IOMMU() {
     if(dmar->flags.raw) {
         print("    - Flags:");
         if(dmar->flags.irq_remap)
-            print(" IRQ Remap\n");
+            print(" IRQ Remap ");
         if(dmar->flags.x2APIC_opt_out)
-            print(" x2APIC opt out\n");
+            print(" x2APIC opt out ");
         if(dmar->flags.dma_control_opt_in)
-            print(" DMA control\n");
+            print(" DMA control ");
         print("\n");
     }
 

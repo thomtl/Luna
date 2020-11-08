@@ -4,13 +4,13 @@
 
 #include <Luna/misc/format.hpp>
 
-ahci::Controller::Controller(pci::Device& device): device{device} {
-    auto bar = device.read_bar(5);
+ahci::Controller::Controller(pci::Device* device): device{device} {
+    auto bar = device->read_bar(5);
     ASSERT(bar.type == pci::Bar::Type::Mmio);
 
-    device.set_privileges(pci::privileges::Dma | pci::privileges::Mmio);
+    device->set_privileges(pci::privileges::Dma | pci::privileges::Mmio);
 
-    iommu::map(device, bar.base, bar.base, paging::mapPagePresent | paging::mapPageWrite); // Allow aHCI to access its own MMIO region
+    iommu::map(*device, bar.base, bar.base, paging::mapPagePresent | paging::mapPageWrite); // Allow aHCI to access its own MMIO region
     vmm::kernel_vmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
     regs = (volatile Hba*)(bar.base + phys_mem_map);
 
@@ -65,7 +65,7 @@ ahci::Controller::Controller(pci::Device& device): device{device} {
         auto region_pa = pmm::alloc_block();
         if(!a64)
             ASSERT((region_pa >> 32) == 0); // Allocate under 4GiB or use IOMMU to map under 4GiB
-        iommu::map(device, region_pa, region_pa, paging::mapPagePresent | paging::mapPageWrite);
+        iommu::map(*device, region_pa, region_pa, paging::mapPagePresent | paging::mapPageWrite);
 
         port.wait_idle();
 
@@ -178,7 +178,7 @@ std::pair<uint8_t, ahci::CmdTable*> ahci::Controller::Port::allocate_command(siz
     ASSERT(size < pmm::block_size);
 
     auto pa = pmm::alloc_block();
-    iommu::map(controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
+    iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
     if(!controller->a64)
         ASSERT((pa >> 32) == 0);
 
@@ -220,7 +220,7 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     ASSERT(transfer_len < pmm::block_size);
 
     auto pa = pmm::alloc_block();
-    iommu::map(controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
+    iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
 
     table->prdts[0].flags.byte_count = Prdt::calculate_bytecount(transfer_len);
     table->prdts[0].low = pa & 0xFFFFFFFF;
@@ -268,7 +268,7 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
     ASSERT(transfer_len < pmm::block_size);
 
     auto pa = pmm::alloc_block();
-    iommu::map(controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
+    iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
 
     table->prdts[0].flags.byte_count = Prdt::calculate_bytecount(transfer_len);
     table->prdts[0].low = pa & 0xFFFFFFFF;
@@ -289,4 +289,13 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
     }
 
     memcpy((void*)data, (void*)(pa + phys_mem_map), transfer_len);
+}
+
+std::vector<ahci::Controller> controllers;
+
+void ahci::init() {
+    pci::Device* dev = nullptr;
+    size_t i = 0;
+    while((dev = pci::device_by_class(1, 6, 1, i++)) != nullptr)
+        controllers.emplace_back(dev);
 }

@@ -142,32 +142,32 @@ void pci::init() {
     }
 }
 
-pci::Device& pci::device_by_class(uint8_t class_code, uint8_t subclass_code, uint8_t prog_if, size_t i) {
+pci::Device* pci::device_by_class(uint8_t class_code, uint8_t subclass_code, uint8_t prog_if, size_t i) {
     size_t curr = 0;
     for(auto& device : devices) {
         if(device.read<uint8_t>(9) == class_code && subclass_code == device.read<uint8_t>(10) && device.read<uint8_t>(11) == prog_if) {
             if(curr != i)
                 curr++;
             else
-                return device;
+                return &device;
         }
     }
     
-    PANIC("Couldn't find device");
+    return nullptr;
 }
 
-pci::Device& pci::device_by_id(uint16_t vid, uint16_t did, size_t i) {
+pci::Device* pci::device_by_id(uint16_t vid, uint16_t did, size_t i) {
     size_t curr = 0;
     for(auto& device : devices) {
         if(device.read<uint16_t>(0) == vid && device.read<uint16_t>(2) == did) {
             if(curr != i)
                 curr++;
             else
-                return device;
+                return &device;
         }
     }
     
-    PANIC("Couldn't find device");
+    return nullptr;
 }
 
 uint32_t pci::read_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset, size_t width) {

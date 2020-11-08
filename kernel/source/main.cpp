@@ -77,8 +77,7 @@ void kernel_main(const stivale2_struct* info) {
     iommu::init();
     asm("sti");
 
-    ahci::Controller c{pci::device_by_class(1, 6, 1)};
-    (void)c;
+    ahci::init();
 
     print("luna: Done with kernel_main\n");
     while(true)
