@@ -70,7 +70,16 @@ void identify_drive(ata::Device& device) {
         if(device.n_sectors == 0)
             device.n_sectors = *(uint64_t*)(xfer.data() + 120);
 
-        device.sector_size = 512; // TODO: Don't assume this but send the command to enumerate it
+        auto sector_size = *(uint16_t*)(xfer.data() + (106 * 2));
+        if(sector_size & (1 << 14) && !(sector_size & (1 << 15))) { // Word contains valid info
+            if(sector_size & (1 << 12)) { // Logical sectors are larger than 512
+                device.sector_size = *(uint16_t*)(xfer.data() + (117 * 2));
+            } else {
+                device.sector_size = 512; // TODO: Don't assume this but send the command to enumerate it
+            }
+        } else {
+            device.sector_size = 512; // TODO: Don't assume this but send the command to enumerate it
+        }
         device.inserted = true;
     } else {
         const auto [lba, sector_size] = pi_read_capacity(device);
@@ -82,7 +91,8 @@ void identify_drive(ata::Device& device) {
     }
 
     if(device.inserted) {
-        print("     Number of Sectors {} [{} MiB]\n", device.n_sectors, (device.n_sectors * device.sector_size) / 1024 / 1024);
+        print("     Logical Sector Size: {} bytes\n", device.sector_size);
+        print("     Number of Sectors: {} [{} MiB]\n", device.n_sectors, (device.n_sectors * device.sector_size) / 1024 / 1024);
     } else {
         print("     Device is not inserted\n");
     }
