@@ -2,6 +2,8 @@
 #include <std/utility.hpp>
 #include <std/string.hpp>
 
+#include <Luna/cpu/paging.hpp>
+
 static std::pair<uintptr_t, uintptr_t> create_table(){
     auto pa = pmm::alloc_block();
     if(!pa)
@@ -69,9 +71,9 @@ void sl_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
     auto& pml1 = *curr;
     auto& pml1_e = pml1[get_index(1)];
 
-    pml1_e.r = (flags & mapSlPagePresent) ? 1 : 0;
-    pml1_e.w = (flags & mapSlPageWrite) ? 1 : 0;
-    pml1_e.x = (flags & mapSlPageExecute) ? 1 : 0;
+    pml1_e.r = (flags & paging::mapPagePresent) ? 1 : 0;
+    pml1_e.w = (flags & paging::mapPageWrite) ? 1 : 0;
+    pml1_e.x = (flags & paging::mapPageExecute) ? 1 : 0;
     pml1_e.frame = (pa >> 12);
 }
 

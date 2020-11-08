@@ -13,7 +13,7 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
-#include <Luna/drivers/intel/vt_d.hpp>
+#include <Luna/drivers/iommu.hpp>
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/ioapic.hpp>
 #include <Luna/drivers/pci.hpp>
@@ -70,9 +70,7 @@ void kernel_main(const stivale2_struct* info) {
     acpi::init_sci();
 
     pci::init();
-
-    // TODO: Only do this on intel cpus
-    vt_d::IOMMU io{};
+    iommu::init();
 
     smp::start_cpus(boot_info, kernel_main_ap);
 

@@ -33,12 +33,6 @@ namespace sl_paging
     };
     static_assert(sizeof(page_table) == pmm::block_size);
 
-    enum {
-        mapSlPagePresent = (1 << 0),
-        mapSlPageWrite = (1 << 1),
-        mapSlPageExecute = (1 << 2),
-    };
-
     class context {
         public:
         context(uint8_t levels);

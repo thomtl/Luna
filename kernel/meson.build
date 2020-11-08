@@ -17,6 +17,7 @@ main_sources = files(
 
     'source/drivers/acpi.cpp',
     'source/drivers/ioapic.cpp',
+    'source/drivers/iommu.cpp',
     'source/drivers/laihost.cpp',
     'source/drivers/pci.cpp',
 

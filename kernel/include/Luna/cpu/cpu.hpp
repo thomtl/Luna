@@ -6,6 +6,11 @@
 #include <Luna/cpu/lapic.hpp>
 
 namespace cpu {
+    constexpr uint32_t signature_intel_ebx = 0x756e6547;
+    constexpr uint32_t signature_intel_edx = 0x49656e69;
+    constexpr uint32_t signature_intel_ecx = 0x6c65746e;
+
+
     bool cpuid(uint32_t leaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
     bool cpuid(uint32_t leaf, uint32_t subleaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
 } // namespace cpu
