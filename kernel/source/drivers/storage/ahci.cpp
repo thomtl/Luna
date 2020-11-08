@@ -8,7 +8,7 @@ ahci::Controller::Controller(pci::Device& device): device{device} {
     auto bar = device.read_bar(5);
     ASSERT(bar.type == pci::Bar::Type::Mmio);
 
-    device.write<uint16_t>(4, device.read<uint16_t>(4) | (1 << 1) | (2 << 1));
+    device.set_privileges(pci::privileges::Dma | pci::privileges::Mmio);
 
     iommu::map(device, bar.base, bar.base, paging::mapPagePresent | paging::mapPageWrite); // Allow aHCI to access its own MMIO region
     vmm::kernel_vmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);

@@ -270,3 +270,10 @@ pci::Bar pci::Device::read_bar(size_t i) const {
         return pci::Bar{.type = pci::Bar::Type::Mmio, .base = base, .len = len};
     }
 }
+
+void pci::Device::set_privileges(uint8_t privilege) {
+    uint16_t command = read<uint16_t>(4);
+    command &= ~0b111; // Clear privileges
+    command |= privilege; // Set the privileges
+    write<uint16_t>(4, command);
+}

@@ -69,6 +69,16 @@ namespace pci {
         size_t len;
     };
 
+    namespace privileges {
+        enum : uint8_t {
+            Pio = (1 << 0), 
+            Mmio = (1 << 1),
+            Dma = (1 << 2),
+        };    
+    } // namespace 
+        
+        
+
     struct Device {
         uint16_t seg;
         uint8_t bus, slot, func;
@@ -86,6 +96,7 @@ namespace pci {
 
         void enable_irq(uint8_t vector);
         Bar read_bar(size_t i) const;
+        void set_privileges(uint8_t privilege);
 
         template<PciConfigValue T>
         T read(size_t offset) const {
