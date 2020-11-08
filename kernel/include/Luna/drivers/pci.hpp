@@ -62,6 +62,13 @@ namespace pci {
     template<typename T>
     concept PciConfigValue = std::same_as<T, uint8_t> || std::same_as<T, uint16_t> || std::same_as<T, uint32_t>;
 
+    struct Bar {
+        enum class Type { Invalid, Pio, Mmio };
+        Type type;
+        uint64_t base;
+        size_t len;
+    };
+
     struct Device {
         uint16_t seg;
         uint8_t bus, slot, func;
@@ -78,6 +85,7 @@ namespace pci {
         } msix{};
 
         void enable_irq(uint8_t vector);
+        Bar read_bar(size_t i) const;
 
         template<PciConfigValue T>
         T read(size_t offset) const {

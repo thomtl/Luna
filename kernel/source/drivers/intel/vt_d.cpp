@@ -12,8 +12,8 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     vmm::kernel_vmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
 
     regs = (RemappingEngineRegs*)va;
-    fault_recording_regs = (FaultRecordingRegister*)(((uintptr_t)regs) + (16 * ((regs->capabilities >> 24) & 0x3FF)));
-    iotlb_regs = (IOTLB*)(((uintptr_t)regs) + (16 * ((regs->extended_capabilities >> 8) & 0x3FF)));
+    fault_recording_regs = (FaultRecordingRegister*)(va + (16 * ((regs->capabilities >> 24) & 0x3FF)));
+    iotlb_regs = (IOTLB*)(va + (16 * ((regs->extended_capabilities >> 8) & 0x3FF)));
 
     const auto d = *drhd;
     ASSERT(d.flags.pci_include_all);
@@ -49,31 +49,35 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     uint32_t destination_id = get_cpu().lapic_id;
     auto vector = idt::allocate_vector();
 
-    pci::msi::Address msi_addr{};
-    pci::msi::Data msi_data{};
-    RemappingEngineRegs::FaultEventUpperAddress msi_upper_addr{};
+    pci::msi::Address msi_addr{.raw = 0};
+    pci::msi::Data msi_data{.raw = 0};
+    RemappingEngineRegs::FaultEventUpperAddress msi_upper_addr{.raw = 0};
 
     msi_addr.base_address = 0xFEE;
     msi_addr.destination_id = destination_id & 0xFF;
 
     msi_data.delivery_mode = 0;
+    msi_data.vector = vector;
 
-    msi_upper_addr.upper_dest_id = (destination_id >> 24) & 0xFFFFFF;
-
+    if(x2apic_mode)
+        msi_upper_addr.upper_dest_id = (destination_id >> 24) & 0xFFFFFF;
 
     regs->fault_event_data = msi_data.raw;
     regs->fault_event_address = msi_addr.raw;
-
-    if(x2apic_mode)
-        regs->fault_event_upper_address = msi_upper_addr.raw;
+    regs->fault_event_upper_address = msi_upper_addr.raw;
 
     idt::set_handler(vector, idt::handler{.f = []([[maybe_unused]] idt::regs*, void* userptr) {
         auto& self = *(vt_d::RemappingEngine*)userptr;
 
         for(size_t i = 0; i < self.n_fault_recording_regs; i++) {
-            const auto& fault = self.fault_recording_regs[i];
+            uint64_t* reg = (uint64_t*)&self.fault_recording_regs[i];
 
-            if(!fault.fault) {
+            FaultRecordingRegister fault;
+            uint64_t r0 = reg[0], r1 = reg[1];
+            memcpy(&fault, &r0, 8);
+            memcpy((uint8_t*)&fault + 8, &r1, 8);    
+
+            if(fault.fault) {
                 print("vt-d: Fault at index {}\n", i);
 
                 uint8_t type = fault.type_bit_1 | (fault.type_bit_2 << 1);
@@ -93,11 +97,14 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
                     print("      Execute access\n");
 
                 auto reason = fault.reason;
-                print("     Fault Reason: {}\n", reason);
-
-                asm("cli; hlt");
+                switch (reason) {
+                    case 5: print("      Reason: A Write or AtomicOp request encountered lack of write permission.\n"); break;
+                    default: print("      Reason: Unknown ({:#x})\n", reason);
+                }
             }
         }
+
+        asm("cli\nhlt");
     }, .is_irq = true, .should_iret = false, .userptr = this});
 
     regs->fault_event_control &= ~(1ull << 31); // Unmask IRQ
@@ -128,7 +135,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
 
     print("Done\n      Enabling Translation ... ");
 
-    regs->global_command |= (1 << 31);
+    regs->global_command = (1 << 31);
     while(!(regs->global_status & (1 << 31)))
         asm("pause");
 
@@ -139,7 +146,7 @@ void vt_d::RemappingEngine::wbflush() {
     if(!(regs->capabilities & (1 << 4)))
         return; // Flushing unsupported
 
-    regs->global_command |= (1 << 27);
+    regs->global_command = (1 << 27);
 
     while(regs->global_status & (1 << 27))
         asm("pause");

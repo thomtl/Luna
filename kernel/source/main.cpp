@@ -18,6 +18,8 @@
 #include <Luna/drivers/ioapic.hpp>
 #include <Luna/drivers/pci.hpp>
 
+#include <Luna/drivers/storage/ahci.hpp>
+
 #include <std/mutex.hpp>
 
 std::minimal_vector<CpuData, 1> per_cpu_data{};
@@ -69,12 +71,15 @@ void kernel_main(const stivale2_struct* info) {
     ioapic::init();
     acpi::init_sci();
 
-    pci::init();
-    iommu::init();
-
     smp::start_cpus(boot_info, kernel_main_ap);
 
+    pci::init();
+    iommu::init();
     asm("sti");
+
+    ahci::Controller c{pci::device_by_class(1, 6, 1)};
+    (void)c;
+
     print("luna: Done with kernel_main\n");
     while(true)
         ;

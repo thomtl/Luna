@@ -36,6 +36,19 @@ namespace std
             hmm::free((uintptr_t)_elements);
         }
 
+        template<typename... Args>
+        void resize(size_t size, Args&&... args) {
+            ensure_capacity(size);
+	        if(size < _size) {
+		        for(size_t i = size; i < _size; i++)
+			        _elements[i].~T();
+	        } else {
+		        for(size_t i = _size; i < size; i++)
+			        new (&_elements[i]) T(std::forward<Args>(args)...);
+	        }
+	        _size = size;
+        }
+
         void clear() {
             for(size_t i = 0; i < _size; i++)
                 _elements[i].~T();

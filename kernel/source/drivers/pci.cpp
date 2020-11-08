@@ -237,3 +237,36 @@ void pci::Device::enable_irq(uint8_t vector) {
     else
         PANIC("No IRQ routing support");
 }
+
+pci::Bar pci::Device::read_bar(size_t i) const {
+    if(i > 5)
+        return pci::Bar{.type = pci::Bar::Type::Invalid, .base = 0, .len = 0};
+
+    uint32_t off = (0x10 + (i * 4));
+
+    auto bar = read<uint32_t>(off);
+    if(bar & 1) { // IO Space
+        uint16_t base = bar & 0xFFFC;
+
+        write<uint32_t>(off, ~0);
+        uint16_t len = (~((read<uint32_t>(off) & ~3)) + 1) & 0xFFFF;
+        write<uint32_t>(off, bar);
+
+        return pci::Bar{.type = pci::Bar::Type::Pio, .base = base, .len = len};
+    } else { // MMIO
+        uint8_t type = (bar >> 1) & 3;
+        uint64_t base = 0;
+        if(type == 0) // 32-bit
+            base = bar & 0xFFFFFFF0;
+        else if(type == 2) // 64-bit
+            base = (bar & 0xFFFFFFF0) | ((uint64_t)read<uint32_t>(off + 4) << 32);
+        else
+            PANIC("Unknown MMIO Bar Type");
+
+        write<uint32_t>(off, ~0);
+        uint64_t len = ~((read<uint32_t>(off) & ~0xF)) + 1;
+        write<uint32_t>(off, bar);
+
+        return pci::Bar{.type = pci::Bar::Type::Mmio, .base = base, .len = len};
+    }
+}

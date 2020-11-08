@@ -4,6 +4,8 @@
 
 #include <Luna/drivers/pci.hpp>
 
+#include <Luna/cpu/paging.hpp>
+
 namespace iommu
 {
     void init();
