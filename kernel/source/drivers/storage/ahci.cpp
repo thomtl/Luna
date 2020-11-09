@@ -44,7 +44,7 @@ ahci::Controller::Controller(pci::Device* device): device{device} {
             else if(det == 1)
                 PANIC("Device but no comms, TODO implement COMRESET");
             else {
-                print("ahci: Unknown PxSSTS.det value {}\n", (uint32_t)det);
+                print("ahci: Unknown PxSSTS.det value {} at port {}\n", (uint32_t)det, i);
                 continue;
             }
         }
@@ -87,7 +87,7 @@ ahci::Controller::Controller(pci::Device* device): device{device} {
             asm("pause");
 
         if(!(port.regs->cmd & (1 << 15)) || !(port.regs->cmd & (1 << 14))) {
-            print("      Failed to start CMD engine\n");
+            print("ahci: Failed to start CMD engine for port {}\n", i);
             continue;
         }
 
@@ -204,9 +204,8 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     fis.flags.c = 1;
 
     fis.command = cmd.command;
-    fis.features = cmd.features;
     fis.control = 0x8;
-    fis.dev_head = 0xA0 | (1 << 6);
+    fis.dev_head = 0xA0 | (1 << 6) | ((cmd.lba28) ? ((cmd.lba >> 24) & 0xF) : (0)); // Obsolete stuff + LBA mode + Top nybble in case of lba28
     fis.sector_count_low = cmd.n_sectors & 0xFF;
     fis.sector_count_high = (cmd.n_sectors >> 8) & 0xFF;
 
@@ -217,9 +216,16 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     fis.lba_4 = (cmd.lba >> 32) & 0xFF;
     fis.lba_5 = (cmd.lba >> 40) & 0xFF;
 
+    fis.features = cmd.features & 0xFF;
+    fis.features_exp = (cmd.features >> 8) & 0xFF;
+
     ASSERT(transfer_len < pmm::block_size);
 
     auto pa = pmm::alloc_block();
+
+    if(cmd.write)
+        memcpy((void*)(pa + phys_mem_map), (void*)data, transfer_len);
+
     iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
 
     table->prdts[0].flags.byte_count = Prdt::calculate_bytecount(transfer_len);
@@ -240,7 +246,8 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
         }
     }
 
-    memcpy((void*)data, (void*)(pa + phys_mem_map), transfer_len);
+    if(!cmd.write)
+        memcpy((void*)data, (void*)(pa + phys_mem_map), transfer_len);
 }
 
 void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len) {
@@ -259,15 +266,22 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
     fis.flags.c = 1;
 
     fis.command = ata::commands::SendPacket;
-    fis.features = 1;
+    fis.features = 1; // Tell device main transfer is happining via DMA
     fis.control = 0x8;
     fis.dev_head = 0xA0;
+
+    fis.lba_1 = transfer_len & 0xFF; // Seems to not actually be needed?
+    fis.lba_2 = (transfer_len >> 8) & 0xFF;
 
     memcpy(table->packet, cmd.packet, 16);
 
     ASSERT(transfer_len < pmm::block_size);
 
     auto pa = pmm::alloc_block();
+
+    if(cmd.write)
+        memcpy((void*)(pa + phys_mem_map), (void*)data, transfer_len);
+
     iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
 
     table->prdts[0].flags.byte_count = Prdt::calculate_bytecount(transfer_len);
@@ -288,7 +302,8 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
         }
     }
 
-    memcpy((void*)data, (void*)(pa + phys_mem_map), transfer_len);
+    if(!cmd.write)
+        memcpy((void*)data, (void*)(pa + phys_mem_map), transfer_len);
 }
 
 std::vector<ahci::Controller> controllers;

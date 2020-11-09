@@ -49,11 +49,11 @@ namespace ata {
 
     struct ATACommand {
         uint8_t command;
-        uint8_t features;
+        uint16_t features;
         uint64_t lba;
         uint16_t n_sectors;
 
-        bool write;
+        bool write, lba28;
     };
 
     struct ATAPICommand {

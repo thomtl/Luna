@@ -52,16 +52,27 @@ void identify_drive(ata::Device& device) {
         return;
     }
 
-    char model[41] = {};
-    memcpy(model, &xfer[54], 40);
-    model[40] = '\0';
+    auto print_string = [&xfer](const char* prefix, size_t off, size_t len){
+        ASSERT((len & 1) == 0); // Assert len is divisible by 2
+        ASSERT(len <= 40); // Can't use a VLA in a template pack???
+        char buf[41] = {};
+        memcpy(buf, &xfer[off], len);
+        buf[len] = '\0';
 
-    for(size_t i = 0; i < 40; i += 2) {
-        auto tmp = model[i];
-        model[i] = model[i + 1];
-        model[i + 1] = tmp;
-    }
-    print("     Model: {}\n", model);
+        for(size_t i = 0; i < len; i += 2) {
+            auto tmp = buf[i];
+            buf[i] = buf[i + 1];
+            buf[i + 1] = tmp;
+        }
+
+        print("{}{}\n", prefix, buf);
+    };
+
+    print_string("     Model: ", 54, 40);
+    print_string("     Serial: ", 20, 20);
+    print_string("     FW Revision: ", 46, 8);
+
+    
 
     device.lba48 = (xfer[167] & (1 << 2)) && (xfer[173] & (1 << 2));
 
@@ -84,7 +95,7 @@ void identify_drive(ata::Device& device) {
     } else {
         const auto [lba, sector_size] = pi_read_capacity(device);
 
-        device.n_sectors = lba;
+        device.n_sectors = lba + 1;
         device.sector_size = sector_size;
 
         device.inserted = (lba != 0 && sector_size != 0);
@@ -98,6 +109,52 @@ void identify_drive(ata::Device& device) {
     }
 }
 
+bool verify_lba(const ata::Device& device, uint64_t lba) {
+    if(device.lba48)
+        return ((lba & ~0xFFFF'FFFF'FFFF) == 0);
+    else
+        return ((lba & ~0xFFF'FFFF) == 0);
+}
+
+bool read_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* data) {
+    if(device.driver.atapi)
+        PANIC("TODO: Implement ATAPI reading");
+
+    if(!verify_lba(device, lba))
+        return false; // Invalid LBA for device
+
+    ata::ATACommand cmd{};
+    cmd.command = device.lba48 ? ata::commands::ReadExtendedDMA : ata::commands::ReadDMA;
+    cmd.lba = lba;
+    cmd.n_sectors = n_sectors;
+    cmd.write = false;
+    cmd.lba28 = !device.lba48; // We need this info to write the correct top lba28 nybble
+
+    std::span<uint8_t> xfer{data, device.sector_size * n_sectors};
+    device.driver.ata_cmd(device.driver.userptr, cmd, xfer);
+
+    return true;
+}
+
+bool write_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* data) {
+    if(device.driver.atapi)
+        PANIC("TODO: Implement ATAPI writing");
+
+    if(!verify_lba(device, lba))
+        return false; // Invalid LBA for device
+
+    ata::ATACommand cmd{};
+    cmd.command = device.lba48 ? ata::commands::WriteExtendedDMA : ata::commands::WriteDMA;
+    cmd.lba = lba;
+    cmd.n_sectors = n_sectors;
+    cmd.write = true;
+    cmd.lba28 = !device.lba48; // We need this info to write the correct top lba28 nybble
+
+    std::span<uint8_t> xfer{data, device.sector_size * n_sectors};
+    device.driver.ata_cmd(device.driver.userptr, cmd, xfer);
+
+    return true;
+}
 
 void ata::register_device(ata::DriverDevice& dev) {
     auto& device = devices.emplace_back();
