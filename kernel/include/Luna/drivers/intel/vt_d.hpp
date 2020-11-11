@@ -213,6 +213,15 @@ namespace vt_d {
             uint16_t bus : 8;
         };
         uint16_t raw;
+
+        static constexpr SourceID from_device(const pci::Device& device) {
+            SourceID id{};
+            id.bus = device.bus;
+            id.slot = device.slot;
+            id.func = device.func;
+
+            return id;
+        }
     };
     static_assert(sizeof(SourceID) == 2);
 
@@ -253,10 +262,14 @@ namespace vt_d {
     struct IOMMU {
         IOMMU();
 
-        sl_paging::context& get_translation(const pci::Device& device);
+        
+        void map(const pci::Device& device, uintptr_t pa, uintptr_t iova, uint64_t flags);
+        uintptr_t unmap(const pci::Device& device, uintptr_t iova);
         void invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova);
 
         private:
+        RemappingEngine& get_engine(const pci::Device& device);
+
         Dmar* dmar;
         std::vector<RemappingEngine> engines;
     };

@@ -268,24 +268,39 @@ vt_d::IOMMU::IOMMU() {
     }
 }
 
-sl_paging::context& vt_d::IOMMU::get_translation(const pci::Device& device) {
-    SourceID id{};
-    id.bus = device.bus;
-    id.slot = device.slot;
-    id.func = device.func;
-
+vt_d::RemappingEngine& vt_d::IOMMU::get_engine(const pci::Device& device) {
     for(auto& engine : engines)
         if(engine.segment == device.seg)
-            return engine.get_device_translation(id);
+            return engine;
 
     PANIC("Couldn't find engine for segment");
 }
 
-void vt_d::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova) {
+void vt_d::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova, uint64_t flags) {
     SourceID id{};
     id.bus = device.bus;
     id.slot = device.slot;
     id.func = device.func;
+
+    auto& engine = get_engine(device);
+
+    engine.get_device_translation(id).map(pa, iova, flags);
+    engine.invalidate_iotlb_addr(id, iova);
+}
+
+uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
+    auto id = SourceID::from_device(device);
+
+    auto& engine = get_engine(device);
+
+    auto ret = engine.get_device_translation(id).unmap(iova);
+    engine.invalidate_iotlb_addr(id, iova);
+
+    return ret;
+}
+
+void vt_d::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova) {
+    auto id = SourceID::from_device(device);
 
     for(auto& engine : engines)
         if(engine.segment == device.seg)
