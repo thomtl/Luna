@@ -225,6 +225,8 @@ namespace vt_d {
         size_t n_fault_recording_regs;
         size_t segment;
 
+        void invalidate_iotlb_addr(SourceID device, uintptr_t iova);
+
         private:
 
         void wbflush();
@@ -243,14 +245,16 @@ namespace vt_d {
         size_t n_domain_ids;
         std::bitmap domain_ids;
         std::unordered_map<uint16_t, sl_paging::context*> page_map;
+        std::unordered_map<uint16_t, uint16_t> domain_id_map;
 
-        bool x2apic_mode;
+        bool x2apic_mode, wbflush_needed;
     };
 
     struct IOMMU {
         IOMMU();
 
         sl_paging::context& get_translation(const pci::Device& device);
+        void invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova);
 
         private:
         Dmar* dmar;

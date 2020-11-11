@@ -5,6 +5,8 @@
 
 #include <Luna/drivers/storage/ata.hpp>
 
+#include <Luna/mm/iovmm.hpp>
+
 
 namespace ahci
 {
@@ -89,6 +91,7 @@ namespace ahci
             uint8_t reserved : 3;
             uint8_t c : 1;
         } flags;
+        static_assert(sizeof(flags) == 1);
         uint8_t command;
         uint8_t features;
         uint8_t lba_0;
@@ -116,8 +119,9 @@ namespace ahci
             uint32_t reserved : 9;
             uint32_t irq_on_completion : 1;
         } flags;
+        static_assert(sizeof(flags) == 4);
 
-        static uint32_t calculate_bytecount(size_t count){
+        static constexpr uint32_t calculate_bytecount(size_t count){
             ASSERT((count % 2) == 0);
 
             ASSERT(count <= 0x3FFFFF);
@@ -126,6 +130,7 @@ namespace ahci
         }            
     };
     static_assert(sizeof(Prdt) == 16);
+    static_assert(Prdt::calculate_bytecount(512) == 0x1FF);
 
     struct [[gnu::packed]] CmdTable {
         uint8_t fis[64];
@@ -172,6 +177,8 @@ namespace ahci
         uint8_t n_allocated_ports, n_command_slots;
         bool a64;
         pci::Device* device;
+
+        iovmm::Iovmm iommu_vmm;
 
         friend struct Port;
 

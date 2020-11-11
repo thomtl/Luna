@@ -9,10 +9,9 @@ std::pair<uint32_t, uint32_t> pi_read_capacity(ata::Device& device) {
     ASSERT(device.driver.atapi);
 
     ata::ATAPICommand cmd{};
-
     cmd.write = false;
-    auto* packet = (ata::packet_commands::read_capacity::packet*)cmd.packet;
 
+    auto* packet = (ata::packet_commands::read_capacity::packet*)cmd.packet;
     packet->command = ata::packet_commands::read_capacity::command;
 
     ata::packet_commands::read_capacity::response res{};
@@ -166,5 +165,5 @@ void ata::register_device(ata::DriverDevice& dev) {
     if(dev.atapi)
         ASSERT(dev.atapi_cmd);
 
-    identify_drive(device);
+    identify_drive(device);    
 }

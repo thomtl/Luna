@@ -39,6 +39,8 @@ namespace sl_paging
         ~context();
 
         void map(uintptr_t pa, uintptr_t iova, uint64_t flags);
+        uintptr_t unmap(uintptr_t iova);
+
         uintptr_t get_root_pa() const;
 
         private:

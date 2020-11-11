@@ -1,10 +1,11 @@
 #include <Luna/drivers/storage/ahci.hpp>
 #include <Luna/drivers/iommu.hpp>
+
 #include <Luna/mm/vmm.hpp>
 
 #include <Luna/misc/format.hpp>
 
-ahci::Controller::Controller(pci::Device* device): device{device} {
+ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{device} {
     auto bar = device->read_bar(5);
     ASSERT(bar.type == pci::Bar::Type::Mmio);
 
@@ -22,6 +23,13 @@ ahci::Controller::Controller(pci::Device* device): device{device} {
     regs->ghcr.ghc |= (1 << 31); // Enable aHCI
 
     a64 = (regs->ghcr.cap & (1 << 31)) != 0;
+
+    // Add the usable iommu region, don't use 0x0 to avoid confusion with NULL, and limit to 32bits if those addresses are not supported
+    if(a64)
+        iommu_vmm.push_region({0x1000, 0xFFFF'FFFF'FFFF'FFFF - 0x1000});
+    else
+        iommu_vmm.push_region({0x1000, 0xFFFF'FFFF - 0x1000});
+
     n_allocated_ports = (regs->ghcr.cap & 0x1F) + 1;
     n_command_slots = ((regs->ghcr.cap >> 8) & 0x1F) + 1;
 
@@ -63,6 +71,7 @@ ahci::Controller::Controller(pci::Device* device): device{device} {
 
         
         auto region_pa = pmm::alloc_block();
+        memset((void*)(region_pa + phys_mem_map), 0, pmm::block_size);
         if(!a64)
             ASSERT((region_pa >> 32) == 0); // Allocate under 4GiB or use IOMMU to map under 4GiB
         iommu::map(*device, region_pa, region_pa, paging::mapPagePresent | paging::mapPageWrite);
@@ -152,7 +161,7 @@ void ahci::Controller::Port::wait_idle() {
 }
 
 void ahci::Controller::Port::wait_ready() {
-    while((regs->tfd & (1 << 7)) && (regs->tfd & (1 << 3)))
+    while((regs->tfd & (1 << 7)) || (regs->tfd & (1 << 3)))
         asm("pause");
 }
 
@@ -178,6 +187,7 @@ std::pair<uint8_t, ahci::CmdTable*> ahci::Controller::Port::allocate_command(siz
     ASSERT(size < pmm::block_size);
 
     auto pa = pmm::alloc_block();
+    memset((void*)(pa + phys_mem_map), 0, pmm::block_size);
     iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
     if(!controller->a64)
         ASSERT((pa >> 32) == 0);
@@ -219,18 +229,22 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     fis.features = cmd.features & 0xFF;
     fis.features_exp = (cmd.features >> 8) & 0xFF;
 
-    ASSERT(transfer_len < pmm::block_size);
+    auto region = controller->iommu_vmm.alloc(transfer_len, cmd.write ? data : nullptr);
+    ASSERT(region.base);
 
-    auto pa = pmm::alloc_block();
+    for(size_t i = 0; i < n_prdts; i++) {
+        auto& prdt = table->prdts[i];
 
-    if(cmd.write)
-        memcpy((void*)(pa + phys_mem_map), (void*)data, transfer_len);
+        size_t remaining = transfer_len - (i * 0x3FFFFF);
+        size_t transfer = (remaining >= 0x3FFFFF) ? 0x3FFFFF : remaining;
 
-    iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
+        prdt.flags.byte_count = Prdt::calculate_bytecount(transfer);
+        uintptr_t pa = region.base + (i * 0x3FFFFF);
 
-    table->prdts[0].flags.byte_count = Prdt::calculate_bytecount(transfer_len);
-    table->prdts[0].low = pa & 0xFFFFFFFF;
-    table->prdts[0].high = (pa >> 32) & 0xFFFFFFFF;
+        prdt.low = pa & 0xFFFF'FFFF;
+        if(controller->a64)
+            prdt.high = (pa >> 32) & 0xFFFF'FFFF;
+    }
 
     wait_ready();
 
@@ -246,14 +260,12 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
         }
     }
 
-    if(!cmd.write)
-        memcpy((void*)data, (void*)(pa + phys_mem_map), transfer_len);
+    controller->iommu_vmm.free(region, cmd.write ? nullptr : data);
 }
 
 void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len) {
     size_t n_prdts = div_ceil(transfer_len, 0x3FFFFF);
     const auto [index, table] = allocate_command(n_prdts);
-
     ASSERT(index != ~0);
 
     region->command_headers[index].flags.prdtl = n_prdts;
@@ -275,18 +287,22 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
 
     memcpy(table->packet, cmd.packet, 16);
 
-    ASSERT(transfer_len < pmm::block_size);
+    auto region = controller->iommu_vmm.alloc(transfer_len, cmd.write ? data : nullptr);
+    ASSERT(region.base);
 
-    auto pa = pmm::alloc_block();
+    for(size_t i = 0; i < n_prdts; i++) {
+        auto& prdt = table->prdts[i];
 
-    if(cmd.write)
-        memcpy((void*)(pa + phys_mem_map), (void*)data, transfer_len);
+        size_t remaining = transfer_len - (i * 0x3FFFFF);
+        size_t transfer = (remaining >= 0x3FFFFF) ? 0x3FFFFF : remaining;
 
-    iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
+        prdt.flags.byte_count = Prdt::calculate_bytecount(transfer);
+        uintptr_t pa = region.base + (i * 0x3FFFFF);
 
-    table->prdts[0].flags.byte_count = Prdt::calculate_bytecount(transfer_len);
-    table->prdts[0].low = pa & 0xFFFFFFFF;
-    table->prdts[0].high = (pa >> 32) & 0xFFFFFFFF;
+        prdt.low = pa & 0xFFFF'FFFF;
+        if(controller->a64)
+            prdt.high = (pa >> 32) & 0xFFFF'FFFF;
+    }
 
     wait_ready();
 
@@ -302,8 +318,7 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
         }
     }
 
-    if(!cmd.write)
-        memcpy((void*)data, (void*)(pa + phys_mem_map), transfer_len);
+    controller->iommu_vmm.free(region, cmd.write ? nullptr : data);
 }
 
 std::vector<ahci::Controller> controllers;

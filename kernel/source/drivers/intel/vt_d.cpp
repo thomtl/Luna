@@ -41,8 +41,8 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     if(regs->capabilities & (1 << 7)) // If cap.CM is set domain ID 0 is reserved
         domain_ids.set(0);
 
-    if(regs->extended_capabilities & (1 << 4))
-        x2apic_mode = true;
+    wbflush_needed = (regs->capabilities & (1 << 4)) ? true : false;
+    x2apic_mode = (regs->extended_capabilities & (1 << 4)) ? true : false;
 
     print("      Setting up IRQ ... ");
 
@@ -143,8 +143,8 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
 }
 
 void vt_d::RemappingEngine::wbflush() {
-    if(!(regs->capabilities & (1 << 4)))
-        return; // Flushing unsupported
+    if(!wbflush_needed)
+        return;
 
     regs->global_command = (1 << 27);
 
@@ -169,6 +169,26 @@ void vt_d::RemappingEngine::invalidate_iotlb() {
     cmd.req_granularity = 1; // Global invalidation
     cmd.invalidate = 1;
 
+    iotlb_regs->cmd = cmd.raw;
+
+    while(iotlb_regs->cmd & (1ull << 63))
+        asm("pause");
+}
+
+void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iova) {
+    wbflush();
+
+    IOTLBCmd cmd{};
+    cmd.drain_reads = 1;
+    cmd.drain_writes = 1;
+    cmd.req_granularity = 0b11; // Domain local invalidation + Addr
+    cmd.invalidate = 1;
+    cmd.domain_id = domain_id_map[device.raw];
+
+    IOTLBAddr addr{};
+    addr.addr = iova >> 12;
+
+    iotlb_regs->addr = addr.raw;
     iotlb_regs->cmd = cmd.raw;
 
     while(iotlb_regs->cmd & (1ull << 63))
@@ -202,6 +222,7 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
             PANIC("No Domain IDs left");
 
         context_table_entry->domain_id = domain_id;
+        domain_id_map[device.raw] = domain_id;
 
         auto* context = new sl_paging::context{secondary_page_levels};
         page_map[device.raw] = context;
@@ -256,6 +277,19 @@ sl_paging::context& vt_d::IOMMU::get_translation(const pci::Device& device) {
     for(auto& engine : engines)
         if(engine.segment == device.seg)
             return engine.get_device_translation(id);
+
+    PANIC("Couldn't find engine for segment");
+}
+
+void vt_d::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova) {
+    SourceID id{};
+    id.bus = device.bus;
+    id.slot = device.slot;
+    id.func = device.func;
+
+    for(auto& engine : engines)
+        if(engine.segment == device.seg)
+            return engine.invalidate_iotlb_addr(id, iova);
 
     PANIC("Couldn't find engine for segment");
 }

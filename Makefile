@@ -26,4 +26,5 @@ kernel:
 run: kernel
 	# -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
 	qemu-system-x86_64 -enable-kvm -device intel-iommu,aw-bits=48 -machine q35 -smp 4 -hda luna.hdd -serial file:/dev/stdout -monitor stdio -no-reboot -no-shutdown
+	 # -trace ahci_dma_prepare_buf -trace ahci_populate_* -trace ahci_pio_transfer -trace ahci_start_dma -trace ahci_dma_prepare_buf_fail -trace ahci_cmd_done -trace vtd_inv_desc_iotlb_pages -trace ahci_* -trace vtd_*
 

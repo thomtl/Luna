@@ -26,8 +26,20 @@ void iommu::init() {
 }
 
 void iommu::map(const pci::Device& device, uintptr_t pa, uintptr_t iova, uint64_t flags) {
-    if(vendor == Vendor::Intel)
-        return intel_iommu->get_translation(device).map(pa, iova, flags);
-    else
+    if(vendor == Vendor::Intel) {
+        intel_iommu->get_translation(device).map(pa, iova, flags);
+        intel_iommu->invalidate_iotlb_entry(device, iova);
+
+        return;
+    } else
+        PANIC("Unknown vendor");
+}
+
+uintptr_t iommu::unmap(const pci::Device& device, uintptr_t iova) {
+    if(vendor == Vendor::Intel) {
+        auto ret = intel_iommu->get_translation(device).unmap(iova);
+        intel_iommu->invalidate_iotlb_entry(device, iova);
+        return ret;
+    } else
         PANIC("Unknown vendor");
 }
