@@ -44,6 +44,8 @@ namespace sl_paging
         uintptr_t get_root_pa() const;
 
         private:
+        page_entry* walk(uintptr_t iova, bool create_new_tables);
+
         uint8_t levels;
         uintptr_t root_pa;
     };

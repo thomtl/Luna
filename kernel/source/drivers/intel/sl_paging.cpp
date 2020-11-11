@@ -45,79 +45,56 @@ sl_paging::context::~context(){
     clean_table(root_pa, levels);
 }
 
-void sl_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
+sl_paging::page_entry* sl_paging::context::walk(uintptr_t iova, bool create_new_tables) {
     auto get_index = [iova](size_t i){ return (iova >> ((9 * (i - 1)) + 12)) & 0x1FF; };
-    auto get_level_or_create = [](page_table* prev, size_t i) -> page_table* {
+    auto get_level_or_create = [create_new_tables](page_table* prev, size_t i) -> page_table* {
         auto& entry = (*prev)[i];
         if(!entry.r) {
-            const auto [pa, _] = create_table();
+            if(create_new_tables) {
+                const auto [pa, _] = create_table();
 
-            entry.frame = (pa >> 12);
-            entry.r = 1;
-            entry.w = 1;
+                entry.frame = (pa >> 12);
+                entry.r = 1;
+                entry.w = 1;
+            } else {
+                return nullptr;
+            }
         }
 
         return (page_table*)((entry.frame << 12) + phys_mem_map);
     };
 
     auto* curr = (page_table*)(root_pa + phys_mem_map);
-    if(levels >= 5)
-        curr = get_level_or_create(curr, get_index(5));
-    if(levels >= 4)
-        curr = get_level_or_create(curr, get_index(4));
-    curr = get_level_or_create(curr, get_index(3));
-    curr = get_level_or_create(curr, get_index(2));
+    for(size_t i = levels; i >= 2; i--) {
+        curr = get_level_or_create(curr, get_index(i));
+        if(!curr)
+            return nullptr;
+    }
 
     auto& pml1 = *curr;
-    auto& pml1_e = pml1[get_index(1)];
-
-    pml1_e.r = (flags & paging::mapPagePresent) ? 1 : 0;
-    pml1_e.w = (flags & paging::mapPageWrite) ? 1 : 0;
-    pml1_e.x = (flags & paging::mapPageExecute) ? 1 : 0;
-    pml1_e.frame = (pa >> 12);
+    return &pml1[get_index(1)];
 }
 
-// TODO: Maybe merge table walking code with map?
+void sl_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
+    auto& page = *walk(iova, true); // We want to create new tables, so this is guaranteed to return a valid pointer
+
+    page.r = (flags & paging::mapPagePresent) ? 1 : 0;
+    page.w = (flags & paging::mapPageWrite) ? 1 : 0;
+    page.x = (flags & paging::mapPageExecute) ? 1 : 0;
+    page.frame = (pa >> 12);
+}
+
 uintptr_t sl_paging::context::unmap(uintptr_t iova) {
-    auto get_index = [iova](size_t i){ return (iova >> ((9 * (i - 1)) + 12)) & 0x1FF; };
-    auto get_level = [](page_table* prev, size_t i) -> page_table* {
-        auto& entry = (*prev)[i];
-        if(!entry.r)
-            return nullptr;
+    auto* entry = walk(iova, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
+    if(!entry)
+        return 0; // Page does not exist
 
-        return (page_table*)((entry.frame << 12) + phys_mem_map);
-    };
+    entry->r = 0;
+    entry->w = 0;
+    entry->x = 0;
 
-    auto* curr = (page_table*)(root_pa + phys_mem_map);
-    if(levels >= 5) {
-        curr = get_level(curr, get_index(5));
-        if(!curr)
-            return 0;
-    }
-
-    if(levels >= 4) {
-        curr = get_level(curr, get_index(4));
-        if(!curr)
-            return 0;
-    }
-
-    curr = get_level(curr, get_index(3));
-    if(!curr)
-        return 0;
-
-    curr = get_level(curr, get_index(2));
-    if(!curr)
-        return 0;
-
-    auto& pml1 = *curr;
-    auto& pml1_e = pml1[get_index(1)];
-
-    pml1_e.r = 0;
-    pml1_e.w = 0;
-    pml1_e.x = 0;
-
-    auto pa = (pml1_e.frame << 12);
-    pml1_e.frame = 0;
+    auto pa = (entry->frame << 12);
+    entry->frame = 0;
 
     return pa;
 }
