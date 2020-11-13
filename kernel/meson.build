@@ -17,6 +17,7 @@ main_sources = files(
 
     'source/drivers/storage/ahci.cpp',
     'source/drivers/storage/ata.cpp',
+    'source/drivers/storage/scsi.cpp',
 
     'source/drivers/acpi.cpp',
     'source/drivers/ioapic.cpp',

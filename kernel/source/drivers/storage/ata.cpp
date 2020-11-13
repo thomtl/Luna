@@ -2,34 +2,16 @@
 #include <std/vector.hpp>
 
 #include <Luna/misc/format.hpp>
+#include <Luna/drivers/storage/scsi.hpp>
 
-std::vector<ata::Device> devices;
-
-std::pair<uint32_t, uint32_t> pi_read_capacity(ata::Device& device) {
-    ASSERT(device.driver.atapi);
-
-    ata::ATAPICommand cmd{};
-    cmd.write = false;
-
-    auto* packet = (ata::packet_commands::read_capacity::packet*)cmd.packet;
-    packet->command = ata::packet_commands::read_capacity::command;
-
-    ata::packet_commands::read_capacity::response res{};
-
-    std::span<uint8_t> xfer{(uint8_t*)&res, sizeof(res)};
-    device.driver.atapi_cmd(device.driver.userptr, cmd, xfer);
-
-    uint32_t block_size = bswap32(res.block_size);
-    uint32_t lba = bswap32(res.lba);
-
-    return {lba, block_size};
-}
+static std::vector<ata::Device*> devices;
 
 void identify_drive(ata::Device& device) {
     ata::ATACommand cmd{};
     cmd.command = device.driver.atapi ? ata::commands::IdentifyPI : ata::commands::Identify;
-
-    std::span<uint8_t> xfer{device.identify, 512};
+    
+    uint8_t identify[512] = {};
+    std::span<uint8_t> xfer{identify, 512};
     device.driver.ata_cmd(device.driver.userptr, cmd, xfer);
 
     auto checksum = [&]() -> bool {
@@ -85,26 +67,26 @@ void identify_drive(ata::Device& device) {
             if(sector_size & (1 << 12)) { // Logical sectors are larger than 512
                 device.sector_size = *(uint16_t*)(xfer.data() + (117 * 2));
             } else {
-                device.sector_size = 512; // TODO: Don't assume this but send the command to enumerate it
+                device.sector_size = 512;
             }
         } else {
-            device.sector_size = 512; // TODO: Don't assume this but send the command to enumerate it
+            device.sector_size = 512;
         }
-        device.inserted = true;
     } else {
-        const auto [lba, sector_size] = pi_read_capacity(device);
-
-        device.n_sectors = lba + 1;
-        device.sector_size = sector_size;
-
-        device.inserted = (lba != 0 && sector_size != 0);
+        uint8_t packet_size = xfer[0] & 0b11;
+        if(packet_size == 0b00)
+            device.max_packet_size = 12;
+        else if(packet_size == 0b01)
+            device.max_packet_size = 16;
+        else
+            print("ata: Unknown packet size {:#b}\n", (uint64_t)packet_size);
     }
 
-    if(device.inserted) {
+    if(device.driver.atapi) {
+        print("     Max Packet Size: {} bytes\n", (uint64_t)device.max_packet_size);
+    } else {
         print("     Logical Sector Size: {} bytes\n", device.sector_size);
         print("     Number of Sectors: {} [{} MiB]\n", device.n_sectors, (device.n_sectors * device.sector_size) / 1024 / 1024);
-    } else {
-        print("     Device is not inserted\n");
     }
 }
 
@@ -156,8 +138,9 @@ bool write_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t*
 }
 
 void ata::register_device(ata::DriverDevice& dev) {
-    auto& device = devices.emplace_back();
-    device.driver = dev;
+    auto* device = new Device{};
+    devices.push_back(device);
+    device->driver = dev;
 
     print("ata: Registered {} Device\n", dev.atapi ? "ATAPI" : "ATA");
 
@@ -165,5 +148,23 @@ void ata::register_device(ata::DriverDevice& dev) {
     if(dev.atapi)
         ASSERT(dev.atapi_cmd);
 
-    identify_drive(device);    
+    identify_drive(*device);  
+
+    // Register with SCSI driver if ATAPI
+    if(dev.atapi) {
+        scsi::DriverDevice scsi_dev{};
+        scsi_dev.max_packet_size = device->max_packet_size;
+        scsi_dev.userptr = device;
+        scsi_dev.scsi_cmd = [](void* userptr, const scsi::SCSICommand& cmd, std::span<uint8_t>& xfer) {
+            auto& device = *(Device*)userptr;
+
+            ATAPICommand atapi_cmd{};
+            memcpy(atapi_cmd.packet, cmd.packet, 16);
+            atapi_cmd.write = cmd.write;
+
+            device.driver.atapi_cmd(device.driver.userptr, atapi_cmd, xfer);
+        };
+
+        scsi::register_device(scsi_dev);
+    }
 }

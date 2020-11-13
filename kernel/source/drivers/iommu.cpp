@@ -17,6 +17,7 @@ void iommu::init() {
     if(!cpu::cpuid(0, a, b, c, d))
         PANIC("CPUID leaf 0 does not exist");
 
+    // TODO: Could a case exist where an AMD cpu has a DMAR or an intel cpu has an IVRS?
     if(b == cpu::signature_intel_ebx && c == cpu::signature_intel_ecx && d == cpu::signature_intel_edx) {
         vendor = Vendor::Intel;
         intel_iommu.init();

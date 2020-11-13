@@ -21,3 +21,7 @@ constexpr size_t div_ceil(size_t a, size_t b) {
 constexpr uint32_t bswap32(uint32_t v) {
     return (uint32_t)((v >> 24) & 0xFF) | ((v << 8) & 0xFF0000) | ((v >> 8) & 0xFF00) | ((v << 24) & 0xFF000000);
 }
+
+constexpr uint16_t bswap16(uint16_t v) {
+    return (v >> 8) | (v << 8);
+}
