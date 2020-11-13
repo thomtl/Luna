@@ -3,6 +3,8 @@
 
 #include <Luna/misc/format.hpp>
 
+#include <Luna/fs/storage_dev.hpp>
+
 static std::vector<scsi::Device*> devices;
 
 std::pair<uint32_t, uint32_t> scsi_read_capacity(scsi::Device& device) {
@@ -92,6 +94,34 @@ void scsi_read10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* d
     dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
 }
 
+void scsi_write12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* data) {
+    scsi::SCSICommand cmd{};
+    cmd.write = true;
+
+    auto& packet = *(scsi::commands::write12::Packet*)cmd.packet;
+
+    packet.command = scsi::commands::write12::command;
+    packet.lba = bswap32(lba);
+    packet.length = bswap32(n_sectors);
+
+    std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
+    dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
+}
+
+void scsi_write10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* data) {
+    scsi::SCSICommand cmd{};
+    cmd.write = true;
+
+    auto& packet = *(scsi::commands::write10::Packet*)cmd.packet;
+
+    packet.command = scsi::commands::write10::command;
+    packet.lba = bswap32(lba);
+    packet.length = bswap16(n_sectors);
+
+    std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
+    dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
+}
+
 void scsi::register_device(scsi::DriverDevice& dev) {
     auto* device = new Device{};
     devices.push_back(device);
@@ -100,4 +130,30 @@ void scsi::register_device(scsi::DriverDevice& dev) {
     print("scsi: Registered device\n");
 
     scsi_inquiry(*device);
+
+    storage_dev::DriverDevice driver{};
+    driver.n_lbas = device->n_sectors;
+    driver.sector_size = device->sector_size;
+    driver.userptr = device;
+
+    driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t>& xfer) {
+        auto& device = *(scsi::Device*)userptr;
+
+        if(write) {
+            if(device.driver.max_packet_size >= 12)
+                scsi_write12(device, lba, n_lbas, xfer.data());
+            else if(device.driver.max_packet_size >= 10)
+                scsi_write10(device, lba, n_lbas, xfer.data());
+            else
+                PANIC("Write with unsupported packet size");
+        } else {
+            if(device.driver.max_packet_size >= 12)
+                scsi_read12(device, lba, n_lbas, xfer.data());
+            else if(device.driver.max_packet_size >= 10)
+                scsi_read10(device, lba, n_lbas, xfer.data());
+            else
+                PANIC("Write with unsupported packet size");
+        }
+    };
+    storage_dev::register_device(driver);
 }

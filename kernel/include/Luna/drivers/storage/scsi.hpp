@@ -63,7 +63,7 @@ namespace scsi {
                 uint8_t control;
             };
             static_assert(sizeof(Packet) == 12);
-        } // namespace read
+        } // namespace read12
 
         namespace read10 {
             constexpr uint8_t command = 0x28;
@@ -83,8 +83,51 @@ namespace scsi {
                 uint8_t control;
             };
             static_assert(sizeof(Packet) == 10);
-        } // namespace read
-        
+        } // namespace read10
+
+        namespace write10 {
+            constexpr uint8_t command = 0x2A;
+
+            struct [[gnu::packed]] Packet {
+                uint8_t command;
+                struct {
+                    uint8_t obsolete : 2;
+                    uint8_t reserved : 1;
+                    uint8_t fua : 1;
+                    uint8_t dpo : 1;
+                    uint8_t rdprotect : 3;
+                };
+                uint32_t lba;
+                uint8_t group_number;
+                uint16_t length;
+                uint8_t control;
+            };
+            static_assert(sizeof(Packet) == 10);
+        } // namespace write10
+
+        namespace write12 {
+            constexpr uint8_t command = 0xAA;
+
+            struct [[gnu::packed]] Packet {
+                uint8_t command;
+                struct {
+                    uint8_t obsolete : 2;
+                    uint8_t rarc : 1;
+                    uint8_t fua : 1;
+                    uint8_t dpo : 1;
+                    uint8_t rdprotect : 3;
+                };
+                uint32_t lba;
+                uint32_t length;
+                struct {
+                    uint8_t group_number : 5;
+                    uint8_t reserved : 2;
+                    uint8_t restricted : 1;
+                };
+                uint8_t control;
+            };
+            static_assert(sizeof(Packet) == 12);
+        } // namespace write12
     } // namespace commands
     
     struct SCSICommand {
