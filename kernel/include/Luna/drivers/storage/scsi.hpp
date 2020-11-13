@@ -147,6 +147,7 @@ namespace scsi {
 
         uint8_t type, version;
         size_t n_sectors, sector_size;
+        bool inserted;
     };
     
     void register_device(DriverDevice& dev);

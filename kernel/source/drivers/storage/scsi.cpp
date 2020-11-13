@@ -66,11 +66,19 @@ void scsi_inquiry(scsi::Device& dev) {
     dev.n_sectors = lba;
     dev.sector_size = block_size;
 
-    print("      Logical Sector Size: {} bytes\n", dev.sector_size);
-    print("      Number of Sectors: {} [{} MiB]\n", dev.n_sectors, (dev.n_sectors * dev.sector_size) / 1024 / 1024);
+    if(lba != 0 && block_size != 0)
+        dev.inserted = true;
+
+    if(dev.inserted) {
+        print("      Logical Sector Size: {} bytes\n", dev.sector_size);
+        print("      Number of Sectors: {} [{} MiB]\n", dev.n_sectors, (dev.n_sectors * dev.sector_size) / 1024 / 1024);
+    }
 }
 
 void scsi_read12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* data) {
+    if(!dev.inserted)
+        return;
+    
     scsi::SCSICommand cmd{};
     auto& packet = *(scsi::commands::read12::Packet*)cmd.packet;
 
@@ -83,6 +91,9 @@ void scsi_read12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* d
 }
 
 void scsi_read10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* data) {
+    if(!dev.inserted)
+        return;
+    
     scsi::SCSICommand cmd{};
     auto& packet = *(scsi::commands::read10::Packet*)cmd.packet;
 
@@ -95,6 +106,9 @@ void scsi_read10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* d
 }
 
 void scsi_write12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* data) {
+    if(!dev.inserted)
+        return;
+    
     scsi::SCSICommand cmd{};
     cmd.write = true;
 
@@ -109,6 +123,9 @@ void scsi_write12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* 
 }
 
 void scsi_write10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* data) {
+    if(!dev.inserted)
+        return;
+    
     scsi::SCSICommand cmd{};
     cmd.write = true;
 
@@ -131,29 +148,31 @@ void scsi::register_device(scsi::DriverDevice& dev) {
 
     scsi_inquiry(*device);
 
-    storage_dev::DriverDevice driver{};
-    driver.n_lbas = device->n_sectors;
-    driver.sector_size = device->sector_size;
-    driver.userptr = device;
+    if(device->inserted) {
+        storage_dev::DriverDevice driver{};
+        driver.n_lbas = device->n_sectors;
+        driver.sector_size = device->sector_size;
+        driver.userptr = device;
 
-    driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t>& xfer) {
-        auto& device = *(scsi::Device*)userptr;
+        driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t>& xfer) {
+            auto& device = *(scsi::Device*)userptr;
 
-        if(write) {
-            if(device.driver.max_packet_size >= 12)
-                scsi_write12(device, lba, n_lbas, xfer.data());
-            else if(device.driver.max_packet_size >= 10)
-                scsi_write10(device, lba, n_lbas, xfer.data());
-            else
-                PANIC("Write with unsupported packet size");
-        } else {
-            if(device.driver.max_packet_size >= 12)
-                scsi_read12(device, lba, n_lbas, xfer.data());
-            else if(device.driver.max_packet_size >= 10)
-                scsi_read10(device, lba, n_lbas, xfer.data());
-            else
-                PANIC("Write with unsupported packet size");
-        }
-    };
-    storage_dev::register_device(driver);
+            if(write) {
+                if(device.driver.max_packet_size >= 12)
+                    scsi_write12(device, lba, n_lbas, xfer.data());
+                else if(device.driver.max_packet_size >= 10)
+                    scsi_write10(device, lba, n_lbas, xfer.data());
+                else
+                    PANIC("Write with unsupported packet size");
+            } else {
+                if(device.driver.max_packet_size >= 12)
+                    scsi_read12(device, lba, n_lbas, xfer.data());
+                else if(device.driver.max_packet_size >= 10)
+                    scsi_read10(device, lba, n_lbas, xfer.data());
+                else
+                    PANIC("Write with unsupported packet size");
+            }
+        };
+        storage_dev::register_device(driver);
+    }
 }

@@ -1,5 +1,7 @@
 #include <Luna/fs/storage_dev.hpp>
 
+#include <Luna/fs/mbr.hpp>
+
 #include <Luna/misc/format.hpp>
 
 #include <std/vector.hpp>
@@ -121,5 +123,10 @@ void storage_dev::register_device(const DriverDevice& driver) {
     devices.push_back(device);
     device->driver = driver;
 
-    // TODO(Enumerate partitions)
+    uint8_t magic[8] = {0};
+    device->read(driver.sector_size, 8, magic); // LBA1
+    if(strncmp((char*)magic, "EFI PART", 8) == 0)
+        PANIC("TODO Implement GPT");
+    else
+        mbr::parse_mbr(*device);
 }
