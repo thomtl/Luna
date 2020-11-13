@@ -4,6 +4,8 @@
 #include <Luna/misc/format.hpp>
 #include <Luna/drivers/storage/scsi.hpp>
 
+#include <Luna/fs/storage_dev.hpp>
+
 static std::vector<ata::Device*> devices;
 
 void identify_drive(ata::Device& device) {
@@ -98,6 +100,9 @@ bool verify_lba(const ata::Device& device, uint64_t lba) {
 }
 
 bool read_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* data) {
+    if(n_sectors == 0)
+        return true;
+    
     if(device.driver.atapi)
         PANIC("TODO: Implement ATAPI reading");
 
@@ -118,6 +123,9 @@ bool read_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* 
 }
 
 bool write_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* data) {
+    if(n_sectors == 0)
+        return true;
+    
     if(device.driver.atapi)
         PANIC("TODO: Implement ATAPI writing");
 
@@ -166,5 +174,23 @@ void ata::register_device(ata::DriverDevice& dev) {
         };
 
         scsi::register_device(scsi_dev);
+    }
+
+    // ATAPI Devices are finally registed in scsi.cpp
+    if(!dev.atapi) {
+        storage_dev::DriverDevice driver{};
+        driver.n_lbas = device->n_sectors;
+        driver.sector_size = device->sector_size;
+        driver.userptr = device;
+
+        driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t>& xfer) {
+            auto& device = *(ata::Device*)userptr;
+
+            if(write)
+                write_sectors(device, lba, n_lbas, xfer.data());
+            else
+                read_sectors(device, lba, n_lbas, xfer.data());
+        };
+        storage_dev::register_device(driver);
     }
 }
