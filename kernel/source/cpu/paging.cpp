@@ -43,40 +43,72 @@ paging::context::~context(){
     clean_table(root_pa, levels);
 }
 
-void paging::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
+paging::page_entry* paging::context::walk(uintptr_t va, bool create_new_tables) {
     auto get_index = [va](size_t i){ return (va >> ((9 * (i - 1)) + 12)) & 0x1FF; };
-    auto get_level_or_create = [](page_table* prev, size_t i) -> page_table* {
+    auto get_level_or_create = [create_new_tables](page_table* prev, size_t i) -> page_table* {
         auto& entry = (*prev)[i];
         if(!entry.present) {
-            const auto [pa, _] = create_table();
+            if(create_new_tables) {
+                const auto [pa, _] = create_table();
 
-            entry.frame = (pa >> 12);
-            entry.present = 1;
-            entry.writeable = 1;
-            entry.user = 1;
+                entry.frame = (pa >> 12);
+                entry.present = 1;
+                entry.writeable = 1;
+                entry.user = 1;
+            } else {
+                return nullptr;
+            }
         }
 
         return (page_table*)((entry.frame << 12) + phys_mem_map);
     };
 
     auto* curr = (page_table*)(root_pa + phys_mem_map);
-    if(levels >= 5)
-        curr = get_level_or_create(curr, get_index(5));
-    if(levels >= 4)
-        curr = get_level_or_create(curr, get_index(4));
-    curr = get_level_or_create(curr, get_index(3));
-    curr = get_level_or_create(curr, get_index(2));
+    for(size_t i = levels; i >= 2; i--) {
+        curr = get_level_or_create(curr, get_index(i));
+        if(!curr)
+            return nullptr;
+    }
 
     auto& pml1 = *curr;
-    auto& pml1_e = pml1[get_index(1)];
+    return &pml1[get_index(1)];
+}
 
-    pml1_e.present = (flags & mapPagePresent) ? 1 : 0;
-    pml1_e.writeable = (flags & mapPageWrite) ? 1 : 0;
-    pml1_e.user = (flags & mapPageUser) ? 1 : 0;
-    pml1_e.no_execute = (flags & mapPageExecute) ? 0 : 1;
-    pml1_e.frame = (pa >> 12);
+void paging::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
+    auto& page = *walk(va, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
-    asm volatile("invlpg (%0)" : : "r"(va) : "memory"); 
+    page.present = (flags & mapPagePresent) ? 1 : 0;
+    page.writeable = (flags & mapPageWrite) ? 1 : 0;
+    page.user = (flags & mapPageUser) ? 1 : 0;
+    page.no_execute = (flags & mapPageExecute) ? 0 : 1;
+    page.frame = (pa >> 12);
+
+    asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+}
+
+uintptr_t paging::context::unmap(uintptr_t va) {
+    auto* entry = walk(va, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
+    if(!entry)
+        return 0; // Page does not exist
+
+    uintptr_t ret = (entry->frame << 12);
+    entry->present = 0;
+    entry->writeable = 0;
+    entry->no_execute = 1;
+    entry->user = 0;
+    entry->frame = 0;
+
+    asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+
+    return ret;
+}
+
+uintptr_t paging::context::get_phys(uintptr_t va) {
+    auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
+    if(!entry)
+        return 0; // Page does not exist
+
+    return (entry->frame << 12);
 }
 
 uintptr_t paging::context::get_root_pa() const {

@@ -69,25 +69,20 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
             continue;
         }
 
-        
-        auto region_pa = pmm::alloc_block();
-        memset((void*)(region_pa + phys_mem_map), 0, pmm::block_size);
-        if(!a64)
-            ASSERT((region_pa >> 32) == 0); // Allocate under 4GiB or use IOMMU to map under 4GiB
-        iommu::map(*device, region_pa, region_pa, paging::mapPagePresent | paging::mapPageWrite);
-
         port.wait_idle();
 
-        port.region = (Port::PhysRegion*)(region_pa + phys_mem_map);
-        auto cmd_header_pa = region_pa + offsetof(Port::PhysRegion, command_headers);
-        port.regs->clb = cmd_header_pa & 0xFFFFFFFF;
-        if(a64)
-            port.regs->clbu = (cmd_header_pa >> 32) & 0xFFFFFFFF;
+        auto region = iommu_vmm.alloc(sizeof(Port::PhysRegion));
+        port.region = (Port::PhysRegion*)region.host_base;
 
-        auto fis_pa = region_pa + offsetof(Port::PhysRegion, receive_fis);
-        port.regs->fb = fis_pa & 0xFFFFFFFF;
+        auto cmd_header_addr = region.guest_base + offsetof(Port::PhysRegion, command_headers);
+        port.regs->clb = cmd_header_addr & 0xFFFFFFFF;
         if(a64)
-            port.regs->fbu = (fis_pa >> 32) & 0xFFFFFFFF;
+            port.regs->clbu = (cmd_header_addr >> 32) & 0xFFFFFFFF;
+
+        auto fis_addr = region.guest_base + offsetof(Port::PhysRegion, receive_fis);
+        port.regs->fb = fis_addr & 0xFFFFFFFF;
+        if(a64)
+            port.regs->fbu = (fis_addr >> 32) & 0xFFFFFFFF;
 
         port.regs->cmd |= (1 << 0) | (1 << 4);
         port.regs->is = 0xFFFFFFFF;
@@ -173,43 +168,39 @@ uint8_t ahci::Controller::Port::get_free_cmd_slot() {
     return ~0;
 }
 
-std::pair<uint8_t, ahci::CmdTable*> ahci::Controller::Port::allocate_command(size_t n_prdts) {
+ahci::Controller::Port::Command ahci::Controller::Port::allocate_command(size_t n_prdts) {
     auto i = get_free_cmd_slot();
-
     if(i == ~0u)
-        return {~0, nullptr};
+        return {(uint8_t)~0, nullptr, {}};
 
     ASSERT(i < 32);
 
     auto& header = region->command_headers[i];
 
     size_t size = sizeof(CmdTable) + (n_prdts * sizeof(Prdt));
-    ASSERT(size < pmm::block_size);
+    auto region = controller->iommu_vmm.alloc(size);
 
-    auto pa = pmm::alloc_block();
-    memset((void*)(pa + phys_mem_map), 0, pmm::block_size);
-    iommu::map(*controller->device, pa, pa, paging::mapPagePresent | paging::mapPageWrite);
-    if(!controller->a64)
-        ASSERT((pa >> 32) == 0);
-
-    header.ctba = pa & 0xFFFFFFFF;
+    header.ctba = region.guest_base & 0xFFFF'FFFF;
     if(controller->a64)
-        header.ctbau = (pa >> 32) & 0xFFFFFFFF;
+        header.ctbau = (region.guest_base >> 32) & 0xFFFF'FFFF;
 
-    return {i, (ahci::CmdTable*)(pa + phys_mem_map)};
+    return {i, (ahci::CmdTable*)region.host_base, region};
+}
+
+void ahci::Controller::Port::free_command(const Command& cmd) {
+    controller->iommu_vmm.free(cmd.allocation);
 }
 
 void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* data, size_t transfer_len) {
     size_t n_prdts = div_ceil(transfer_len, 0x3FFFFF);
-    const auto [index, table] = allocate_command(n_prdts);
+    auto slot = allocate_command(n_prdts);
+    ASSERT(slot.index != ~0);
 
-    ASSERT(index != ~0);
+    region->command_headers[slot.index].flags.prdtl = n_prdts;
+    region->command_headers[slot.index].flags.write = cmd.write;
+    region->command_headers[slot.index].flags.cfl = 5; // h2d register is 5 dwords
 
-    region->command_headers[index].flags.prdtl = n_prdts;
-    region->command_headers[index].flags.write = cmd.write;
-    region->command_headers[index].flags.cfl = 5; // h2d register is 5 dwords
-
-    auto& fis = *(H2DRegisterFIS*)table->fis;
+    auto& fis = *(H2DRegisterFIS*)slot.table->fis;
     fis.type = FISTypeH2DRegister;
     fis.flags.c = 1;
 
@@ -229,17 +220,20 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     fis.features = cmd.features & 0xFF;
     fis.features_exp = (cmd.features >> 8) & 0xFF;
 
-    auto region = controller->iommu_vmm.alloc(transfer_len, cmd.write ? data : nullptr);
-    ASSERT(region.base);
+    auto region = controller->iommu_vmm.alloc(transfer_len);
+    ASSERT(region.guest_base);
+
+    if(cmd.write)
+        memcpy(region.host_base, data, transfer_len);
 
     for(size_t i = 0; i < n_prdts; i++) {
-        auto& prdt = table->prdts[i];
+        auto& prdt = slot.table->prdts[i];
 
         size_t remaining = transfer_len - (i * 0x3FFFFF);
         size_t transfer = (remaining >= 0x3FFFFF) ? 0x3FFFFF : remaining;
 
         prdt.flags.byte_count = Prdt::calculate_bytecount(transfer);
-        uintptr_t pa = region.base + (i * 0x3FFFFF);
+        uintptr_t pa = region.guest_base + (i * 0x3FFFFF);
 
         prdt.low = pa & 0xFFFF'FFFF;
         if(controller->a64)
@@ -248,9 +242,9 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
 
     wait_ready();
 
-    regs->ci |= (1 << index);
+    regs->ci |= (1 << slot.index);
 
-    while(regs->ci & (1 << index)) {
+    while(regs->ci & (1 << slot.index)) {
         if(regs->is & (1 << 30)) {
             if(regs->tfd & (1 << 0)) {
                 auto err = regs->tfd >> 8;
@@ -260,20 +254,24 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
         }
     }
 
-    controller->iommu_vmm.free(region, cmd.write ? nullptr : data);
+    controller->iommu_vmm.free(region);
+    if(!cmd.write)
+        memcpy(data, region.host_base, transfer_len);
+
+    free_command(slot);
 }
 
 void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len) {
     size_t n_prdts = div_ceil(transfer_len, 0x3FFFFF);
-    const auto [index, table] = allocate_command(n_prdts);
-    ASSERT(index != ~0);
+    auto slot = allocate_command(n_prdts);
+    ASSERT(slot.index != ~0);
 
-    region->command_headers[index].flags.prdtl = n_prdts;
-    region->command_headers[index].flags.write = cmd.write;
-    region->command_headers[index].flags.cfl = 5; // h2d register is 5 dwords
-    region->command_headers[index].flags.atapi = 1;
+    region->command_headers[slot.index].flags.prdtl = n_prdts;
+    region->command_headers[slot.index].flags.write = cmd.write;
+    region->command_headers[slot.index].flags.cfl = 5; // h2d register is 5 dwords
+    region->command_headers[slot.index].flags.atapi = 1;
 
-    auto& fis = *(H2DRegisterFIS*)table->fis;
+    auto& fis = *(H2DRegisterFIS*)slot.table->fis;
     fis.type = FISTypeH2DRegister;
     fis.flags.c = 1;
 
@@ -285,19 +283,22 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
     fis.lba_1 = transfer_len & 0xFF; // Seems to not actually be needed?
     fis.lba_2 = (transfer_len >> 8) & 0xFF;
 
-    memcpy(table->packet, cmd.packet, 16);
+    memcpy(slot.table->packet, cmd.packet, 16);
 
-    auto region = controller->iommu_vmm.alloc(transfer_len, cmd.write ? data : nullptr);
-    ASSERT(region.base);
+    auto region = controller->iommu_vmm.alloc(transfer_len);
+    ASSERT(region.guest_base);
+
+    if(cmd.write)
+        memcpy(region.host_base, data, transfer_len);
 
     for(size_t i = 0; i < n_prdts; i++) {
-        auto& prdt = table->prdts[i];
+        auto& prdt = slot.table->prdts[i];
 
         size_t remaining = transfer_len - (i * 0x3FFFFF);
         size_t transfer = (remaining >= 0x3FFFFF) ? 0x3FFFFF : remaining;
 
         prdt.flags.byte_count = Prdt::calculate_bytecount(transfer);
-        uintptr_t pa = region.base + (i * 0x3FFFFF);
+        uintptr_t pa = region.guest_base + (i * 0x3FFFFF);
 
         prdt.low = pa & 0xFFFF'FFFF;
         if(controller->a64)
@@ -306,9 +307,9 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
 
     wait_ready();
 
-    regs->ci |= (1 << index);
+    regs->ci |= (1 << slot.index);
 
-    while(regs->ci & (1 << index)) {
+    while(regs->ci & (1 << slot.index)) {
         if(regs->is & (1 << 30)) {
             if(regs->tfd & (1 << 0)) {
                 auto err = regs->tfd >> 8;
@@ -318,7 +319,11 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
         }
     }
 
-    controller->iommu_vmm.free(region, cmd.write ? nullptr : data);
+    controller->iommu_vmm.free(region);
+    if(!cmd.write)
+        memcpy(data, region.host_base, transfer_len);
+
+    free_command(slot);
 }
 
 std::vector<ahci::Controller> controllers;

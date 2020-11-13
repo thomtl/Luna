@@ -45,10 +45,15 @@ namespace paging
         ~context();
 
         void map(uintptr_t pa, uintptr_t va, uint64_t flags);
+        uintptr_t unmap(uintptr_t va);
+        uintptr_t get_phys(uintptr_t va);
+
         uintptr_t get_root_pa() const;
         void set() const;
 
         private:
+        page_entry* walk(uintptr_t va, bool create_new_tables);
+
         uint8_t levels;
         uintptr_t root_pa;
     };

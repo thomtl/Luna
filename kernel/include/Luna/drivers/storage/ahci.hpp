@@ -164,7 +164,14 @@ namespace ahci
             void wait_ready();
 
             uint8_t get_free_cmd_slot();
-            std::pair<uint8_t, CmdTable*> allocate_command(size_t n_prdts);
+
+            struct Command { 
+                uint8_t index; 
+                CmdTable* table; 
+                iovmm::Iovmm::Allocation allocation; 
+            };
+            Command allocate_command(size_t n_prdts);
+            void free_command(const Command& cmd);
 
             void send_ata_cmd(const ata::ATACommand& cmd, uint8_t* data, size_t transfer_len);
             void send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len);
