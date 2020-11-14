@@ -29,7 +29,7 @@ void lapic::Lapic::init() {
     base |= (x2apic << 10); // Set x2APIC bit if supported
 
     auto mmio_base_pa = base & 0xFFFF'FFFF'FFFF'F000;
-    auto mmio_base = mmio_base_pa + phys_mem_map;
+    mmio_base = mmio_base_pa + phys_mem_map;
     msr::write(msr::apic_base, base);
 
     if(!x2apic)
