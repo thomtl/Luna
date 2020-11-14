@@ -308,3 +308,7 @@ void vt_d::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t io
 
     PANIC("Couldn't find engine for segment");
 }
+
+bool vt_d::has_iommu() {
+    return acpi::get_table<Dmar>() ? true : false;
+}

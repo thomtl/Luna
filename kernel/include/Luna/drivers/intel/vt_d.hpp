@@ -273,4 +273,6 @@ namespace vt_d {
         Dmar* dmar;
         std::vector<RemappingEngine> engines;
     };
+
+    bool has_iommu();
 } // namespace vt_d
