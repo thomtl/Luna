@@ -1,9 +1,11 @@
 #include <Luna/fs/fs.hpp>
 #include <Luna/misc/format.hpp>
 
-void fs::probe_fs(const fs::Partition& part) {
-    (void)(part);
-    // TODO: Probe here
+#include <Luna/fs/echfs.hpp>
+
+void fs::probe_fs(fs::Partition& part) {
+    if(echfs::probe(part))
+        return;
 
     print("fs: Unknown partition on disk\n");
 }

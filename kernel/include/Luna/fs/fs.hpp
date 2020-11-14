@@ -18,5 +18,5 @@ namespace fs {
         }
     };
 
-    void probe_fs(const Partition& part);
+    void probe_fs(Partition& part);
 } // namespace fs

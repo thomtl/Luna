@@ -18,6 +18,8 @@
 #include <Luna/drivers/ioapic.hpp>
 #include <Luna/drivers/pci.hpp>
 
+#include <Luna/fs/vfs.hpp>
+
 #include <Luna/drivers/storage/ahci.hpp>
 
 #include <std/mutex.hpp>
