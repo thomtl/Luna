@@ -37,7 +37,8 @@ void kernel_main_ap(stivale2_smp_info* info);
 
 void kernel_main(const stivale2_struct* info) {
     print("Booting Luna, Copyright Thomas Woertman 2020\nBootloader: {:s} {:s}\n", info->bootloader_brand, info->bootloader_version);
-    
+
+    cpu::init();
     vmm::init_bsp(); // This doesn't actually allocate any memory or anything, it just detects 5 level paging and sets phys_mem_map
 
     stivale2::Parser boot_info{(stivale2_struct*)((uintptr_t)info + phys_mem_map)};
@@ -89,7 +90,7 @@ void kernel_main(const stivale2_struct* info) {
 void kernel_main_ap(stivale2_smp_info* info){
     (void)info;
 
-    vmm::init_ap();
+    cpu::init();
     vmm::kernel_vmm::get_instance().set();
 
     auto& cpu_data = allocate_cpu_data();

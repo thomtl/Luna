@@ -10,6 +10,17 @@ void msr::write(uint32_t msr, uint64_t v) {
     asm volatile("wrmsr" : : "a"(v & 0xFFFFFFFF), "d"(v >> 32), "c"(msr));
 }
 
+uint64_t cr0::read(){
+    uint64_t ret = 0;
+    asm volatile("mov %%cr0, %0" : "=r"(ret));
+
+    return ret;
+}
+
+void cr0::write(uint64_t v){
+    asm volatile("mov %0, %%cr0" : : "r"(v) : "memory");
+}
+
 uint64_t cr4::read(){
     uint64_t ret = 0;
     asm volatile("mov %%cr4, %0" : "=r"(ret));

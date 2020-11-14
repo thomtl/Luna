@@ -6,7 +6,6 @@
 namespace vmm
 {
     void init_bsp();
-    void init_ap();
     paging::context create_context();
 
     class kernel_vmm {

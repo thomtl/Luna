@@ -13,6 +13,8 @@ namespace cpu {
 
     bool cpuid(uint32_t leaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
     bool cpuid(uint32_t leaf, uint32_t subleaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
+
+    void init();
 } // namespace cpu
 
 struct CpuData {
