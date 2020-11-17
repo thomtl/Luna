@@ -170,6 +170,15 @@ namespace vt_d {
         uint64_t protected_high_mem_limit;
         uint64_t invalidation_queue_head;
         uint64_t invalidation_queue_tail;
+        union [[gnu::packed]] InalidationQueueAddress {
+            struct {
+                uint64_t size : 3;
+                uint64_t reserved : 8;
+                uint64_t descriptor_width : 1;
+                uint64_t address : 52;
+            };
+            uint64_t raw;
+        };
         uint64_t invalidation_queue_address;
         uint32_t reserved_3;
         uint32_t invalidation_completion_status;
@@ -225,6 +234,85 @@ namespace vt_d {
     };
     static_assert(sizeof(SourceID) == 2);
 
+    struct [[gnu::packed]] InvalidationWaitDescriptor {
+        static constexpr uint8_t cmd = 5;
+        uint32_t type : 4;
+        uint32_t irq : 1;
+        uint32_t status_write : 1;
+        uint32_t fence : 1;
+        uint32_t request_drain : 1;
+        uint32_t reserved : 1;
+        uint32_t zero : 3;
+        uint32_t reserved_0 : 20;
+        uint32_t status;
+        uint64_t addr;
+    };
+    static_assert(sizeof(InvalidationWaitDescriptor) == (128 / 8));
+
+    struct [[gnu::packed]] ContextInvalidationDescriptor {
+        static constexpr uint8_t cmd = 1;
+        uint64_t type : 4;
+        uint64_t granularity : 2;
+        uint64_t reserved : 3;
+        uint64_t zero : 3;
+        uint64_t reserved_0 : 4;
+        uint64_t domain_id : 16;
+        uint64_t source_id : 16;
+        uint64_t function_mask : 2;
+        uint64_t reserved_1 : 14;
+        uint64_t reserved_2;
+    };
+    static_assert(sizeof(ContextInvalidationDescriptor) == (128 / 8));
+
+    struct [[gnu::packed]] IOTLBInvalidationDescriptor {
+        static constexpr uint8_t cmd = 2;
+        uint32_t type : 4;
+        uint32_t granularity : 2;
+        uint32_t drain_writes : 1;
+        uint32_t drain_reads : 1;
+        uint32_t reserved : 1;
+        uint32_t zero : 3;
+        uint32_t reserved_0 : 4;
+        uint32_t domain_id : 16;
+        uint32_t reserved_1;
+        uint64_t address_mask : 6;
+        uint64_t hint : 1;
+        uint64_t reserved_2 : 5;
+        uint64_t addr : 52;
+    };
+    static_assert(sizeof(IOTLBInvalidationDescriptor) == (128 / 8));
+
+
+
+    class InvalidationQueue {
+        public:
+        InvalidationQueue(volatile RemappingEngineRegs* regs);
+        ~InvalidationQueue();
+
+        void submit_sync(const uint8_t* cmd);
+        uintptr_t get_queue_pa() const {
+            return queue_pa;
+        }
+
+        static constexpr size_t queue_page_size = 1; // In pages
+        static constexpr size_t queue_entry_size = (128 / 8);
+        static constexpr size_t queue_length = (queue_page_size * pmm::block_size) / queue_entry_size;
+        private:
+        enum class QueueDescription : uint32_t {
+            Free,
+            InUse,
+            Done,
+            Abort
+        };
+
+        volatile RemappingEngineRegs* regs;
+
+        volatile uint8_t* queue;
+        volatile QueueDescription* desc;
+        uintptr_t queue_pa, desc_pa;
+        size_t free_count, free_head, free_tail;
+    };
+
 
     class RemappingEngine {
         public:
@@ -237,7 +325,6 @@ namespace vt_d {
         void invalidate_iotlb_addr(SourceID device, uintptr_t iova);
 
         private:
-
         void wbflush();
         void invalidate_global_context();
         void invalidate_iotlb();
@@ -252,9 +339,14 @@ namespace vt_d {
 
         uint8_t secondary_page_levels;
         size_t n_domain_ids;
+
+        uint32_t global_command;
+
         std::bitmap domain_ids;
         std::unordered_map<uint16_t, sl_paging::context*> page_map;
         std::unordered_map<uint16_t, uint16_t> domain_id_map;
+
+        std::lazy_initializer<InvalidationQueue> iq;
 
         bool x2apic_mode, wbflush_needed;
     };

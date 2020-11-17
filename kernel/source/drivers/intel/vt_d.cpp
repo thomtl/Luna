@@ -7,7 +7,109 @@
 #include <Luna/cpu/idt.hpp>
 #include <Luna/drivers/pci.hpp>
 
-vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
+vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* regs): regs{regs} {
+    ASSERT(regs->extended_capabilities & (1 << 1));
+
+    queue_pa = pmm::alloc_block();
+    ASSERT(queue_pa);
+
+    desc_pa = pmm::alloc_block();
+    ASSERT(desc_pa);
+
+    queue = (uint8_t*)(queue_pa + phys_mem_map);
+    desc = (QueueDescription*)(desc_pa + phys_mem_map);
+
+    memset((void*)queue, 0, pmm::block_size);
+    memset((void*)desc, 0, pmm::block_size);
+
+    free_count = queue_length;
+    free_head = 0;
+    free_tail = 0;
+}
+
+vt_d::InvalidationQueue::~InvalidationQueue() {
+    pmm::free_block(queue_pa);
+    pmm::free_block(desc_pa);
+}
+
+void vt_d::InvalidationQueue::submit_sync(const uint8_t* cmd) {
+    auto index = free_head;
+    auto wait_index = index + 1;
+
+    auto write_entry = [&](size_t i, const uint8_t* data) {
+        auto index = (i % queue_length);
+        auto offset = index * queue_entry_size;
+        memcpy((void*)(queue + offset), data, queue_entry_size);
+        desc[index] = QueueDescription::InUse;
+    };
+
+    InvalidationWaitDescriptor wait{};
+    wait.type = InvalidationWaitDescriptor::cmd;
+    wait.status_write = 1;
+    wait.status = (uint32_t)QueueDescription::Done;
+    wait.addr = (desc_pa + (wait_index * sizeof(uint32_t)));
+
+    write_entry(index, cmd);
+    write_entry(wait_index, (uint8_t*)&wait);
+
+    free_head = (free_head + 2) % queue_length;
+    free_count -= 2;
+    
+    regs->invalidation_queue_tail = (free_head * queue_entry_size);
+
+    wait_index %= queue_length;
+    
+    while(desc[wait_index] != QueueDescription::Done) {
+        auto fault = regs->fault_status;
+
+        // Invalidation Queue Error
+        if(fault & (1 << 4)) {
+            auto head = regs->invalidation_queue_head;
+            if((head / queue_entry_size) == index) {
+                auto* cmd = (uint64_t*)queue + head;
+
+                print("vt-d: Invalidation Queue Error: qw0: {:#x}, qw1: {:#x}\n", cmd[0], cmd[1]);
+                memcpy((void*)cmd, (void*)(queue + (wait_index * queue_entry_size)), queue_entry_size);
+                PANIC("Invalidation Queue Error");
+            }
+        }
+
+        // Invalidation Time-out
+        if(fault & (1 << 6)) {
+            auto head = regs->invalidation_queue_head;
+            head = ((head / queue_entry_size) - 1 + queue_length) % queue_length;
+            head |= 1;
+            auto tail = regs->invalidation_queue_tail;
+            tail = ((tail / queue_entry_size) - 1 + queue_length) % queue_length;
+
+            regs->fault_status = (1 << 6);
+
+            do {
+                if(desc[head] == QueueDescription::InUse)
+                    desc[head] = QueueDescription::Abort;
+
+                head = (head - 2 + queue_length) % queue_length;
+            } while(head != tail);
+
+            if(desc[wait_index] == QueueDescription::Abort)
+                PANIC("Invalidation Queue Timeout");
+        }
+
+        if(fault & (1 << 5))
+            regs->fault_status = (1 << 5);
+    }
+
+    desc[index % queue_length] = QueueDescription::Done;
+
+    // Reclaim old entries
+    while(desc[free_tail] == QueueDescription::Done || desc[free_tail] == QueueDescription::Abort) {
+        desc[free_tail] = QueueDescription::Free;
+        free_tail = (free_tail + 1) % queue_length;
+        free_count++;
+    }
+}
+
+vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_command{0} {
     auto va = drhd->mmio_base + phys_mem_map;
     vmm::kernel_vmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
 
@@ -125,17 +227,43 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     wbflush();
     regs->root_table_address = root_addr.raw;
 
-    regs->global_command |= (1 << 30); // Update root ptr
+    regs->global_command = global_command | (1 << 30); // Update root ptr
 
     while(!(regs->global_status & (1 << 30)))
         asm("pause");
 
+    print("Done\n");
+
+    if(regs->extended_capabilities & (1 << 1)) {
+        print("      Setting up Invalidation Queue ... ");
+        iq.init(regs);
+
+        {
+            RemappingEngineRegs::InalidationQueueAddress addr{};
+            addr.size = (InvalidationQueue::queue_page_size - 1); // 2^N pages
+            addr.descriptor_width = 0; // 128-bit descriptors
+            addr.address = (iq->get_queue_pa() >> 12);
+
+            regs->invalidation_queue_address = addr.raw;
+        }
+
+        regs->invalidation_queue_tail = 0;
+
+        global_command |= (1 << 26); // Enable Queued Invalidations, NO NORMAL IOTLB BEYOND THIS POINT
+        regs->global_command = global_command;
+        while(!(regs->global_status & (1 << 26)))
+            asm("pause");
+
+        print("Done\n");
+    }
+
+    print("      Enabling Translation ... ");
+
     this->invalidate_global_context();
     this->invalidate_iotlb();
 
-    print("Done\n      Enabling Translation ... ");
-
-    regs->global_command = (1 << 31);
+    global_command |= (1 << 31);
+    regs->global_command = global_command;
     while(!(regs->global_status & (1 << 31)))
         asm("pause");
 
@@ -153,46 +281,78 @@ void vt_d::RemappingEngine::wbflush() {
 }
 
 void vt_d::RemappingEngine::invalidate_global_context() {
-    regs->context_command = (1ull << 63) | (1ull << 61);
+    if(iq) {
+        ContextInvalidationDescriptor cmd{};
+        cmd.type = ContextInvalidationDescriptor::cmd;
+        cmd.granularity = 0b01; // Global Invalidation
 
-    while(regs->context_command & (1ull << 63))
-        asm("pause");
+        iq->submit_sync((uint8_t*)&cmd);
+    } else {
+        regs->context_command = (1ull << 63) | (1ull << 61);
+
+        while(regs->context_command & (1ull << 63))
+            asm("pause");
+    }
 }
 
 void vt_d::RemappingEngine::invalidate_iotlb() {
     wbflush();
 
-    IOTLBCmd cmd{};
+    if(iq) {
+        IOTLBInvalidationDescriptor cmd{};
+        cmd.type = IOTLBInvalidationDescriptor::cmd;
+        
+        cmd.drain_reads = 1;
+        cmd.drain_writes = 1;
+        cmd.granularity = 0b01; // Global Invalidation
 
-    cmd.drain_reads = 1;
-    cmd.drain_writes = 1;
-    cmd.req_granularity = 1; // Global invalidation
-    cmd.invalidate = 1;
+        iq->submit_sync((uint8_t*)&cmd);
+    } else {
+        IOTLBCmd cmd{};
 
-    iotlb_regs->cmd = cmd.raw;
+        cmd.drain_reads = 1;
+        cmd.drain_writes = 1;
+        cmd.req_granularity = 0b01; // Global invalidation
+        cmd.invalidate = 1;
 
-    while(iotlb_regs->cmd & (1ull << 63))
-        asm("pause");
+        iotlb_regs->cmd = cmd.raw;
+
+        while(iotlb_regs->cmd & (1ull << 63))
+            asm("pause");
+    }
 }
 
 void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iova) {
     wbflush();
 
-    IOTLBCmd cmd{};
-    cmd.drain_reads = 1;
-    cmd.drain_writes = 1;
-    cmd.req_granularity = 0b11; // Domain local invalidation + Addr
-    cmd.invalidate = 1;
-    cmd.domain_id = domain_id_map[device.raw];
+    if(iq) {
+        IOTLBInvalidationDescriptor cmd{};
+        cmd.type = IOTLBInvalidationDescriptor::cmd;
 
-    IOTLBAddr addr{};
-    addr.addr = iova >> 12;
+        cmd.drain_reads = 1;
+        cmd.drain_writes = 1;
+        cmd.granularity = 0b11; // Domain + Addr Local
+        cmd.domain_id = domain_id_map[device.raw];
+        cmd.addr = iova >> 12;
+        
+        iq->submit_sync((uint8_t*)&cmd);
+    } else {
+        IOTLBCmd cmd{};
+        cmd.drain_reads = 1;
+        cmd.drain_writes = 1;
+        cmd.req_granularity = 0b11; // Domain local invalidation + Addr
+        cmd.invalidate = 1;
+        cmd.domain_id = domain_id_map[device.raw];
 
-    iotlb_regs->addr = addr.raw;
-    iotlb_regs->cmd = cmd.raw;
+        IOTLBAddr addr{};
+        addr.addr = iova >> 12;
 
-    while(iotlb_regs->cmd & (1ull << 63))
-        asm("pause");
+        iotlb_regs->addr = addr.raw;
+        iotlb_regs->cmd = cmd.raw;
+
+        while(iotlb_regs->cmd & (1ull << 63))
+            asm("pause");
+    }
 }
 
 sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID device) {
