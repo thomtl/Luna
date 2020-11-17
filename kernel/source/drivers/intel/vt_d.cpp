@@ -28,8 +28,11 @@ vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* r
 }
 
 vt_d::InvalidationQueue::~InvalidationQueue() {
-    pmm::free_block(queue_pa);
-    pmm::free_block(desc_pa);
+    if(queue_pa)
+        pmm::free_block(queue_pa);
+
+    if(desc_pa)
+        pmm::free_block(desc_pa);
 }
 
 void vt_d::InvalidationQueue::submit_sync(const uint8_t* cmd) {
@@ -144,7 +147,12 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
         domain_ids.set(0);
 
     wbflush_needed = (regs->capabilities & (1 << 4)) ? true : false;
+    write_draining = (regs->capabilities & (1ull << 54)) ? true : false;
+    read_draining = (regs->capabilities & (1ull << 55)) ? true : false;
     x2apic_mode = (regs->extended_capabilities & (1 << 4)) ? true : false;
+
+    if((regs->capabilities & (1ull << 39)) == 0)
+        PANIC("Page Selective Invalidation is unsupported");
 
     print("      Setting up IRQ ... ");
 
@@ -227,9 +235,9 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     wbflush();
     regs->root_table_address = root_addr.raw;
 
-    regs->global_command = global_command | (1 << 30); // Update root ptr
+    regs->global_command = global_command | GlobalCommand::SetRootTablePointer; // Update root ptr
 
-    while(!(regs->global_status & (1 << 30)))
+    while(!(regs->global_status & GlobalCommand::SetRootTablePointer))
         asm("pause");
 
     print("Done\n");
@@ -249,9 +257,9 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
 
         regs->invalidation_queue_tail = 0;
 
-        global_command |= (1 << 26); // Enable Queued Invalidations, NO NORMAL IOTLB BEYOND THIS POINT
+        global_command |= GlobalCommand::QueuedInvalidationEnable; // Enable Queued Invalidations, NO NORMAL IOTLB BEYOND THIS POINT
         regs->global_command = global_command;
-        while(!(regs->global_status & (1 << 26)))
+        while(!(regs->global_status & GlobalCommand::QueuedInvalidationEnable))
             asm("pause");
 
         print("Done\n");
@@ -262,9 +270,9 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     this->invalidate_global_context();
     this->invalidate_iotlb();
 
-    global_command |= (1 << 31);
+    global_command |= GlobalCommand::TranslationEnable;
     regs->global_command = global_command;
-    while(!(regs->global_status & (1 << 31)))
+    while(!(regs->global_status & GlobalCommand::TranslationEnable))
         asm("pause");
 
     print("Done\n");
@@ -274,9 +282,9 @@ void vt_d::RemappingEngine::wbflush() {
     if(!wbflush_needed)
         return;
 
-    regs->global_command = (1 << 27);
+    regs->global_command = global_command | GlobalCommand::FlushWriteBuffer;
 
-    while(regs->global_status & (1 << 27))
+    while(regs->global_status & GlobalCommand::FlushWriteBuffer)
         asm("pause");
 }
 
@@ -302,16 +310,16 @@ void vt_d::RemappingEngine::invalidate_iotlb() {
         IOTLBInvalidationDescriptor cmd{};
         cmd.type = IOTLBInvalidationDescriptor::cmd;
         
-        cmd.drain_reads = 1;
-        cmd.drain_writes = 1;
+        cmd.drain_reads = read_draining ? 1 : 0;
+        cmd.drain_writes = write_draining ? 1 : 0;
         cmd.granularity = 0b01; // Global Invalidation
 
         iq->submit_sync((uint8_t*)&cmd);
     } else {
         IOTLBCmd cmd{};
 
-        cmd.drain_reads = 1;
-        cmd.drain_writes = 1;
+        cmd.drain_reads = read_draining ? 1 : 0;
+        cmd.drain_writes = write_draining ? 1 : 0;
         cmd.req_granularity = 0b01; // Global invalidation
         cmd.invalidate = 1;
 
@@ -329,8 +337,8 @@ void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iov
         IOTLBInvalidationDescriptor cmd{};
         cmd.type = IOTLBInvalidationDescriptor::cmd;
 
-        cmd.drain_reads = 1;
-        cmd.drain_writes = 1;
+        cmd.drain_reads = read_draining ? 1 : 0;
+        cmd.drain_writes = write_draining ? 1 : 0;
         cmd.granularity = 0b11; // Domain + Addr Local
         cmd.domain_id = domain_id_map[device.raw];
         cmd.addr = iova >> 12;
@@ -338,11 +346,11 @@ void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iov
         iq->submit_sync((uint8_t*)&cmd);
     } else {
         IOTLBCmd cmd{};
-        cmd.drain_reads = 1;
-        cmd.drain_writes = 1;
+        cmd.drain_reads = read_draining ? 1 : 0;
+        cmd.drain_writes = write_draining ? 1 : 0;
         cmd.req_granularity = 0b11; // Domain local invalidation + Addr
-        cmd.invalidate = 1;
         cmd.domain_id = domain_id_map[device.raw];
+        cmd.invalidate = 1;
 
         IOTLBAddr addr{};
         addr.addr = iova >> 12;

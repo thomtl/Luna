@@ -127,6 +127,18 @@ namespace vt_d {
     };
     static_assert(sizeof(IOTLBAddr) == 8);
 
+    enum GlobalCommand : uint32_t {
+        CompatibilityFormatIRQ = (1 << 23),
+        SetIRQRemapTable = (1 << 24),
+        IRQRemappingEnable = (1 << 25),
+        QueuedInvalidationEnable = (1 << 26),
+        FlushWriteBuffer = (1 << 27),
+        AdvancedFaultLoggingEnable = (1 << 28),
+        SetFaultLog = (1 << 29),
+        SetRootTablePointer = (1 << 30),
+        TranslationEnable = (1u << 31)
+    };
+
     struct [[gnu::packed]] RemappingEngineRegs {
         uint32_t version;
         uint32_t reserved;
@@ -348,7 +360,7 @@ namespace vt_d {
 
         std::lazy_initializer<InvalidationQueue> iq;
 
-        bool x2apic_mode, wbflush_needed;
+        bool x2apic_mode, wbflush_needed, read_draining, write_draining;
     };
 
     struct IOMMU {
