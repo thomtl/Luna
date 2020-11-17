@@ -21,3 +21,18 @@ namespace cr4 {
     uint64_t read();
     void write(uint64_t v);
 } // namespace cr4
+
+namespace simd {
+    void init();
+
+    struct Context {
+        Context();
+        ~Context();
+
+        void store();
+        void load() const;
+
+        private:
+        uint8_t* _ctx;
+    };
+} // namespace simd

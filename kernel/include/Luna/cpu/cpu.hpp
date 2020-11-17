@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Luna/common.hpp>
-#include <Luna/cpu/regs.hpp>
 #include <Luna/cpu/gdt.hpp>
 #include <Luna/cpu/lapic.hpp>
 
@@ -22,6 +21,12 @@ struct CpuData {
     uint32_t lapic_id;
     gdt::table gdt_table;
     lapic::Lapic lapic;
+
+    struct {
+        size_t region_size, region_alignment;
+        void (*store)(uint8_t* context);
+        void (*load)(const uint8_t* context);
+    } simd_data;
 
     void set();
 };

@@ -1,4 +1,5 @@
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/cpu/regs.hpp>
 #include <cpuid.h>
 
 void CpuData::set() {

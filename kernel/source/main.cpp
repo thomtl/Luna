@@ -6,6 +6,7 @@
 #include <std/minimal_vector.hpp>
 
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/cpu/regs.hpp>
 #include <Luna/cpu/idt.hpp>
 #include <Luna/cpu/smp.hpp>
 
@@ -47,6 +48,8 @@ void kernel_main(const stivale2_struct* info) {
     auto& cpu_data = allocate_cpu_data();
     cpu_data.gdt_table.init();
     cpu_data.set();
+
+    simd::init();
 
     idt::init_table();
     idt::load();
@@ -97,6 +100,8 @@ void kernel_main_ap(stivale2_smp_info* info){
     cpu_data.gdt_table.init();
     cpu_data.set();
     cpu_data.lapic.init();
+
+    simd::init();
 
     idt::load();
 
