@@ -76,20 +76,26 @@ namespace vt_d {
     };
     static_assert(sizeof(ContextTable) == pmm::block_size);
 
-    struct [[gnu::packed]] FaultRecordingRegister {
-        uint64_t reserved : 12;
-        uint64_t fault_info : 52;
-        uint64_t source_id : 16;
-        uint64_t reserved_0 : 12;
-        uint64_t type_bit_2 : 1;
-        uint64_t supervisor : 1;
-        uint64_t execute : 1;
-        uint64_t pasid_present : 1;
-        uint64_t reason : 8;
-        uint64_t pasid : 20;
-        uint64_t address_type : 2;
-        uint64_t type_bit_1 : 1;
-        uint64_t fault : 1;
+    union [[gnu::packed]] FaultRecordingRegister {
+        struct {
+            uint64_t reserved : 12;
+            uint64_t fault_info : 52;
+            uint64_t source_id : 16;
+            uint64_t reserved_0 : 12;
+            uint64_t type_bit_2 : 1;
+            uint64_t supervisor : 1;
+            uint64_t execute : 1;
+            uint64_t pasid_present : 1;
+            uint64_t reason : 8;
+            uint64_t pasid : 20;
+            uint64_t address_type : 2;
+            uint64_t type_bit_1 : 1;
+            uint64_t fault : 1;
+        };
+        struct {
+            uint64_t a;
+            uint64_t b;
+        } raw;
     };
     static_assert(sizeof(FaultRecordingRegister) == 16);
 
@@ -331,7 +337,6 @@ namespace vt_d {
         RemappingEngine(Drhd* drhd);
         sl_paging::context& get_device_translation(SourceID device);
 
-        size_t n_fault_recording_regs;
         size_t segment;
 
         void invalidate_iotlb_addr(SourceID device, uintptr_t iova);
@@ -340,6 +345,8 @@ namespace vt_d {
         void wbflush();
         void invalidate_global_context();
         void invalidate_iotlb();
+
+        void handle_irq();
 
         Drhd* drhd;
 
@@ -350,7 +357,8 @@ namespace vt_d {
         volatile RootTable* root_table;
 
         uint8_t secondary_page_levels;
-        size_t n_domain_ids;
+        size_t n_domain_ids, n_fault_recording_regs;
+
 
         uint32_t global_command;
 
@@ -365,7 +373,6 @@ namespace vt_d {
 
     struct IOMMU {
         IOMMU();
-
         
         void map(const pci::Device& device, uintptr_t pa, uintptr_t iova, uint64_t flags);
         uintptr_t unmap(const pci::Device& device, uintptr_t iova);

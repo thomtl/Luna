@@ -18,6 +18,8 @@ void lapic::Lapic::write(uint32_t reg, uint32_t v) {
         *(volatile uint32_t*)(mmio_base + reg) = v;
 }
 
+#include <Luna/misc/format.hpp>
+
 void lapic::Lapic::init() {
     uint32_t a, b, c, d;
     ASSERT(cpu::cpuid(1, a, b, c, d));
@@ -27,10 +29,10 @@ void lapic::Lapic::init() {
     auto base = msr::read(msr::apic_base);
     base |= (1 << 11); // Set Enable bit
     base |= (x2apic << 10); // Set x2APIC bit if supported
+    msr::write(msr::apic_base, base);
 
     auto mmio_base_pa = base & 0xFFFF'FFFF'FFFF'F000;
     mmio_base = mmio_base_pa + phys_mem_map;
-    msr::write(msr::apic_base, base);
 
     if(!x2apic)
         vmm::kernel_vmm::get_instance().map(mmio_base_pa, mmio_base, paging::mapPagePresent | paging::mapPageWrite);
@@ -44,7 +46,7 @@ void lapic::Lapic::init() {
     get_cpu().lapic_id = id;
 
     write(regs::tpr, 0); // Enable all interrupt classes
-    write(regs::spurious, 0x1FF); // Spurious IRQ is 0xFF and enable the LAPIC
+    write(regs::spurious, 0xFF | (1 << 8)); // Spurious IRQ is 0xFF and enable the LAPIC
 
     ticks_per_ms = 0;
 }

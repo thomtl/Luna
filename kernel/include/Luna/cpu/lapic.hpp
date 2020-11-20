@@ -6,24 +6,24 @@ namespace lapic
 {
     namespace regs
     {
-        constexpr uint32_t id = 0x20;
-        constexpr uint32_t version = 0x30;
-        constexpr uint32_t tpr = 0x80;
-        constexpr uint32_t apr = 0x90;
-        constexpr uint32_t ppr = 0xA0;
-        constexpr uint32_t eoi = 0xB0;
-        constexpr uint32_t rrd = 0xC0;
-        constexpr uint32_t ldr = 0xD0;
-        constexpr uint32_t dfr = 0xE0;
-        constexpr uint32_t spurious = 0xF0;
+        constexpr uint64_t id = 0x20;
+        constexpr uint64_t version = 0x30;
+        constexpr uint64_t tpr = 0x80;
+        constexpr uint64_t apr = 0x90;
+        constexpr uint64_t ppr = 0xA0;
+        constexpr uint64_t eoi = 0xB0;
+        constexpr uint64_t rrd = 0xC0;
+        constexpr uint64_t ldr = 0xD0;
+        constexpr uint64_t dfr = 0xE0;
+        constexpr uint64_t spurious = 0xF0;
 
-        constexpr uint32_t lvt_timer = 0x320;
+        constexpr uint64_t lvt_timer = 0x320;
 
-        constexpr uint32_t timer_initial_count = 0x380;
-        constexpr uint32_t timer_current_count = 0x390;
-        constexpr uint32_t timer_divider = 0x380;
+        constexpr uint64_t timer_initial_count = 0x380;
+        constexpr uint64_t timer_current_count = 0x390;
+        constexpr uint64_t timer_divider = 0x380;
 
-        enum class LapicTimerModes : uint8_t { OneShot, Periodic, TscDeadline };
+        enum class LapicTimerModes : uint8_t { OneShot = 0, Periodic, TscDeadline };
     } // namespace regs
 
     class Lapic {

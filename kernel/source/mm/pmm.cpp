@@ -49,7 +49,7 @@ void pmm::init(stivale2::Parser& parser) {
             bitmap_aligned_size = align_up(bitmap_size, pmm::block_size);
 
             for(auto& e : bitmap)
-                e = ~0;
+                e = 0xFF;
 
             bitmap_constructed = true;
             break;
@@ -74,13 +74,14 @@ uintptr_t pmm::alloc_block() {
     std::lock_guard guard{pmm_lock};
 
     for(size_t i = 0; i < bitmap.size(); i++) {
-        if(bitmap[i] != ~0){
-            for(size_t j = 0; j < 8; j++) {
-                if(!(bitmap[i] & (1 << j))){
-                    // Found free entry
-                    bitmap[i] |= (1 << j); // Mark entry as reserved
-                    return ((i * 8) + j) * block_size;
-                }
+        if(bitmap[i] == 0xFF)
+            continue;
+        
+        for(size_t j = 0; j < 8; j++) {
+            if((bitmap[i] & (1 << j)) == 0){
+                // Found free entry
+                bitmap[i] |= (1 << j); // Mark entry as reserved
+                return ((i * 8) + j) * block_size;
             }
         }
     }

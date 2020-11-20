@@ -71,15 +71,22 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
 
         port.wait_idle();
 
-        auto region = iommu_vmm.alloc(sizeof(Port::PhysRegion));
-        port.region = (Port::PhysRegion*)region.host_base;
+        // TODO: This does not work for some reason, it makes qemu shit its pants
+        // qemu-system-x86_64: /build/qemu-2AfuBA/qemu-4.2/exec.c:3572: address_space_unmap: Assertion `mr != NULL' failed.
+        /*auto region = iommu_vmm.alloc(sizeof(Port::PhysRegion));
+        port.region = (Port::PhysRegion*)region.host_base;*/
 
-        auto cmd_header_addr = region.guest_base + offsetof(Port::PhysRegion, command_headers);
+        auto region_pa = pmm::alloc_block();
+        iommu::map(*device, region_pa, region_pa, paging::mapPagePresent | paging::mapPageWrite);
+
+        port.region = (Port::PhysRegion*)(region_pa + phys_mem_map);
+
+        auto cmd_header_addr = region_pa + offsetof(Port::PhysRegion, command_headers);
         port.regs->clb = cmd_header_addr & 0xFFFFFFFF;
         if(a64)
             port.regs->clbu = (cmd_header_addr >> 32) & 0xFFFFFFFF;
 
-        auto fis_addr = region.guest_base + offsetof(Port::PhysRegion, receive_fis);
+        auto fis_addr = region_pa + offsetof(Port::PhysRegion, receive_fis);
         port.regs->fb = fis_addr & 0xFFFFFFFF;
         if(a64)
             port.regs->fbu = (fis_addr >> 32) & 0xFFFFFFFF;
@@ -254,9 +261,9 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
         }
     }
 
-    controller->iommu_vmm.free(region);
     if(!cmd.write)
         memcpy(data, region.host_base, transfer_len);
+    controller->iommu_vmm.free(region);
 
     free_command(slot);
 }
@@ -319,9 +326,9 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
         }
     }
 
-    controller->iommu_vmm.free(region);
     if(!cmd.write)
         memcpy(data, region.host_base, transfer_len);
+    controller->iommu_vmm.free(region);
 
     free_command(slot);
 }

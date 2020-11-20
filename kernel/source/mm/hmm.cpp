@@ -55,7 +55,7 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
 
                     // allocate_page() is a bump allocator so this is all fine and dandy
                     auto addr = allocate_page();
-                    for(size_t i = 0; i < n_pages - 1; i++)
+                    for(size_t i = 0; i < (n_pages - 1); i++)
                         allocate_page();
                     
                     pool->items[i].large_allocation = LargeAllocation{.free = false, .address = addr, .size = effective_size};

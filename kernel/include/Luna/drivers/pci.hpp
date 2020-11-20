@@ -18,8 +18,8 @@ namespace pci {
         union [[gnu::packed]] Control {
             struct {
                 uint16_t enable : 1;
-                uint16_t mmc : 1;
-                uint16_t mme : 1;
+                uint16_t mmc : 3;
+                uint16_t mme : 3;
                 uint16_t c64 : 1;
                 uint16_t pvm : 1;
                 uint16_t reserved : 6;
@@ -35,7 +35,7 @@ namespace pci {
                 uint32_t redirection_hint : 1;
                 uint32_t reserved_0 : 8;
                 uint32_t destination_id : 8;
-                uint32_t base_address : 12;
+                uint32_t base_address : 12; // Must be 0xFEE
             };
             uint32_t raw;
         };

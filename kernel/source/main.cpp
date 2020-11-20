@@ -80,8 +80,9 @@ void kernel_main(const stivale2_struct* info) {
     smp::start_cpus(boot_info, kernel_main_ap);
 
     pci::init();
-    iommu::init();
     asm("sti");
+
+    iommu::init();
 
     ahci::init();
 

@@ -20,7 +20,7 @@ namespace iovmm {
         };
 
         void push_region(Region region) { 
-            _regions.emplace_back(region.base, region.len); 
+            _regions.push_back(region); 
         }
 
         struct Allocation {
@@ -38,10 +38,10 @@ namespace iovmm {
                     auto base = region.base;
                     region.base += aligned_len;
 
-                    uintptr_t host_region = hmm::alloc(aligned_len, pmm::block_size);
+                    uintptr_t host_region = hmm::alloc(len, pmm::block_size); // Will do its own alignment internally
                     ASSERT(((uintptr_t)host_region & (pmm::block_size - 1)) == 0);
 
-                    memset((void*)host_region, 0, aligned_len);
+                    memset((void*)host_region, 0, len);
 
                     auto& kvmm = vmm::kernel_vmm::get_instance();
                     for(size_t i = 0; i < aligned_len; i += pmm::block_size)

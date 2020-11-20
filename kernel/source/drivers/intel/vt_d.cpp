@@ -6,6 +6,7 @@
 
 #include <Luna/cpu/idt.hpp>
 #include <Luna/drivers/pci.hpp>
+#include <Luna/drivers/ioapic.hpp>
 
 vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* regs): regs{regs} {
     ASSERT(regs->extended_capabilities & (1 << 1));
@@ -155,13 +156,13 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
         PANIC("Page Selective Invalidation is unsupported");
 
     print("      Setting up IRQ ... ");
+    wbflush();
 
     uint32_t destination_id = get_cpu().lapic_id;
     auto vector = idt::allocate_vector();
 
     pci::msi::Address msi_addr{.raw = 0};
     pci::msi::Data msi_data{.raw = 0};
-    RemappingEngineRegs::FaultEventUpperAddress msi_upper_addr{.raw = 0};
 
     msi_addr.base_address = 0xFEE;
     msi_addr.destination_id = destination_id & 0xFF;
@@ -169,67 +170,39 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     msi_data.delivery_mode = 0;
     msi_data.vector = vector;
 
-    if(x2apic_mode)
-        msi_upper_addr.upper_dest_id = (destination_id >> 24) & 0xFFFFFF;
-
     regs->fault_event_data = msi_data.raw;
     regs->fault_event_address = msi_addr.raw;
-    regs->fault_event_upper_address = msi_upper_addr.raw;
 
-    idt::set_handler(vector, idt::handler{.f = []([[maybe_unused]] idt::regs*, void* userptr) {
+    if(x2apic_mode) {
+        RemappingEngineRegs::FaultEventUpperAddress msi_upper_addr{.raw = 0};
+        msi_upper_addr.upper_dest_id = (destination_id >> 24) & 0xFFFFFF;
+        
+        regs->fault_event_upper_address = msi_upper_addr.raw;
+    }
+
+    idt::set_handler(vector, idt::handler{.f = []([[maybe_unused]] idt::regs* regs, void* userptr) {
         auto& self = *(vt_d::RemappingEngine*)userptr;
-
-        for(size_t i = 0; i < self.n_fault_recording_regs; i++) {
-            uint64_t* reg = (uint64_t*)&self.fault_recording_regs[i];
-
-            FaultRecordingRegister fault;
-            uint64_t r0 = reg[0], r1 = reg[1];
-            memcpy(&fault, &r0, 8);
-            memcpy((uint8_t*)&fault + 8, &r1, 8);    
-
-            if(fault.fault) {
-                print("vt-d: Fault at index {}\n", i);
-
-                uint8_t type = fault.type_bit_1 | (fault.type_bit_2 << 1);
-                switch (type) {
-                    case 0: print("      Type: Write Request\n"); break;
-                    case 1: print("      Type: Read Request\n"); break;
-                    case 2: print("      Type: Page Request\n"); break;
-                    case 3: print("      Type: AtomicOp Request\n"); break;
-                    default: print("      Type: Unknown\n"); break;
-                }
-
-                const SourceID sid{.raw = (uint16_t)fault.source_id};
-                print("      SID: {}:{}.{}\n", sid.bus, sid.slot, sid.func);
-
-                print("      Privilege: {:s}\n", fault.supervisor ? "Supervisor" : "User");
-                if(fault.execute)
-                    print("      Execute access\n");
-
-                auto reason = fault.reason;
-                switch (reason) {
-                    case 5: print("      Reason: A Write or AtomicOp request encountered lack of write permission.\n"); break;
-                    default: print("      Reason: Unknown ({:#x})\n", reason);
-                }
-            }
-        }
-
-        asm("cli\nhlt");
+        self.handle_irq(); 
     }, .is_irq = true, .should_iret = false, .userptr = this});
 
-    regs->fault_event_control &= ~(1ull << 31); // Unmask IRQ
+    regs->fault_event_control &= ~(1u << 31); // Unmask IRQ
+    (void)(regs->fault_event_control); // Force flush
 
-    print("Done\n      Installing Root Table ... ");
+    print("Done\n");
+
+    print("      Installing Root Table ... ");
 
     auto root_block = pmm::alloc_block();
     ASSERT(root_block);
+
     auto root_table_va = root_block + phys_mem_map;
     vmm::kernel_vmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite);
+
     root_table = (RootTable*)root_table_va;
     memset((void*)root_table, 0, pmm::block_size);
 
     RemappingEngineRegs::RootTableAddress root_addr{};
-    root_addr.address = root_block >> 12;
+    root_addr.address = (root_block >> 12);
     root_addr.translation_type = 0; // Legacy Mode
 
     wbflush();
@@ -289,6 +262,8 @@ void vt_d::RemappingEngine::wbflush() {
 }
 
 void vt_d::RemappingEngine::invalidate_global_context() {
+    wbflush();
+
     if(iq) {
         ContextInvalidationDescriptor cmd{};
         cmd.type = ContextInvalidationDescriptor::cmd;
@@ -382,24 +357,70 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
     auto* context_table_entry = &context_table[context_table_index];
 
     if(!context_table_entry->present) {
-        context_table_entry->translation_type = 0; // Legacy Translation
-        context_table_entry->address_width = (secondary_page_levels - 2);
-
         auto domain_id = domain_ids.get_free_bit();
         if(domain_id == ~0u)
             PANIC("No Domain IDs left");
 
-        context_table_entry->domain_id = domain_id;
         domain_id_map[device.raw] = domain_id;
 
         auto* context = new sl_paging::context{secondary_page_levels};
         page_map[device.raw] = context;
 
+        context_table_entry->translation_type = 0; // Legacy Translation
+        context_table_entry->address_width = (secondary_page_levels - 2);
+        context_table_entry->domain_id = domain_id;
         context_table_entry->sl_translation_ptr = (context->get_root_pa() >> 12);
         context_table_entry->present = 1;
     }
 
     return *page_map[device.raw];
+}
+
+void vt_d::RemappingEngine::handle_irq() {
+    auto fault_status = regs->fault_status;
+    if((fault_status & (1 << 1)) == 0) // No actual faults
+        return;
+
+    size_t fault_index = (fault_status >> 8) & 0xFF;
+
+    for(size_t i = fault_index; i < n_fault_recording_regs; i++) {
+        uint64_t* reg = (uint64_t*)&fault_recording_regs[i];
+
+        FaultRecordingRegister fault{};
+        //uint64_t r0 = reg[0], r1 = reg[1];
+        //memcpy(&fault, &r0, 8);
+        //memcpy((uint8_t*)&fault + 8, &r1, 8);    
+        fault.raw.a = reg[0];
+        fault.raw.b = reg[1];
+
+        if(fault.fault) {
+            print("vt-d: Fault at index {}\n", i);
+
+            uint8_t type = fault.type_bit_1 | (fault.type_bit_2 << 1);
+            switch (type) {
+                case 0: print("      Type: Write Request\n"); break;
+                case 1: print("      Type: Read Request\n"); break;
+                case 2: print("      Type: Page Request\n"); break;
+                case 3: print("      Type: AtomicOp Request\n"); break;
+                default: print("      Type: Unknown\n"); break;
+            }
+
+            const SourceID sid{.raw = (uint16_t)fault.source_id};
+            print("      SID: {}:{}.{}\n", sid.bus, sid.slot, sid.func);
+
+            print("      Privilege: {:s}\n", fault.supervisor ? "Supervisor" : "User");
+            if(fault.execute)
+                print("      Execute access\n");
+
+            auto reason = fault.reason;
+            switch (reason) {
+                case 5: print("      Reason: A Write or AtomicOp request encountered lack of write permission.\n"); break;
+                default: print("      Reason: Unknown ({:#x})\n", reason);
+            }
+        }
+    }
+
+    asm("cli\nhlt");
 }
 
 vt_d::IOMMU::IOMMU() {
