@@ -185,7 +185,7 @@ ahci::Controller::Port::Command ahci::Controller::Port::allocate_command(size_t 
     auto& header = region->command_headers[i];
 
     size_t size = sizeof(CmdTable) + (n_prdts * sizeof(Prdt));
-    auto region = controller->iommu_vmm.alloc(size);
+    auto region = controller->iommu_vmm.alloc(size, iovmm::Iovmm::Bidirectional);
 
     header.ctba = region.guest_base & 0xFFFF'FFFF;
     if(controller->a64)
@@ -227,7 +227,7 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     fis.features = cmd.features & 0xFF;
     fis.features_exp = (cmd.features >> 8) & 0xFF;
 
-    auto region = controller->iommu_vmm.alloc(transfer_len);
+    auto region = controller->iommu_vmm.alloc(transfer_len, cmd.write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
     ASSERT(region.guest_base);
 
     if(cmd.write)
@@ -292,7 +292,7 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
 
     memcpy(slot.table->packet, cmd.packet, 16);
 
-    auto region = controller->iommu_vmm.alloc(transfer_len);
+    auto region = controller->iommu_vmm.alloc(transfer_len, cmd.write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
     ASSERT(region.guest_base);
 
     if(cmd.write)

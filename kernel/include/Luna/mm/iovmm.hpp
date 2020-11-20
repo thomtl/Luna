@@ -29,7 +29,13 @@ namespace iovmm {
             size_t len;
         };
 
-        Allocation alloc(size_t len) {
+        enum DmaDirection : uint8_t {
+            DeviceToHost = (1 << 0),
+            HostToDevice = (1 << 1),
+            Bidirectional = DeviceToHost | HostToDevice
+        };
+        
+        Allocation alloc(size_t len, uint8_t direction) {
             size_t aligned_len = align_up(len, pmm::block_size);
             for(auto& region : _regions) {
                 if(region.len >= aligned_len) {
@@ -43,9 +49,13 @@ namespace iovmm {
 
                     memset((void*)host_region, 0, len);
 
+                    uint64_t flags = 0;
+                    flags |= (direction & HostToDevice) ? paging::mapPagePresent : 0; // Present actually means read here, maybe use different flags for IOMMU paging?
+                    flags |= (direction & DeviceToHost) ? paging::mapPageWrite : 0;
+
                     auto& kvmm = vmm::kernel_vmm::get_instance();
                     for(size_t i = 0; i < aligned_len; i += pmm::block_size)
-                        iommu::map(*_device, kvmm.get_phys(host_region + i), base + i, paging::mapPagePresent | paging::mapPageWrite);
+                        iommu::map(*_device, kvmm.get_phys(host_region + i), base + i, flags);
 
                     return {base, (uint8_t*)host_region, len};
                 }
