@@ -131,7 +131,7 @@ void pci::init() {
 
     print("pci: Enumerated devices:\n");
     for(auto& device : devices) {
-        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(9), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(11));
+        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(11), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(9));
 
         if(device.msi.supported)
             print(" MSI");
@@ -145,7 +145,7 @@ void pci::init() {
 pci::Device* pci::device_by_class(uint8_t class_code, uint8_t subclass_code, uint8_t prog_if, size_t i) {
     size_t curr = 0;
     for(auto& device : devices) {
-        if(device.read<uint8_t>(9) == class_code && subclass_code == device.read<uint8_t>(10) && device.read<uint8_t>(11) == prog_if) {
+        if(device.read<uint8_t>(11) == class_code && subclass_code == device.read<uint8_t>(10) && device.read<uint8_t>(9) == prog_if) {
             if(curr != i)
                 curr++;
             else
@@ -167,6 +167,13 @@ pci::Device* pci::device_by_id(uint16_t vid, uint16_t did, size_t i) {
         }
     }
     
+    return nullptr;
+}
+
+pci::Device* pci::device_by_location(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func) {
+    for(auto& device : devices)
+        if(device.seg == seg && device.bus == bus && device.slot == slot && device.func == func)
+            return &device;
     return nullptr;
 }
 

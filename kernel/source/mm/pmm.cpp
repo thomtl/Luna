@@ -89,6 +89,39 @@ uintptr_t pmm::alloc_block() {
     return 0;
 }
 
+uintptr_t pmm::alloc_n_blocks(size_t n_pages) {
+    std::lock_guard guard{pmm_lock};
+
+
+    size_t left = n_pages;
+    for(size_t i = 0; i < bitmap.size(); i++) {
+        if(bitmap[i] == 0xFF) {
+            left = n_pages;
+            continue;
+        }
+
+        for(size_t j = 0; j < 8; j++) {
+            if((bitmap[i] & (1 << j)) == 0) {
+                left--;
+                if(left == 0) {
+                    j++; // Make sure this page is counted too
+                    auto bit_set = [&](size_t bit) { bitmap[bit / 8] |= (1 << (bit % 8)); };
+
+                    auto starting_bit = ((i * 8) + j) - n_pages;
+                    for(size_t i = 0; i < n_pages; i++)
+                        bit_set(starting_bit + i);
+
+                    return starting_bit * block_size;
+                }
+            } else {
+                left = n_pages;
+            }
+        }
+    }
+
+    return 0;
+}
+
 void pmm::free_block(uintptr_t block) {
     std::lock_guard guard{pmm_lock};
 

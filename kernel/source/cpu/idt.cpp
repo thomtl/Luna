@@ -31,6 +31,7 @@ void idt::load() {
 
 void idt::set_handler(uint8_t vector, const handler& h) {
     handlers[vector] = h;
+    handlers[vector].is_reserved = true;
 }
 
 uint8_t idt::allocate_vector() {

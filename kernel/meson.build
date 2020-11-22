@@ -12,6 +12,9 @@ main_sources = files(
     'source/cpu/regs.cpp',
     'source/cpu/smp.cpp',
 
+    'source/drivers/amd/amd_vi.cpp',
+    'source/drivers/amd/io_paging.cpp',
+
     'source/drivers/intel/sl_paging.cpp',
     'source/drivers/intel/vt_d.cpp',
 

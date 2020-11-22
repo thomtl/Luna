@@ -360,6 +360,7 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
         auto domain_id = domain_ids.get_free_bit();
         if(domain_id == ~0u)
             PANIC("No Domain IDs left");
+        domain_ids.set(domain_id);
 
         domain_id_map[device.raw] = domain_id;
 
