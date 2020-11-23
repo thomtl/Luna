@@ -58,14 +58,28 @@ void simd::init() {
             asm volatile("xrstorq %[Context]" : : [Context] "m"(*context), "a"(rfbm_low), "d"(rfbm_high) : "memory");
         };
 
-        data.store = [](uint8_t* context) {
-            constexpr uint64_t rfbm = ~0ull;
+        ASSERT(cpu::cpuid(0xD, 1, a, b, c, d));
+        
+        // xsaveopt is supported
+        if(a & (1 << 0)) {
+            data.store = [](uint8_t* context) {
+                constexpr uint64_t rfbm = ~0ull;
 
-            constexpr uint32_t rfbm_low = rfbm & 0xFFFF'FFFF;
-            constexpr uint32_t rfbm_high = (rfbm >> 32) & 0xFFFF'FFFF;
+                constexpr uint32_t rfbm_low = rfbm & 0xFFFF'FFFF;
+                constexpr uint32_t rfbm_high = (rfbm >> 32) & 0xFFFF'FFFF;
 
-            asm volatile("xsaveq %[Context]" : : [Context] "m"(*context), "a"(rfbm_low), "d"(rfbm_high) : "memory");
-        };
+                asm volatile("xsaveopt64 %[Context]" : : [Context] "m"(*context), "a"(rfbm_low), "d"(rfbm_high) : "memory");
+            };
+        } else {
+            data.store = [](uint8_t* context) {
+                constexpr uint64_t rfbm = ~0ull;
+
+                constexpr uint32_t rfbm_low = rfbm & 0xFFFF'FFFF;
+                constexpr uint32_t rfbm_high = (rfbm >> 32) & 0xFFFF'FFFF;
+
+                asm volatile("xsaveq %[Context]" : : [Context] "m"(*context), "a"(rfbm_low), "d"(rfbm_high) : "memory");
+            };
+        }
     } else if(d & (1 << 24)) { // FXSAVE
         cr4::write(cr4::read() | (1 << 9)); // Set CR4.OSFXSR
 

@@ -26,5 +26,5 @@ kernel:
 run: kernel
 	# -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
 	# Intel IOMMU: -device intel-iommu,aw-bits=48
-	qemu-system-x86_64 -enable-kvm -device amd-iommu -machine q35 -smp 4 -hda luna.hdd -serial file:/dev/stdout -monitor stdio -no-reboot -no-shutdown
+	qemu-system-x86_64 -enable-kvm -cpu host -device amd-iommu -machine q35 -smp 4 -hda luna.hdd -serial file:/dev/stdout -monitor stdio -no-reboot -no-shutdown
 
