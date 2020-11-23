@@ -70,11 +70,6 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
 
         regs->device_table_base = table_base;
         print("Done\n");
-
-        for(size_t i = 0; i <= max_device_id; i++) {
-            device_table[i].valid = 1;
-            device_table[i].translation_info_valid = 1;
-        }
     }
 
     {
@@ -155,6 +150,68 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
             regs->exclusion_limit = exclusion_length;
 
             print("       Setup Exclusion Registers\n");
+        }
+    }
+
+    {
+        // flush_all_caches() will flush the devtable later
+        for(uint16_t i = 0; i <= max_device_id; i++)
+            device_table[i].valid = 1; // Disallow all accesses, when valid = 1 but translation_info_valid = 0
+
+        auto update_device_info_from_acpi = [&](uint16_t devid, uint8_t flags) {
+            #define BIT_TEST(n, field) \
+                if(flags & (1 << n)) \
+                    device_table[devid].field = 1;
+
+            BIT_TEST(0, init_pass);
+            BIT_TEST(1, einit_pass);
+            BIT_TEST(2, nmi_pass);
+            BIT_TEST(4, sysmgt1);
+            BIT_TEST(5, sysmgt2);
+            BIT_TEST(6, lint0_pass);
+            BIT_TEST(7, lint1_pass);
+
+            // Apply Erratum 63
+            uint8_t sysmgt = device_table[devid].sysmgt1 | (device_table[devid].sysmgt2 << 1);
+            if(sysmgt == 1)
+                device_table[devid].io_write_permission = 1;
+        };
+
+        size_t header_size = 0;
+        switch (ivhd->type) {
+            case 0x10: header_size = 24; break;
+            case 0x11: [[fallthrough]];
+            case 0x40: header_size = 40; break;
+            default: PANIC("Unknown IVHD Header type");
+        }
+
+        auto* entries = (uint8_t*)ivhd + header_size;
+        for(size_t i = 0; i < (ivhd->length - header_size);) {
+            const auto& entry = *(IVHDEntry*)(entries + i);
+            auto type = (IVHDEntryTypes)entry.type;
+
+            switch (type) {
+            case IVHDEntryTypes::DeviceAll:
+                for(uint16_t i = 0; i <= max_device_id; i++)
+                    update_device_info_from_acpi(i, entry.flags);
+                break;
+            case IVHDEntryTypes::DeviceSelect:
+                update_device_info_from_acpi(entry.device_id, entry.flags);
+                break;
+            default:
+                print("amdvi: Unknown IVHD entry type {:#x}\n", (uint16_t)type);
+                PANIC("Unknown Entry Type");
+            }
+
+            size_t entry_size = 0;
+            if(entry.type < 0x80)
+                entry_size = (4 << (entry.type >> 6));
+            else {
+                print("amdvi: Unknown IVHD entry type {:#x}\n", (uint16_t)type);
+                PANIC("Unknown Entry Type");
+            }
+
+            i += entry_size;
         }
     }
 

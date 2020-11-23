@@ -208,7 +208,8 @@ namespace amd_vi {
         uint64_t iotlb_cache_hint : 1;
         uint64_t snoop_disable : 1;
         uint64_t allow_exclusion : 1;
-        uint64_t system_managment_enable : 2;
+        uint64_t sysmgt1 : 1;
+        uint64_t sysmgt2 : 1;
         uint64_t reserved_1 : 1;
         uint64_t guest_cr3_table_root_pointer_high : 21;
         uint64_t interrupt_map_valid : 1;
