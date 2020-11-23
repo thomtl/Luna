@@ -13,7 +13,8 @@ namespace cpu {
     bool cpuid(uint32_t leaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
     bool cpuid(uint32_t leaf, uint32_t subleaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
 
-    void init();
+    void early_init(); // Cannot access per_cpu struct
+    void init(); // Can access per_cpu struct
 } // namespace cpu
 
 struct CpuData {
@@ -21,6 +22,12 @@ struct CpuData {
     uint32_t lapic_id;
     gdt::table gdt_table;
     lapic::Lapic lapic;
+
+    struct {
+        uint16_t family;
+        uint8_t model;
+        uint8_t stepping;
+    } cpu;
 
     struct {
         size_t region_size, region_alignment;

@@ -348,6 +348,7 @@ namespace amd_vi {
         private:
         void disable();
         void init_flags();
+        void erratum_746_workaround();
 
         uint16_t get_highest_device_id();
 

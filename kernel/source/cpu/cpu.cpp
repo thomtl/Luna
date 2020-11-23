@@ -22,7 +22,7 @@ bool cpu::cpuid(uint32_t leaf, uint32_t subleaf, uint32_t& a, uint32_t& b, uint3
     return __get_cpuid_count(leaf, subleaf, &a, &b, &c, &d);
 }
 
-void cpu::init() {
+void cpu::early_init() {
     // NX Support
     {
         uint32_t a, b, c, d;
@@ -35,4 +35,27 @@ void cpu::init() {
 
     // Enable Write-Protect in Ring 0
     cr0::write(cr0::read() | (1 << 16));
+}
+
+void cpu::init() {
+    auto& cpu_data = get_cpu();
+    {
+        uint32_t a, b, c, d;
+        ASSERT(cpuid(0x1, a, b, c, d));
+
+        uint8_t ext_family = (a >> 20) & 0xFF;
+        uint8_t basic_family = (a >> 8) & 0xFF;
+
+        cpu_data.cpu.family = basic_family + ((basic_family == 15) ? ext_family : 0);
+
+        uint8_t ext_model = (a >> 16) & 0xF;
+        uint8_t basic_model = (a >> 4) & 0xF;
+
+        if(basic_family == 6 || basic_family == 15)
+            cpu_data.cpu.model = (ext_model << 4) | basic_model;
+        else
+            cpu_data.cpu.model = basic_model;
+
+        cpu_data.cpu.stepping = a & 0xF;
+    }
 }

@@ -39,8 +39,12 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
         page_levels = 5; // TODO: Support 6 level paging
     print("       Page Levels: {}\n", (uint16_t)page_levels);
 
+    erratum_746_workaround();
+
     // According to the spec we should program the SMI Filter first, but linux doesn't seem to do it
     // TODO: Program SMI Filter, How do you figure out the BMC DeviceID??
+
+
     
     disable();
     init_flags();
@@ -194,6 +198,26 @@ void amd_vi::IOMMUEngine::init_flags() {
 
         regs->control = control;
     }
+}
+
+void amd_vi::IOMMUEngine::erratum_746_workaround() {
+    // https://elixir.bootlin.com/linux/v5.9.10/source/drivers/iommu/amd/init.c#L1403
+
+    auto& cpu = get_cpu().cpu;
+    if(cpu.family != 0x15 || cpu.model < 0x10 || cpu.model > 0x1F)
+        return;
+    
+    pci_dev->write<uint32_t>(0xF0, 0x90);
+    auto v = pci_dev->read<uint32_t>(0xF4);
+
+    // Already applied by firmware
+    if(v & (1 << 2))
+        return;
+
+    pci_dev->write<uint32_t>(0xF0, 0x90 | (1 << 8)); // Enable Writing
+    pci_dev->write<uint32_t>(0xF4, v | (1 << 2));
+    pci_dev->write<uint32_t>(0xF0, 0x90); // Clear Writing
+    print("       Applied Erratum 746 Workaround\n");
 }
 
 uint16_t amd_vi::IOMMUEngine::get_highest_device_id() {
