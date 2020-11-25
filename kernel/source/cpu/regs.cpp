@@ -4,9 +4,9 @@
 #include <Luna/mm/hmm.hpp>
 
 uint64_t msr::read(uint32_t msr) {
-    uint64_t high = 0, low = 0;
+    uint32_t high = 0, low = 0;
     asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(msr));
-    return (high << 32) | low;
+    return ((uint64_t)high << 32) | low;
 }
 
 void msr::write(uint32_t msr, uint64_t v) {

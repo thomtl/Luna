@@ -4,6 +4,9 @@ main_sources = files(
     'source/cpp_support.cpp',
     'source/main.cpp',
 
+    'source/cpu/intel/ept.cpp',
+    'source/cpu/intel/vmx.cpp',
+
     'source/cpu/cpu.cpp',
     'source/cpu/idt.cpp',
     'source/cpu/lapic.cpp',
@@ -46,6 +49,7 @@ main_sources = files(
 cpp_includes = include_directories('include')
 
 nasm_sources = files(
+    'source/cpu/intel/vmx_low.asm',
     'source/cpu/irqs.asm')
 
 nasm = find_program('nasm')

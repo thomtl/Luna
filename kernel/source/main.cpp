@@ -9,11 +9,13 @@
 #include <Luna/cpu/regs.hpp>
 #include <Luna/cpu/idt.hpp>
 #include <Luna/cpu/smp.hpp>
+#include <Luna/cpu/intel/vmx.hpp>
 
 #include <Luna/mm/pmm.hpp>
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
+#include <Luna/drivers/storage/ahci.hpp>
 #include <Luna/drivers/iommu.hpp>
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/ioapic.hpp>
@@ -21,8 +23,7 @@
 
 #include <Luna/fs/vfs.hpp>
 
-#include <Luna/drivers/storage/ahci.hpp>
-#include <Luna/cpu/intel/vmx.hpp>
+#include <Luna/vmm/vm.hpp>
 
 #include <std/mutex.hpp>
 
@@ -92,7 +93,20 @@ void kernel_main(const stivale2_struct* info) {
 
     vmx::init();
 
-    vmx::Vm vm{};
+    auto& vm = *(vm::AbstractVm*)new vmx::Vm{};
+    {
+        auto pa = pmm::alloc_block();
+        uint8_t* va = (uint8_t*)(pa + phys_mem_map);
+
+        vm.map(pa, 0x1000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+
+        uint8_t payload[] = {
+            0xF4, // HLT
+        };
+
+        memcpy(va, payload, sizeof(payload));
+    }
+    vm.run();
 
     print("luna: Done with kernel_main\n");
     while(true)
