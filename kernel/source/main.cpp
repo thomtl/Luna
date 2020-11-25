@@ -22,6 +22,7 @@
 #include <Luna/fs/vfs.hpp>
 
 #include <Luna/drivers/storage/ahci.hpp>
+#include <Luna/cpu/intel/vmx.hpp>
 
 #include <std/mutex.hpp>
 
@@ -47,6 +48,7 @@ void kernel_main(const stivale2_struct* info) {
 
     auto& cpu_data = allocate_cpu_data();
     cpu_data.gdt_table.init();
+    cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table));
     cpu_data.set();
 
     cpu::init();
@@ -88,6 +90,10 @@ void kernel_main(const stivale2_struct* info) {
 
     ahci::init();
 
+    vmx::init();
+
+    vmx::Vm vm{};
+
     print("luna: Done with kernel_main\n");
     while(true)
         ;
@@ -101,6 +107,7 @@ void kernel_main_ap(stivale2_smp_info* info){
 
     auto& cpu_data = allocate_cpu_data();
     cpu_data.gdt_table.init();
+    cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table));
     cpu_data.set();
 
     cpu::init();

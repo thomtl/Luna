@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Luna/common.hpp>
+#include <Luna/cpu/tss.hpp>
 
 namespace gdt
 {
@@ -8,8 +9,12 @@ namespace gdt
         uint16_t size;
         uint64_t table;
 
-        void set() {
+        void load() const {
             asm volatile("lgdt %0" : : "m"(*this) : "memory");
+        }
+
+        void store() {
+            asm volatile("sgdt %0" : "=m"(*this) : : "memory");
         }
     };
 
@@ -29,9 +34,25 @@ namespace gdt
             set();
         }
 
+        uint16_t push_tss(tss::Table* table) {
+            auto ptr = (uintptr_t)table;
+            auto size = (sizeof(tss::Table) - 1);
+
+            uint32_t a_low = (size & 0xFFFF) | ((ptr & 0xFFFF) << 16);
+            uint32_t a_high = ((ptr >> 16) & 0xFF) | (1 << 8) | (1 << 11) | (1 << 15) | (size & 0xF0000) | (ptr & 0xFF000000);
+
+            uint16_t sel = i * 8;
+            entries[i++] = a_low | ((uint64_t)a_high << 32);
+            entries[i++] = (ptr >> 32);
+
+            set();
+
+            return sel;
+        }
+
         void set(){
             pointer p{.size = (table_entries * sizeof(uint64_t)) - 1, .table = (uint64_t)&entries};
-            p.set();
+            p.load();
 
             asm volatile (R"(
                     mov %%rsp, %%rax

@@ -26,7 +26,7 @@ void idt::init_table() {
 }
 
 void idt::load() {
-    table_pointer.set();
+    table_pointer.load();
 }
 
 void idt::set_handler(uint8_t vector, const handler& h) {

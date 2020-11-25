@@ -21,6 +21,7 @@ struct CpuData {
     void* self;
     uint32_t lapic_id;
     gdt::table gdt_table;
+    tss::Table tss_table;
     lapic::Lapic lapic;
 
     struct {

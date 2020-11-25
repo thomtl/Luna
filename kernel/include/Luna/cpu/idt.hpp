@@ -16,8 +16,12 @@ namespace idt
         uint16_t size;
         uint64_t table;
 
-        void set() {
+        void load() const {
             asm volatile("lidt %0" : : "m"(*this) : "memory");
+        }
+        
+        void store() {
+            asm volatile("sidt %0" : "=m"(*this) : : "memory");
         }
     };
 
