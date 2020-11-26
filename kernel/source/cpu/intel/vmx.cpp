@@ -234,8 +234,9 @@ vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
 
     write(guest_interruptibility_state, 0);
     write(guest_activity_state, 0);
-    write(guest_intr_status, 0);
-    write(guest_pml_index, 0);
+
+    //write(guest_intr_status, 0); // Only do if we use Virtual-Interrupt Delivery
+    //write(guest_pml_index, 0); // Only do if we do PMLs
 
     write(guest_dr7, 0);
     write(guest_rsp, 0);
