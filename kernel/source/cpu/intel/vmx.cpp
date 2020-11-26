@@ -89,9 +89,19 @@ void vmx::init() {
     asm volatile("vmxon %[Region]" : "=@ccnc"(success) : [Region]"m"(vmxon_region_pa) : "memory");
     if(!success)
         PANIC("'vmxon' Failed");
+
+    auto& cpu = get_cpu().cpu;
+    auto ept = msr::read(msr::ia32_vmx_ept_vpid_cap);
+    ASSERT((ept >> 14) & 1); // Assert that WB paging is supported
+    if((ept >> 6) & 1)
+        cpu.vmx.ept_levels = 4;
+    else
+        PANIC("Unknown amount of EPT levels");
+
+    cpu.vmx.ept_dirty_accessed = ((ept >> 21) & 1) ? true : false;
 }
 
-vmx::Vm::Vm(): guest_page{4} {
+vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
     vmcs_pa = pmm::alloc_block();
     vmcs = vmcs_pa + phys_mem_map;
 
@@ -255,7 +265,17 @@ vmx::Vm::Vm(): guest_page{4} {
         write(guest_cr0, lo | ((uint64_t)hi) << 32);
     }
 
-    write(ept_control, guest_page.get_root_pa() | ((guest_page.get_levels() - 1) << 3) | 6); // Set levels, and its in WB mem
+    {
+        uint64_t eptp = 0;
+        eptp |= guest_page.get_root_pa(); // Set EPT Physical Address
+        eptp |= ((guest_page.get_levels() - 1) << 3); // Set EPT Number of page levels
+        eptp |= 6; // Writeback Caching
+
+        if(get_cpu().cpu.vmx.ept_dirty_accessed)
+            eptp |= (1 << 6);
+
+        write(ept_control, eptp);
+    }
 }
 
 void vmx::Vm::run() {

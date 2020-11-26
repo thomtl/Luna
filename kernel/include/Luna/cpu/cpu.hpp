@@ -28,6 +28,11 @@ struct CpuData {
         uint16_t family;
         uint8_t model;
         uint8_t stepping;
+
+        struct {
+            uint8_t ept_levels;
+            bool ept_dirty_accessed;
+        } vmx;
     } cpu;
 
     struct {
