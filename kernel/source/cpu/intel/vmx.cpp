@@ -90,6 +90,18 @@ void vmx::init() {
     if(!success)
         PANIC("'vmxon' Failed");
 
+    auto proc = msr::read(msr::ia32_vmx_procbased_ctls) >> 32;
+    auto proc2 = msr::read(msr::ia32_vmx_procbased_ctls2) >> 32;
+
+    if((proc & (uint32_t)ProcBasedControls::SecondaryControlsEnable) == 0)
+        PANIC("Secondary ProcBasedCtls are unsupported");
+    
+    if((proc2 & (uint32_t)ProcBasedControls2::EPTEnable) == 0)
+        PANIC("EPT is unsupported");
+    
+    if((proc2 & (uint32_t)ProcBasedControls2::UnrestrictedGuest) == 0)
+        PANIC("Unrestricted Guest is unsupported");
+
     auto& cpu = get_cpu().cpu;
     auto ept = msr::read(msr::ia32_vmx_ept_vpid_cap);
     ASSERT((ept >> 14) & 1); // Assert that WB paging is supported
