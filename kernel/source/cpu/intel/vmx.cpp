@@ -140,6 +140,9 @@ void vmx::init() {
         PANIC("Unknown amount of EPT levels");
 
     cpu.vmx.ept_dirty_accessed = ((ept >> 21) & 1) ? true : false;
+
+    ASSERT(ept & (1 << 20)); // Assert invept is supported
+    ASSERT(ept & (1 << 25)); // Assert single context invept is supported
 }
 
 vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {

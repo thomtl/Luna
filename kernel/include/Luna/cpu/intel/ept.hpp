@@ -48,6 +48,7 @@ namespace ept {
 
         private:
         page_entry* walk(uintptr_t va, bool create_new_tables);
+        void invept();
 
         uint8_t levels;
         uintptr_t root_pa;

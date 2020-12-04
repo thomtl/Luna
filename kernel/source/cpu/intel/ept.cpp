@@ -83,6 +83,8 @@ void ept::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     page.w = (flags & paging::mapPageWrite) ? 1 : 0;
     page.x = (flags & paging::mapPageExecute) ? 1 : 0;
     page.frame = (pa >> 12);
+
+    invept();
 }
 
 uintptr_t ept::context::unmap(uintptr_t va) {
@@ -95,6 +97,8 @@ uintptr_t ept::context::unmap(uintptr_t va) {
     entry->w = 0;
     entry->x = 1;
     entry->frame = 0;
+
+    invept();
 
     return ret;
 }
@@ -109,4 +113,15 @@ uintptr_t ept::context::get_phys(uintptr_t va) {
 
 uintptr_t ept::context::get_root_pa() const {
     return root_pa;
+}
+
+void ept::context::invept() {
+    // invept mode 1 was already guaranteed to be supported by vmx::init()
+    struct {
+        uint64_t eptp;
+        uint64_t reserved;
+    } descriptor{root_pa, 0};
+    uint64_t mode = 1; // Single Context
+    
+    asm volatile("invept %1, %0" : : "r"(mode), "m"(descriptor) : "memory");
 }
