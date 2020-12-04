@@ -172,25 +172,33 @@ vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
     };
 
     {
-        uint32_t min = (uint32_t)PinBasedControls::ExtInt;
+        uint32_t min = (uint32_t)PinBasedControls::ExtInt \
+                     | (uint32_t)PinBasedControls::NMI;
         uint32_t opt = 0;
         write(pin_based_vm_exec_controls, adjust_controls(min, opt, msr::ia32_vmx_pinbased_ctls));
     }
 
     {
-        uint32_t min = (uint32_t)ProcBasedControls::VMExitOnHlt | (uint32_t)ProcBasedControls::VMExitOnPIO | (uint32_t)ProcBasedControls::SecondaryControlsEnable;
+        uint32_t min = (uint32_t)ProcBasedControls::VMExitOnHlt | (uint32_t)ProcBasedControls::VMExitOnPIO \
+                     | (uint32_t)ProcBasedControls::SecondaryControlsEnable \
+                     | (uint32_t)ProcBasedControls::VMExitOnCr8Store \
+                     | (uint32_t)ProcBasedControls::VMExitOnRdpmc \
+                     | (uint32_t)ProcBasedControls::VMExitOnRdtsc;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls));
     }
 
     {
-        uint32_t min = (uint32_t)ProcBasedControls2::EPTEnable | (uint32_t)ProcBasedControls2::UnrestrictedGuest | (uint32_t)ProcBasedControls2::VMExitOnDescriptor;
+        uint32_t min = (uint32_t)ProcBasedControls2::EPTEnable \
+                     | (uint32_t)ProcBasedControls2::UnrestrictedGuest \
+                     | (uint32_t)ProcBasedControls2::VMExitOnDescriptorLoadStore \
+                     | (uint32_t)ProcBasedControls2::VMExitOnWbinvd;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls2, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls2));
 
     }
     
-    write(exception_bitmap, 0);
+    write(exception_bitmap, (1 << 1) | (1 << 6) | (1 << 14) | (1 << 17) | (1 << 18));
 
     {
         uint32_t min = (uint32_t)VMExitControls::LongMode | (uint32_t)VMExitControls::LoadIA32EFER;
@@ -305,6 +313,8 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             return false;
         }
 
+        auto next_instruction = [&]() { write(guest_rip, read(guest_rip) + exit.instruction_len); };
+
         auto basic_reason = (VMExitReasons)(read(vm_exit_reason) & 0xFFFF);
         if(basic_reason == VMExitReasons::Hlt) {
             exit.reason = vm::VmExit::Reason::Hlt;
@@ -312,20 +322,40 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.instruction_len = 1;
             exit.instruction[0] = 0xF4;
 
+            next_instruction();
+
+            return true;
+        } else if(basic_reason == VMExitReasons::Vmcall) {
+            exit.reason = vm::VmExit::Reason::Vmcall;
+
+            exit.instruction_len = 3;
+            exit.instruction[0] = 0xF0;
+            exit.instruction[1] = 0x01;
+            exit.instruction[2] = 0xC1;
+
+            next_instruction();
+
             return true;
         } else if(basic_reason == VMExitReasons::InvalidGuestState) {
             print("vmx: VM-Entry Failure due to invalid guest state\n");
             return false;
         } else if(basic_reason == VMExitReasons::EPTViolation) {
-            print("vmx: EPT Violation\n");
             auto addr = read(ept_violation_addr);
             EPTViolationQualification info{.raw = read(ept_violation_flags)};
 
-            print("    GPA: {:#x}\n", addr);
-            print("    Access: {:s}{:s}{:s}\n", info.r ? "R" : "", info.w ? "W" : "", info.x ? "X" : "");
-            print("    Page: {:s}{:s}{:s}\n", info.page_r ? "R" : "", info.page_w ? "W" : "", info.page_x ? "X" : "");
-            print("    {:s}\n", info.gva_translated ? "GVA Translated" : "");
-            PANIC("EPT Violation");
+            exit.reason = vm::VmExit::Reason::MMUViolation;
+
+            exit.mmu.access.r = info.r;
+            exit.mmu.access.w = info.w;
+            exit.mmu.access.x = info.x;
+
+            exit.mmu.page.r = info.page_r;
+            exit.mmu.page.w = info.page_w;
+            exit.mmu.page.x = info.page_x;
+
+            exit.mmu.gpa = addr;
+
+            return true;
         } else {
             print("vmx: Unknown VMExit Reason: {:#x}\n", (uint64_t)basic_reason);
             PANIC("Unknown exit reason");

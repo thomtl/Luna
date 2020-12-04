@@ -101,20 +101,14 @@ void kernel_main(const stivale2_struct* info) {
         vm.map(pa, 0x1000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
 
         uint8_t payload[] = {
-            0xF4, // HLT
+            0x66, 0xB8, 0x00, 0x00, 0x00, 0x00, // MOV EAX, 0 ; Opcode: Request Exit
+            0x0F, 0x01, 0xC1, // VMCALL
         };
 
         memcpy(va, payload, sizeof(payload));
     }
     
-    vm::VmExit exit{};
-    ASSERT(vm.run(exit));
-    
-    print("VM Exit: {:s}\n", exit.reason_to_string(exit.reason));
-    print("         Opcode: ");
-    for(size_t i = 0; i < exit.instruction_len; i++)
-        print("{:#x} ", (uint64_t)exit.instruction[i]);
-    print("\n");
+    ASSERT(vm.run());
 
     print("luna: Done with kernel_main\n");
     while(true)

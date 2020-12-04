@@ -1,6 +1,8 @@
 #include <Luna/cpu/idt.hpp>
 #include <Luna/cpu/gdt.hpp>
 
+#include <Luna/cpu/regs.hpp>
+
 static idt::handler handlers[idt::n_table_entries] = {};
 static idt::entry table[idt::n_table_entries] = {};
 static idt::pointer table_pointer{};
@@ -110,6 +112,8 @@ extern "C" void isr_handler(idt::regs* regs) {
         print("R12: {:#x}, R13: {:#x}, R14: {:#x}, R15: {:#x}\n", r.r12, r.r13, r.r14, r.r15);
         print("CS: {:#x}, SS: {:#x}, DS: {:#x}\n", r.cs, r.ss, r.ds);
         print("CR2: {:#x}, CR3: {:#x}\n", cr2, cr3);
+
+        print("GS: {:#x}\n", msr::read(msr::gs_base));
 
         while(1)
             ;

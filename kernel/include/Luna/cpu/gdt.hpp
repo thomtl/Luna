@@ -32,6 +32,7 @@ namespace gdt
             entries[i++] = (1ull << 41ull) | (1ull << 44) | (1ull << 47); // Kernel Data 
 
             set();
+            flush();
         }
 
         uint16_t push_tss(tss::Table* table) {
@@ -53,22 +54,24 @@ namespace gdt
         void set(){
             pointer p{.size = (table_entries * sizeof(uint64_t)) - 1, .table = (uint64_t)&entries};
             p.load();
+        }
 
+        void flush() {
             asm volatile (R"(
-                    mov %%rsp, %%rax
-                    push $0x10
-                    push %%rax
-                    pushf
-                    push $0x8
-                    push $1f
-                    iretq
-                    1:
-                    mov $0x10, %%ax
-                    mov %%ax, %%ds
-                    mov %%ax, %%es
-                    mov %%ax, %%ss
-                    mov %%ax, %%fs
-                    mov %%ax, %%gs
+                mov %%rsp, %%rax
+                push $0x10
+                push %%rax
+                pushf
+                push $0x8
+                push $1f
+                iretq
+                1:
+                mov $0x10, %%ax
+                mov %%ax, %%ds
+                mov %%ax, %%es
+                mov %%ax, %%ss
+                mov %%ax, %%fs
+                mov %%ax, %%gs
                 )" : : : "rax", "memory");
         }
 

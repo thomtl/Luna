@@ -31,6 +31,8 @@ section .text
     mov rdi, .payload_end
     vmwrite rdx, rdi
 
+    mov rdi, qword [rsp]
+
     mov rax, qword [rdi]
     mov rbx, qword [rdi + (1 * 8)]
     mov rcx, qword [rdi + (2 * 8)]

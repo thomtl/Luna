@@ -17,15 +17,56 @@ namespace vmx {
     };
 
     enum class ProcBasedControls : uint32_t {  
+        IRQWindowExiting = (1 << 2),
+        TSCOffsetting = (1 << 3),
         VMExitOnHlt = (1 << 7),
+        VMExitOnInvlpg = (1 << 9),
+        VMExitOnMwait = (1 << 10),
+        VMExitOnRdpmc = (1 << 11),
+        VMExitOnRdtsc = (1 << 12),
+        VMExitOnCr3Load = (1 << 15),
+        VMExitOnCr3Store = (1 << 16),
+        VMExitOnCr8Load = (1 << 19),
+        VMExitOnCr8Store = (1 << 20),
+        UseTPRShadow = (1 << 21),
+        VMExitOnMovDR = (1 << 23),
         VMExitOnPIO = (1 << 24),
+        UsePIOBitmap = (1 << 25),
+        MonitorTrapFlag = (1 << 27),
+        UseMSRBitmap = (1 << 28),
+        VMExitOnMonitor = (1 << 29),
+        VMExitOnPause = (1 << 30),
         SecondaryControlsEnable = (1u << 31)
     };
 
     enum class ProcBasedControls2 : uint32_t {
+        VirtualizeAPICAccesses = (1 << 0),
         EPTEnable = (1 << 1),
+        VMExitOnDescriptorLoadStore = (1 << 2),
+        RDTSCPEnable = (1 << 3),
+        VirtualizeX2APIC = (1 << 4),
+        VPIDEnable = (1 << 5),
+        VMExitOnWbinvd = (1 << 6),
         UnrestrictedGuest = (1 << 7),
-        VMExitOnDescriptor = (1 << 2)
+        APICRegisterVirtualization = (1 << 8),
+        VIRQDelivery = (1 << 9),
+        VMExitOnPauseLoop = (1 << 10),
+        VMExitOnRdrand = (1 << 11),
+        EnableInvpcid = (1 << 12),
+        EnableVmfunc = (1 << 13),
+        VMCSShadowing = (1 << 14),
+        VMExitOnEncls = (1 << 15),
+        VMExitOnRdseed = (1 << 16),
+        PMLEnable = (1 << 17),
+        VEOnEPTViolation = (1 << 18),
+        ConcealFromPT = (1 << 19),
+        XsavesEnable = (1 << 20),
+        EPTModeBasedExecuteControl = (1 << 22),
+        SPPEnable = (1 << 23),
+        PTUsingGPA = (1 << 24),
+        UseTSCScaling = (1 << 25),
+        EnableUserWaitAndPause = (1 << 26),
+        VMExitOnEnclv = (1 << 28)
     };
 
     enum class VMExitControls : uint32_t {
@@ -43,6 +84,7 @@ namespace vmx {
 
     enum class VMExitReasons : uint32_t {
         Hlt = 12,
+        Vmcall = 18,
         InvalidGuestState = 33,
         EPTViolation = 48
     };

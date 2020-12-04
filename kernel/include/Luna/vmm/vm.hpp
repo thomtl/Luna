@@ -30,10 +30,13 @@ namespace vm {
 
     constexpr size_t max_x86_instruction_size = 15;
     struct VmExit {
-        enum class Reason { Hlt };
+        enum class Reason { Unknown, Hlt, Vmcall, MMUViolation };
         static constexpr const char* reason_to_string(const Reason& reason) {
             switch (reason) {
+                case Reason::Unknown: return "Unknown";
                 case Reason::Hlt: return "HLT";
+                case Reason::Vmcall: return "VM{M}CALL";
+                case Reason::MMUViolation: return "MMUViolation";
                 default: return "Unknown";
             }
         }
@@ -42,6 +45,17 @@ namespace vm {
 
         uint8_t instruction_len;
         uint8_t instruction[max_x86_instruction_size];
+
+        union {
+            struct {
+                struct {
+                    uint8_t r : 1;
+                    uint8_t w : 1;
+                    uint8_t x : 1;
+                } access, page;
+                uint64_t gpa;
+            } mmu;
+        };
     };
 
     struct AbstractVm {
@@ -62,7 +76,7 @@ namespace vm {
         void set_regs(const vm::RegisterState& regs);
 
         void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags);
-        bool run(VmExit& exit);
+        bool run();
 
         private:
         AbstractVm* vm;
