@@ -13,8 +13,8 @@
 #include <Luna/mm/vmm.hpp>
 
 extern "C" {
-    void vmx_vmlaunch(vmx::GprState* gprs);
-    void vmx_vmresume(vmx::GprState* gprs);
+    uint64_t vmx_vmlaunch(vmx::GprState* gprs); // These functions return rflags after vmlaunch or vmresume
+    uint64_t vmx_vmresume(vmx::GprState* gprs);
 }
 
 constexpr const char* vm_instruction_errors[] = {
@@ -275,11 +275,12 @@ bool vmx::Vm::run(vm::VmExit& exit) {
         host_simd.store();
         guest_simd.load();
 
+        uint64_t rflags = 0;
         if(!launched) {
-            vmx_vmlaunch(&guest_gprs);
+            rflags = vmx_vmlaunch(&guest_gprs);
             launched = true;
         } else {
-            vmx_vmresume(&guest_gprs);
+            rflags = vmx_vmresume(&guest_gprs);
         }
 
         guest_simd.store();
@@ -291,8 +292,12 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
         asm("sti");
 
-        auto error = read(vm_instruction_error);
-        if(error) {
+        // rflags.CF is set when an error occurs and there is no current VMCS
+        if(rflags & (1 << 0)) {
+            print("vmx: VMExit error without valid VMCS\n");
+            return false;
+        } else if(rflags & (1 << 6)) { // rflags.ZF is set when an error occurs and there is a VMCS, error code is registered in vm_instruction_error
+            auto error = read(vm_instruction_error);
             print("vmx: VMExit error: {:s} ({:#x})\n", vm_instruction_errors[error], error);
             return false;
         }

@@ -86,6 +86,8 @@ section .text
     pop rbx
     pop rax
 
+    pushfq ; mov, push, and pop don't modify flags so the original op flags are still intact, return these
+    pop rax
     ret
 %endmacro
 
