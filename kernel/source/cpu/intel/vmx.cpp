@@ -49,8 +49,37 @@ constexpr const char* vm_instruction_errors[] = {
     "Invalid operand to INVEPT/INVVPID"
 };
 
+bool vmx::is_supported() {
+ uint32_t a, b, c, d;
+    ASSERT(cpu::cpuid(1, a, b, c, d));
+
+    if((c & (1 << 5)) == 0)
+        return false; // Unsupported
+
+    return true;
+}
+
+static uint64_t cr_constraint(uint32_t msr0, uint32_t msr1) {
+    uint64_t cr = 0;
+    auto fixed0 = msr::read(msr0);
+    auto fixed1 = msr::read(msr1);
+
+    cr &= fixed1;
+    cr |= fixed0;
+
+    return cr;
+}
+
+uint64_t vmx::get_cr0_constraint() {
+    return cr_constraint(msr::ia32_vmx_cr0_fixed0, msr::ia32_vmx_cr0_fixed1);
+}
+
+uint64_t vmx::get_cr4_constraint() {
+    return cr_constraint(msr::ia32_vmx_cr4_fixed0, msr::ia32_vmx_cr4_fixed1);
+}
+
 void vmx::init() {
-    uint32_t a, b, c, d;
+     uint32_t a, b, c, d;
     ASSERT(cpu::cpuid(1, a, b, c, d));
 
     if((c & (1 << 5)) == 0)
@@ -172,6 +201,24 @@ vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
         write(vm_entry_control, adjust_controls(min, opt, msr::ia32_vmx_entry_ctls));
     }
 
+    {
+        uint64_t eptp = 0;
+        eptp |= guest_page.get_root_pa(); // Set EPT Physical Address
+        eptp |= ((guest_page.get_levels() - 1) << 3); // Set EPT Number of page levels
+        eptp |= 6; // Writeback Caching
+
+        if(get_cpu().cpu.vmx.ept_dirty_accessed)
+            eptp |= (1 << 6);
+
+        write(ept_control, eptp);
+    }
+
+    write(guest_interruptibility_state, 0);
+    write(guest_activity_state, 0);
+
+    //write(guest_intr_status, 0); // Only do if we use Virtual-Interrupt Delivery
+    //write(guest_pml_index, 0); // Only do if we do PMLs
+
     write(host_tr_base, (uint64_t)&get_cpu().tss_table); // We don't have a TSS
 
     {
@@ -192,106 +239,9 @@ vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
     write(host_cr4, cr4::read() | msr::read(msr::ia32_vmx_cr4_fixed0));
     //write(host_pat_full, msr::read(msr::ia32_pat));
     write(host_efer_full, msr::read(msr::ia32_efer));
-
-    constexpr uint16_t code_access = 0b11 | (1 << 4) | (1 << 7) | (1 << 13);
-    constexpr uint16_t data_access = 0b11 | (1 << 4) | (1 << 7);
-    constexpr uint16_t ldtr_access = 0b10 | (1 << 7);
-    constexpr uint16_t tr_access = 0b11 | (1 << 7);
-
-    write(guest_es_selector, 0);
-    write(guest_es_base, 0);
-    write(guest_es_limit, 0xFFFF);
-    write(guest_es_access_right, data_access);
-
-    write(guest_cs_selector, 0);
-    write(guest_cs_base, 0);
-    write(guest_cs_limit, 0xFFFF);
-    write(guest_cs_access_right, code_access);
-
-    write(guest_ds_selector, 0);
-    write(guest_ds_base, 0);
-    write(guest_ds_limit, 0xFFFF);
-    write(guest_ds_access_right, data_access);
-
-    write(guest_fs_selector, 0);
-    write(guest_fs_base, 0);
-    write(guest_fs_limit, 0xFFFF);
-    write(guest_fs_access_right, data_access);
-
-    write(guest_gs_selector, 0);
-    write(guest_gs_base, 0);
-    write(guest_gs_limit, 0xFFFF);
-    write(guest_gs_access_right, data_access);
-
-    write(guest_ss_selector, 0);
-    write(guest_ss_base, 0);
-    write(guest_ss_limit, 0xFFFF);
-    write(guest_ss_access_right, data_access);
-
-    write(guest_tr_selector, 0);
-    write(guest_tr_base, 0);
-    write(guest_tr_limit, 0xFFFF);
-    write(guest_tr_access_right, tr_access);
-    
-    write(guest_ldtr_selector, 0);
-    write(guest_ldtr_base, 0);
-    write(guest_ldtr_limit, 0xFFFF);
-    write(guest_ldtr_access_right, ldtr_access);
-
-    write(guest_idtr_base, 0);
-    write(guest_idtr_limit, 0xFFFF);
-
-    write(guest_gdtr_base, 0);
-    write(guest_gdtr_limit, 0xFFFF);
-
-    write(guest_interruptibility_state, 0);
-    write(guest_activity_state, 0);
-
-    //write(guest_intr_status, 0); // Only do if we use Virtual-Interrupt Delivery
-    //write(guest_pml_index, 0); // Only do if we do PMLs
-
-    write(guest_dr7, 0);
-    write(guest_rsp, 0);
-    write(guest_rip, 0x1000);
-    write(guest_rflags, 1 << 1); // Reserved bit
-    write(guest_efer_full, 0);
-
-    write(guest_cr3, 0);
-
-    {
-        auto cr4 = msr::read(msr::ia32_vmx_cr4_fixed0);
-        auto lo = cr4 & 0xFFFF'FFFF;
-        auto hi = cr4 >> 32;
-
-        write(guest_cr4, lo | ((uint64_t)hi) << 32);
-
-    }
-
-    {
-        auto cr0 = msr::read(msr::ia32_vmx_cr0_fixed0);
-        auto lo = cr0 & 0xFFFF'FFFF;
-        auto hi = cr0 >> 32;
-
-        lo &= ~(1 << 0); // Clear cr0.PE
-        lo &= ~(1 << 31); // Clear cr0.PG
-
-        write(guest_cr0, lo | ((uint64_t)hi) << 32);
-    }
-
-    {
-        uint64_t eptp = 0;
-        eptp |= guest_page.get_root_pa(); // Set EPT Physical Address
-        eptp |= ((guest_page.get_levels() - 1) << 3); // Set EPT Number of page levels
-        eptp |= 6; // Writeback Caching
-
-        if(get_cpu().cpu.vmx.ept_dirty_accessed)
-            eptp |= (1 << 6);
-
-        write(ept_control, eptp);
-    }
 }
 
-void vmx::Vm::run() {
+bool vmx::Vm::run(vm::VmExit& exit) {
     #define SAVE_REG(reg) \
         { \
             uint16_t tmp = 0; \
@@ -344,11 +294,21 @@ void vmx::Vm::run() {
         auto error = read(vm_instruction_error);
         if(error) {
             print("vmx: VMExit error: {:s} ({:#x})\n", vm_instruction_errors[error], error);
-            return;
+            return false;
         }
 
-        auto reason = (VMExitReasons)read(vm_exit_reason);
-        if(reason == VMExitReasons::EPTViolation) {
+        auto basic_reason = (VMExitReasons)(read(vm_exit_reason) & 0xFFFF);
+        if(basic_reason == VMExitReasons::Hlt) {
+            exit.reason = vm::VmExit::Reason::Hlt;
+
+            exit.instruction_len = 1;
+            exit.instruction[0] = 0xF4;
+
+            return true;
+        } else if(basic_reason == VMExitReasons::InvalidGuestState) {
+            print("vmx: VM-Entry Failure due to invalid guest state\n");
+            return false;
+        } else if(basic_reason == VMExitReasons::EPTViolation) {
             print("vmx: EPT Violation\n");
             auto addr = read(ept_violation_addr);
             EPTViolationQualification info{.raw = read(ept_violation_flags)};
@@ -359,7 +319,7 @@ void vmx::Vm::run() {
             print("    {:s}\n", info.gva_translated ? "GVA Translated" : "");
             PANIC("EPT Violation");
         } else {
-            print("vmx: Unknown VMExit Reason: {:#x}\n", (uint64_t)reason);
+            print("vmx: Unknown VMExit Reason: {:#x}\n", (uint64_t)basic_reason);
             PANIC("Unknown exit reason");
         }
     }
@@ -388,6 +348,7 @@ void vmx::Vm::get_regs(vm::RegisterState& regs) const {
     regs.rsp = read(guest_rsp);
     regs.rip = read(guest_rip);
     regs.rflags = read(guest_rflags);
+    regs.dr7 = read(guest_dr7);
 
     regs.cr0 = read(guest_cr0);
     regs.cr3 = read(guest_cr3);
@@ -441,10 +402,11 @@ void vmx::Vm::set_regs(const vm::RegisterState& regs) {
     write(guest_rsp, regs.rsp);
     write(guest_rip, regs.rip);
     write(guest_rflags, regs.rflags);
+    write(guest_dr7, regs.dr7);
 
     write(guest_cr0, regs.cr0);
-    write(guest_cr3, regs.cr3);
     write(guest_cr4, regs.cr4);
+    write(guest_cr3, regs.cr3);
     write(guest_efer_full, regs.efer);
 
     #define SET_TABLE(table) \

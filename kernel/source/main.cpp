@@ -91,9 +91,9 @@ void kernel_main(const stivale2_struct* info) {
 
     ahci::init();
 
-    vmx::init();
+    vm::init();
 
-    auto& vm = *(vm::AbstractVm*)new vmx::Vm{};
+    vm::Vm vm{};
     {
         auto pa = pmm::alloc_block();
         uint8_t* va = (uint8_t*)(pa + phys_mem_map);
@@ -106,7 +106,15 @@ void kernel_main(const stivale2_struct* info) {
 
         memcpy(va, payload, sizeof(payload));
     }
-    vm.run();
+    
+    vm::VmExit exit{};
+    ASSERT(vm.run(exit));
+    
+    print("VM Exit: {:s}\n", exit.reason_to_string(exit.reason));
+    print("         Opcode: ");
+    for(size_t i = 0; i < exit.instruction_len; i++)
+        print("{:#x} ", (uint64_t)exit.instruction[i]);
+    print("\n");
 
     print("luna: Done with kernel_main\n");
     while(true)

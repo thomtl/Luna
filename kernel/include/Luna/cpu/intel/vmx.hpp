@@ -42,6 +42,8 @@ namespace vmx {
     };
 
     enum class VMExitReasons : uint32_t {
+        Hlt = 12,
+        InvalidGuestState = 33,
         EPTViolation = 48
     };
 
@@ -156,6 +158,10 @@ namespace vmx {
     constexpr uint64_t vm_exit_reason = 0x4402;
 
     void init();
+    bool is_supported();
+
+    uint64_t get_cr0_constraint();
+    uint64_t get_cr4_constraint();
 
     // ACCESSED FROM ASSEMBLY, DO NOT CHANGE WITHOUT CHANGING vmx_low.asm
     struct [[gnu::packed]] GprState {
@@ -165,7 +171,7 @@ namespace vmx {
 
     struct Vm : public vm::AbstractVm {
         Vm();
-        void run();
+        bool run(vm::VmExit& exit);
 
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
