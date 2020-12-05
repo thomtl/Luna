@@ -6,7 +6,7 @@ configure:
 	meson setup --cross-file=kernel/build/cross.ini build/kernel kernel
 
 	git clone https://github.com/limine-bootloader/limine build/limine
-	cd build/limine && git checkout d9b062917a8b44eb4508828f8a15e144c05e6a93
+	cd build/limine && git checkout 8d04ab1c303df9830b864bf6026ae62a841da5db
 	make -C build/limine limine-install
 
 	dd if=/dev/zero of=luna.hdd bs=4M count=128

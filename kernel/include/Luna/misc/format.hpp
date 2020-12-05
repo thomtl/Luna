@@ -7,6 +7,7 @@
 
 #include <Luna/drivers/e9.hpp>
 #include <Luna/drivers/uart.hpp>
+#include <Luna/drivers/vga.hpp>
 
 #include <std/string.hpp>
 #include <std/utility.hpp>
