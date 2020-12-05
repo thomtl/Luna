@@ -1,6 +1,9 @@
 #pragma once
 
 #include <Luna/common.hpp>
+#include <Luna/fs/vfs.hpp>
+
+#include <std/vector.hpp>
 
 namespace vm {
     struct RegisterState {
@@ -65,6 +68,7 @@ namespace vm {
         virtual void set_regs(const vm::RegisterState& regs) = 0;
 
         virtual void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) = 0;
+        virtual uintptr_t get_phys(uintptr_t gpa) = 0;
 
         virtual bool run(VmExit& exit) = 0;
     };
@@ -78,8 +82,12 @@ namespace vm {
         void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags);
         bool run();
 
+        std::vector<vfs::File*> disks;
+
+
         private:
         AbstractVm* vm;
+
     };
 
     void init();

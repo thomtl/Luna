@@ -222,6 +222,8 @@ namespace vmx {
             guest_page.map(hpa, gpa, flags);
         }
 
+        uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
+
         ept::context guest_page;
 
         private:

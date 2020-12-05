@@ -84,6 +84,39 @@ bool vm::Vm::run() {
             if(op == 0) {
                 print("vm: Guest requested exit\n", op);
                 return true;
+            } else if(op == 1) {
+                uint16_t size = regs.rcx & 0xFFFF;
+                uint16_t disk_index = (regs.rcx >> 16) & 0x7FFF;
+                bool address_size = (regs.rcx & (1 << 31)) ? true : false;
+
+                uintptr_t dest = regs.rdi & (address_size ? 0xFFFF'FFFF'FFFF'FFFF : 0xFFFF'FFFF);
+                uintptr_t off = regs.rbx & (address_size ? 0xFFFF'FFFF'FFFF'FFFF : 0xFFFF'FFFF);
+
+                print("vm: Guest requested disk read, Disk: {}, Size: {}, Dest {:#x}, Off: {}, AS: {}\n", disk_index, size, dest, off, address_size);
+                if(disk_index >= disks.size()) {
+                    regs.rflags |= 1; // Set CF
+                    set_regs(regs);
+                } else {
+                    auto& disk = disks[disk_index];
+
+                    auto* buffer = new uint8_t[size];
+                    if(disk->read(off, size, buffer) != size) {
+                        regs.rflags |= 1; // Set CF
+                        set_regs(regs);
+                    } else {
+                        // TODO: Get rid of these assertions
+                        auto page_off = dest & 0xFFF;
+                        ASSERT(size <= (0x1000 - page_off));
+
+                        auto hpa = vm->get_phys(dest);
+                        ASSERT(hpa); // Assert that the page is actually mapped
+                        auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
+
+                        memcpy(host_buf + page_off, buffer, size);
+                    }
+
+                    delete[] buffer;
+                }
             } else {
                 print("vm: Unknown VMMCALL opcode {:#x}\n", op);
                 return false;
@@ -91,8 +124,9 @@ bool vm::Vm::run() {
             break;
         }
         case VmExit::Reason::MMUViolation:
+            get_regs(regs);
             print("vm: MMU Violation\n");
-            print("    GPA: {:#x}\n", exit.mmu.gpa);
+            print("    gRIP: {:#x}, gPA: {:#x}\n", regs.cs.base + regs.rip, exit.mmu.gpa);
             print("    Access: {:s}{:s}{:s}\n", exit.mmu.access.r ? "R" : "", exit.mmu.access.w ? "W" : "", exit.mmu.access.x ? "X" : "");
             print("    Page: {:s}{:s}{:s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "");
             return false;

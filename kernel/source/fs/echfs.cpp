@@ -45,6 +45,8 @@ vfs::File* echfs::Filesystem::open(const char* path) {
 
             if(entry.directory_id == dir_id && entry.type == type && strncmp(name, entry.name, 200) == 0)
                 return i;
+            
+            i++;
         }
 
         return ~0;

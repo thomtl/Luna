@@ -1,4 +1,4 @@
-.PHONY: configure kernel run
+.PHONY: configure kernel bios run
 
 all: run
 
@@ -23,7 +23,15 @@ kernel:
 	echfs-utils -m -p0 luna.hdd import limine.cfg limine.cfg
 	echfs-utils -m -p0 luna.hdd import build/kernel/luna.bin boot/luna.bin
 
-run: kernel
+bios:
+	mkdir -p build/bios
+
+	nasm bios/main.asm -o build/bios/bios.bin
+	nasm bios/test.asm -o build/bios/test.bin
+	echfs-utils -m -p0 luna.hdd import build/bios/bios.bin luna/bios.bin
+	echfs-utils -m -p0 luna.hdd import build/bios/test.bin disk.img
+
+run: kernel bios
 	# -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
 	# Intel IOMMU: -device intel-iommu,aw-bits=48
 	# AMD IOMMU: -device amd-iommu
