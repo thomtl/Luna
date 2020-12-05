@@ -3,6 +3,9 @@
 #include <Luna/common.hpp>
 #include <std/span.hpp>
 
+#include <Luna/cpu/cpu.hpp>
+#include <std/mutex.hpp>
+
 namespace storage_dev {
     struct DriverDevice {
         size_t n_lbas, sector_size;
@@ -16,6 +19,9 @@ namespace storage_dev {
 
         bool read(size_t offset, size_t count, uint8_t* data);
         bool write(size_t offset, size_t count, uint8_t* data);
+
+        private:
+        TicketLock lock;
     };
 
     void register_device(const DriverDevice& driver);

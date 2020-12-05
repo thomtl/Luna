@@ -2,6 +2,8 @@
 
 #include <Luna/common.hpp>
 
+#include <Luna/cpu/cpu.hpp>
+
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/pci.hpp>
 
@@ -338,6 +340,8 @@ namespace amd_vi {
 
     constexpr size_t n_domains = 65536; // AMD does not have a limit to it like intel?
 
+    struct IOMMU;
+
     struct IOMMUEngine {
         IOMMUEngine(Type10IVHD* ivhd);
 
@@ -390,6 +394,10 @@ namespace amd_vi {
 
         Type10IVHD* ivhd;
         pci::Device* pci_dev;
+
+        TicketLock lock;
+
+        friend struct IOMMU;
     };
 
     struct IOMMU {

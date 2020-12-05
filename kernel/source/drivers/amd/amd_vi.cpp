@@ -7,6 +7,8 @@
 #include <Luna/mm/pmm.hpp>
 #include <Luna/mm/vmm.hpp>
 
+#include <std/mutex.hpp>
+
 amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_segment}, domain_ids{n_domains}, ivhd{ivhd} {
     auto regs_pa = ivhd->iommu_base;
     auto regs_va = regs_pa + phys_mem_map;
@@ -473,6 +475,8 @@ void amd_vi::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova,
 
     auto& engine = engine_for_device(device.seg, id);
 
+    std::lock_guard guard{engine.lock};
+
     engine.get_translation(id).map(pa, iova, flags);
     engine.invalidate_iotlb_addr(id, iova);
 }
@@ -481,6 +485,8 @@ uintptr_t amd_vi::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
     auto id = DeviceID::from_device(device);
 
     auto& engine = engine_for_device(device.seg, id);
+
+    std::lock_guard guard{engine.lock};
 
     auto ret = engine.get_translation(id).unmap(iova);
     engine.invalidate_iotlb_addr(id, iova);
@@ -492,6 +498,8 @@ void amd_vi::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t 
     auto id = DeviceID::from_device(device);
 
     auto& engine = engine_for_device(device.seg, id);
+
+    std::lock_guard guard{engine.lock};
 
     engine.invalidate_iotlb_addr(id, iova);
 }

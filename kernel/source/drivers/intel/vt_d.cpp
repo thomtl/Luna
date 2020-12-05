@@ -474,6 +474,8 @@ void vt_d::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova, u
 
     auto& engine = get_engine(device);
 
+    std::lock_guard guard{engine.lock};
+
     engine.get_device_translation(id).map(pa, iova, flags);
     engine.invalidate_iotlb_addr(id, iova);
 }
@@ -482,6 +484,8 @@ uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
     auto id = SourceID::from_device(device);
 
     auto& engine = get_engine(device);
+
+    std::lock_guard guard{engine.lock};
 
     auto ret = engine.get_device_translation(id).unmap(iova);
     engine.invalidate_iotlb_addr(id, iova);
@@ -492,11 +496,11 @@ uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
 void vt_d::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova) {
     auto id = SourceID::from_device(device);
 
-    for(auto& engine : engines)
-        if(engine.segment == device.seg)
-            return engine.invalidate_iotlb_addr(id, iova);
+    auto& engine = get_engine(device);
 
-    PANIC("Couldn't find engine for segment");
+    std::lock_guard guard{engine.lock};
+    
+    return engine.invalidate_iotlb_addr(id, iova);
 }
 
 bool vt_d::has_iommu() {

@@ -8,6 +8,8 @@
 #include <std/string.hpp>
 
 bool storage_dev::Device::read(size_t offset, size_t count, uint8_t* data) {
+    std::lock_guard guard{lock};
+
     size_t start_lba = offset / driver.sector_size;
     size_t end_lba = (offset + count - 1) / driver.sector_size;
 
@@ -63,6 +65,8 @@ bool storage_dev::Device::read(size_t offset, size_t count, uint8_t* data) {
 }
 
 bool storage_dev::Device::write(size_t offset, size_t count, uint8_t* data) {
+    std::lock_guard guard{lock};
+    
     size_t start_lba = offset / driver.sector_size;
     size_t end_lba = (offset + count - 1) / driver.sector_size;
 

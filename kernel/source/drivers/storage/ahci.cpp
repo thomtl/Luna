@@ -110,12 +110,16 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
         device.ata_cmd = [](void* userptr, const ata::ATACommand& cmd, std::span<uint8_t>& xfer) {
             auto* port = (Controller::Port*)userptr;
 
+            std::lock_guard guard{port->lock};
+
             port->send_ata_cmd(cmd, xfer.data(), xfer.size());
         };
 
         if(device.atapi) { // Only enable the atapi cmd function if the device is actually atapi
             device.atapi_cmd = [](void* userptr, const ata::ATAPICommand& cmd, std::span<uint8_t>& xfer) {
                 auto* port = (Controller::Port*)userptr;
+
+                std::lock_guard guard{port->lock};
 
                 port->send_atapi_cmd(cmd, xfer.data(), xfer.size());
             };

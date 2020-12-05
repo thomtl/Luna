@@ -2,6 +2,8 @@
 
 #include <Luna/common.hpp>
 
+#include <Luna/cpu/cpu.hpp>
+
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/pci.hpp>
 
@@ -332,6 +334,7 @@ namespace vt_d {
         size_t free_count, free_head, free_tail;
     };
 
+    struct IOMMU;
 
     class RemappingEngine {
         public:
@@ -370,6 +373,10 @@ namespace vt_d {
         std::lazy_initializer<InvalidationQueue> iq;
 
         bool x2apic_mode, wbflush_needed, read_draining, write_draining;
+
+        TicketLock lock;
+
+        friend struct IOMMU;
     };
 
     struct IOMMU {
