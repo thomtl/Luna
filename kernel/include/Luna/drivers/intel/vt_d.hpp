@@ -348,7 +348,8 @@ namespace vt_d {
         private:
         void wbflush();
         void invalidate_global_context();
-        void invalidate_iotlb();
+        void invalidate_global_iotlb();
+        void invalidate_domain_iotlb(SourceID device);
 
         void handle_irq();
 
@@ -372,7 +373,7 @@ namespace vt_d {
 
         std::lazy_initializer<InvalidationQueue> iq;
 
-        bool x2apic_mode, wbflush_needed, read_draining, write_draining;
+        bool x2apic_mode, wbflush_needed, read_draining, write_draining, page_selective_invalidation;
 
         TicketLock lock;
 

@@ -151,9 +151,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     write_draining = (regs->capabilities & (1ull << 54)) ? true : false;
     read_draining = (regs->capabilities & (1ull << 55)) ? true : false;
     x2apic_mode = (regs->extended_capabilities & (1 << 4)) ? true : false;
-
-    if((regs->capabilities & (1ull << 39)) == 0)
-        PANIC("Page Selective Invalidation is unsupported");
+    page_selective_invalidation = (regs->capabilities & (1ull << 39)) ? true : false;
 
     print("      Setting up IRQ ... ");
     wbflush();
@@ -241,7 +239,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     print("      Enabling Translation ... ");
 
     this->invalidate_global_context();
-    this->invalidate_iotlb();
+    this->invalidate_global_iotlb();
 
     global_command |= GlobalCommand::TranslationEnable;
     regs->global_command = global_command;
@@ -278,7 +276,7 @@ void vt_d::RemappingEngine::invalidate_global_context() {
     }
 }
 
-void vt_d::RemappingEngine::invalidate_iotlb() {
+void vt_d::RemappingEngine::invalidate_global_iotlb() {
     wbflush();
 
     if(iq) {
@@ -305,9 +303,39 @@ void vt_d::RemappingEngine::invalidate_iotlb() {
     }
 }
 
-void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iova) {
+void vt_d::RemappingEngine::invalidate_domain_iotlb(SourceID device) {
     wbflush();
 
+    if(iq) {
+        IOTLBInvalidationDescriptor cmd{};
+        cmd.type = IOTLBInvalidationDescriptor::cmd;
+
+        cmd.drain_reads = read_draining ? 1 : 0;
+        cmd.drain_writes = write_draining ? 1 : 0;
+        cmd.granularity = 0b10; // Domain
+        cmd.domain_id = domain_id_map[device.raw];
+        
+        iq->submit_sync((uint8_t*)&cmd);
+    } else {
+        IOTLBCmd cmd{};
+        cmd.drain_reads = read_draining ? 1 : 0;
+        cmd.drain_writes = write_draining ? 1 : 0;
+        cmd.req_granularity = 0b10; // Domain
+        cmd.domain_id = domain_id_map[device.raw];
+        cmd.invalidate = 1;
+
+        iotlb_regs->cmd = cmd.raw;
+
+        while(iotlb_regs->cmd & (1ull << 63))
+            asm("pause");
+    }
+}
+
+void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iova) {
+    if(!page_selective_invalidation)
+        return invalidate_domain_iotlb(device);
+    
+    wbflush();
     if(iq) {
         IOTLBInvalidationDescriptor cmd{};
         cmd.type = IOTLBInvalidationDescriptor::cmd;
