@@ -1,11 +1,12 @@
 #include <Luna/drivers/storage/scsi.hpp>
 #include <std/vector.hpp>
+#include <std/linked_list.hpp>
 
 #include <Luna/misc/format.hpp>
 
 #include <Luna/fs/storage_dev.hpp>
 
-static std::vector<scsi::Device*> devices;
+static std::linked_list<scsi::Device*> devices;
 
 std::pair<uint32_t, uint32_t> scsi_read_capacity(scsi::Device& device) {
     scsi::SCSICommand cmd{};
@@ -141,7 +142,7 @@ void scsi_write10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* 
 
 void scsi::register_device(scsi::DriverDevice& dev) {
     auto* device = new Device{};
-    devices.push_back(device);
+    devices.emplace_back(device);
     device->driver = dev;
 
     print("scsi: Registered device\n");

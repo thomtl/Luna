@@ -8,6 +8,7 @@
 #include <Luna/drivers/amd/io_paging.hpp>
 
 #include <std/vector.hpp>
+#include <std/linked_list.hpp>
 #include <std/bitmap.hpp>
 #include <std/unordered_map.hpp>
 
@@ -402,7 +403,7 @@ namespace amd_vi {
 
         Ivrs* ivrs;
 
-        std::vector<IOMMUEngine> engines;
+        std::linked_list<IOMMUEngine> engines;
     };
 
     bool has_iommu();

@@ -9,6 +9,7 @@
 
 #include <std/bitmap.hpp>
 #include <std/unordered_map.hpp>
+#include <std/linked_list.hpp>
 
 namespace vt_d {
     struct [[gnu::packed]] Dmar {
@@ -382,7 +383,7 @@ namespace vt_d {
         RemappingEngine& get_engine(const pci::Device& device);
 
         Dmar* dmar;
-        std::vector<RemappingEngine> engines;
+        std::linked_list<RemappingEngine> engines;
     };
 
     bool has_iommu();

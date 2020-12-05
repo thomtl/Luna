@@ -5,6 +5,8 @@
 
 #include <Luna/misc/format.hpp>
 
+#include <std/linked_list.hpp>
+
 ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{device} {
     auto bar = device->read_bar(5);
     ASSERT(bar.type == pci::Bar::Type::Mmio);
@@ -333,7 +335,7 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
     free_command(slot);
 }
 
-std::vector<ahci::Controller> controllers;
+std::linked_list<ahci::Controller> controllers;
 
 void ahci::init() {
     pci::Device* dev = nullptr;

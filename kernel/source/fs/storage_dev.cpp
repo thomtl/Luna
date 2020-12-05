@@ -4,7 +4,7 @@
 
 #include <Luna/misc/format.hpp>
 
-#include <std/vector.hpp>
+#include <std/linked_list.hpp>
 #include <std/string.hpp>
 
 bool storage_dev::Device::read(size_t offset, size_t count, uint8_t* data) {
@@ -116,11 +116,11 @@ bool storage_dev::Device::write(size_t offset, size_t count, uint8_t* data) {
     return true;
 }
 
-static std::vector<storage_dev::Device*> devices;
+static std::linked_list<storage_dev::Device*> devices;
 
 void storage_dev::register_device(const DriverDevice& driver) {
     auto* device = new Device{};
-    devices.push_back(device);
+    devices.emplace_back(device);
     device->driver = driver;
 
     uint8_t magic[8] = {0};

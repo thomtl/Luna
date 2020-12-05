@@ -1,12 +1,12 @@
 #include <Luna/drivers/storage/ata.hpp>
-#include <std/vector.hpp>
+#include <std/linked_list.hpp>
 
 #include <Luna/misc/format.hpp>
 #include <Luna/drivers/storage/scsi.hpp>
 
 #include <Luna/fs/storage_dev.hpp>
 
-static std::vector<ata::Device*> devices;
+static std::linked_list<ata::Device*> devices;
 
 void identify_drive(ata::Device& device) {
     ata::ATACommand cmd{};
@@ -147,7 +147,7 @@ bool write_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t*
 
 void ata::register_device(ata::DriverDevice& dev) {
     auto* device = new Device{};
-    devices.push_back(device);
+    devices.emplace_back(device);
     device->driver = dev;
 
     print("ata: Registered {} Device\n", dev.atapi ? "ATAPI" : "ATA");
