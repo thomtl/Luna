@@ -23,6 +23,17 @@ section .text
     push r14
     push r15
 
+    mov rax, dr0
+    push rax
+    mov rax, dr1
+    push rax
+    mov rax, dr2
+    push rax
+    mov rax, dr3
+    push rax
+    mov rax, dr6
+    push rax
+
     push rdi
     mov rcx, HOST_RSP
     mov rdx, HOST_RIP
@@ -32,6 +43,17 @@ section .text
     vmwrite rdx, rdi
 
     mov rdi, qword [rsp]
+
+    mov rax, qword [rdi + (15 * 8)]
+    mov dr0, rax
+    mov rax, qword [rdi + (16 * 8)]
+    mov dr1, rax
+    mov rax, qword [rdi + (17 * 8)]
+    mov dr2, rax
+    mov rax, qword [rdi + (18 * 8)]
+    mov dr3, rax
+    mov rax, qword [rdi + (19 * 8)]
+    mov dr6, rax
 
     mov rax, qword [rdi]
     mov rbx, qword [rdi + (1 * 8)]
@@ -54,7 +76,20 @@ section .text
 .payload_end:
     push rdi
     mov rdi, qword [rsp + 8]
+
     mov qword [rdi], rax
+
+    mov rax, dr0
+    mov qword [rdi + (15 * 8)], rax
+    mov rax, dr1
+    mov qword [rdi + (16 * 8)], rax
+    mov rax, dr2
+    mov qword [rdi + (17 * 8)], rax
+    mov rax, dr3
+    mov qword [rdi + (18 * 8)], rax
+    mov rax, dr6
+    mov qword [rdi + (19 * 8)], rax
+
     mov qword [rdi + (1 * 8)], rbx
     mov qword [rdi + (2 * 8)], rcx
     mov qword [rdi + (3 * 8)], rdx
@@ -71,6 +106,17 @@ section .text
     pop r8 ; Guest RDI
     pop r9 ; Host RDI
     mov qword [r9 + (4 * 8)], r8
+
+    pop rax
+    mov dr6, rax
+    pop rax
+    mov dr3, rax
+    pop rax
+    mov dr2, rax
+    pop rax
+    mov dr1, rax
+    pop rax
+    mov dr0, rax
 
     pop r15
     pop r14

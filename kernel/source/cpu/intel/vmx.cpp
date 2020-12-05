@@ -383,6 +383,12 @@ void vmx::Vm::get_regs(vm::RegisterState& regs) const {
     regs.r14 = guest_gprs.r14;
     regs.r15 = guest_gprs.r15;
 
+    regs.dr0 = guest_gprs.dr0;
+    regs.dr1 = guest_gprs.dr1;
+    regs.dr2 = guest_gprs.dr2;
+    regs.dr3 = guest_gprs.dr3;
+    regs.dr6 = guest_gprs.dr6;
+
     regs.rsp = read(guest_rsp);
     regs.rip = read(guest_rip);
     regs.rflags = read(guest_rflags);
@@ -436,6 +442,12 @@ void vmx::Vm::set_regs(const vm::RegisterState& regs) {
     guest_gprs.r13 = regs.r13;
     guest_gprs.r14 = regs.r14;
     guest_gprs.r15 = regs.r15;
+
+    guest_gprs.dr0 = regs.dr0;
+    guest_gprs.dr1 = regs.dr1;
+    guest_gprs.dr2 = regs.dr2;
+    guest_gprs.dr3 = regs.dr3;
+    guest_gprs.dr6 = regs.dr6;
 
     write(guest_rsp, regs.rsp);
     write(guest_rip, regs.rip);

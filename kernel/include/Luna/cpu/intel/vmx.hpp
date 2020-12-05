@@ -209,6 +209,7 @@ namespace vmx {
     struct [[gnu::packed]] GprState {
         uint64_t rax, rbx, rcx, rdx, rdi, rsi, rbp;
         uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
+        uint64_t dr0, dr1, dr2, dr3, dr6;
     };
 
     struct Vm : public vm::AbstractVm {
@@ -223,8 +224,7 @@ namespace vmx {
         }
 
         uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
-
-        ept::context guest_page;
+        simd::Context& get_guest_simd_context() { return guest_simd; }
 
         private:
         void vmclear();
@@ -237,6 +237,7 @@ namespace vmx {
         uintptr_t vmcs;
 
         simd::Context host_simd, guest_simd;
+        ept::context guest_page;
         GprState guest_gprs;
     };
 } // namespace vmx

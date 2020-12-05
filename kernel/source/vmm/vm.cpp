@@ -36,7 +36,7 @@ vm::Vm::Vm() {
     constexpr uint16_t ldtr_access = 0b10 | (1 << 7);
     constexpr uint16_t tr_access = 0b11 | (1 << 7);
 
-    regs.cs = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = code_access};
+    regs.cs = {.selector = 0xF000, .base = 0xFFFF0000, .limit = 0xFFFF, .attrib = code_access};
 
     regs.ds = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = data_access};
     regs.es = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = data_access};
@@ -50,9 +50,11 @@ vm::Vm::Vm() {
     regs.idtr = {.base = 0, .limit = 0xFFFF};
     regs.gdtr = {.base = 0, .limit = 0xFFFF};
 
-    regs.dr7 = 0;
+    regs.dr6 = 0xFFFF0FF0;
+    regs.dr7 = 0x400;
     regs.rsp = 0;
-    regs.rip = 0x1000;
+
+    regs.rip = 0xFFF0;
     regs.rflags = (1 << 1);
 
     regs.cr0 = (cr0_constraint & ~((1 << 0) | (1 << 31))); // Clear PE and PG;
@@ -62,6 +64,10 @@ vm::Vm::Vm() {
     regs.efer = 0;
 
     vm->set_regs(regs);
+
+    auto& simd = vm->get_guest_simd_context();
+    simd.data()->fcw = 0x40;
+    simd.data()->mxcsr = 0x1F80;
 }
         
 void vm::Vm::get_regs(vm::RegisterState& regs) const { vm->get_regs(regs); }

@@ -96,20 +96,37 @@ void kernel_main(const stivale2_struct* info) {
     vm::Vm vm{};
     {
         vm.map(pmm::alloc_block(), 0x0, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+        vm.map(pmm::alloc_block(), 0x1000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
         vm.map(pmm::alloc_block(), 0x7000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
 
-        auto pa = pmm::alloc_block();
-        uint8_t* va = (uint8_t*)(pa + phys_mem_map);
+        {
+            auto pa = pmm::alloc_block();
+            uint8_t* va = (uint8_t*)(pa + phys_mem_map);
 
-        vm.map(pa, 0x1000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+            vm.map(pa, 0xFFFF'F000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
 
-        auto& file = *vfs::get_vfs().open("A:/luna/bios.bin");
-        auto bios_size = file.get_size();
-        auto* bios_payload = new uint8_t[bios_size];
+            uint8_t payload[] = {
+                0xEA, 0x00, 0x00, 0x00, 0xF0 // JMP 0xF000:0
+            };
+            ASSERT(sizeof(payload) <= 16);
 
-        ASSERT(file.read(0, bios_size, bios_payload) == bios_size);
+            memcpy(va + 0xFF0, payload, sizeof(payload));
+        }
 
-        memcpy(va, bios_payload, bios_size);
+        {
+            auto pa = pmm::alloc_block();
+            uint8_t* va = (uint8_t*)(pa + phys_mem_map);
+
+            vm.map(pa, 0xF0000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+
+            auto& file = *vfs::get_vfs().open("A:/luna/bios.bin");
+            auto bios_size = file.get_size();
+            auto* bios_payload = new uint8_t[bios_size];
+
+            ASSERT(file.read(0, bios_size, bios_payload) == bios_size);
+
+            memcpy(va, bios_payload, bios_size);
+        }
     }
 
     auto* disk = vfs::get_vfs().open("A:/disk.img");

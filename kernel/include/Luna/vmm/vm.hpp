@@ -5,6 +5,8 @@
 
 #include <std/vector.hpp>
 
+#include <Luna/cpu/regs.hpp>
+
 namespace vm {
     struct RegisterState {
         uint64_t rax, rbx, rcx, rdx, rdi, rsi, rbp;
@@ -28,7 +30,7 @@ namespace vm {
 
         uint64_t cr0, cr3, cr4;
         uint64_t efer;
-        uint64_t dr7;
+        uint64_t dr0, dr1, dr2, dr3, dr6, dr7;
     };
 
     constexpr size_t max_x86_instruction_size = 15;
@@ -69,6 +71,7 @@ namespace vm {
 
         virtual void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) = 0;
         virtual uintptr_t get_phys(uintptr_t gpa) = 0;
+        virtual simd::Context& get_guest_simd_context() = 0;
 
         virtual bool run(VmExit& exit) = 0;
     };

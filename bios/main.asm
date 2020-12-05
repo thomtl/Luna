@@ -1,7 +1,7 @@
 bits 16
 org 0x0
 
-jmp 0x100:start
+jmp 0xF000:start
 start:
     mov ax, 0
     mov ss, ax

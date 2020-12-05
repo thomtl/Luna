@@ -48,6 +48,32 @@ namespace cr4 {
 } // namespace cr4
 
 namespace simd {
+    struct [[gnu::packed]] FxState {
+        uint16_t fcw, fsw;
+        uint8_t ftw, reserved;
+        uint16_t fop;
+        uint64_t fip, fdp;
+        uint32_t mxcsr, mxcsr_mask;
+
+        struct [[gnu::packed]] Mm {
+            uint64_t low;
+            uint16_t high;
+            uint32_t reserved;
+            uint16_t reserved_0;
+        };
+        Mm mm[8];
+
+        struct [[gnu::packed]] Xmm {
+            uint64_t low;
+            uint64_t high;
+        };
+        Xmm xmm[16];
+
+        uint8_t reserved_0[48];
+        uint8_t available[48];
+    };
+    static_assert(sizeof(FxState) == 512);
+
     void init();
 
     struct Context {
@@ -56,6 +82,7 @@ namespace simd {
 
         void store();
         void load() const;
+        FxState* data() { return (FxState*)_ctx; }
 
         private:
         uint8_t* _ctx;
