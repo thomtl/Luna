@@ -48,7 +48,7 @@ jump_to_mbr:
         mov ebx, 0x0 ; Disk offset
         vmcall
 
-        jc .fail
+        jc .next
 
         mov bx, 0x7C0
         mov es, bx
@@ -56,7 +56,8 @@ jump_to_mbr:
         mov ax, word [es:bx] ; 0x1FE: Boot signature
         cmp ax, 0xAA55
         je .done
-
+        
+        .next:
         inc dl
         jmp .find_disk
     .done:

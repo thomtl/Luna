@@ -104,24 +104,28 @@ bool vm::Vm::run() {
                     set_regs(regs);
                 } else {
                     auto& disk = disks[disk_index];
-
-                    auto* buffer = new uint8_t[size];
-                    if(disk->read(off, size, buffer) != size) {
+                    if(!disk) {
                         regs.rflags |= 1; // Set CF
                         set_regs(regs);
                     } else {
-                        // TODO: Get rid of these assertions
-                        auto page_off = dest & 0xFFF;
-                        ASSERT(size <= (0x1000 - page_off));
+                        auto* buffer = new uint8_t[size];
+                        if(disk->read(off, size, buffer) != size) {
+                            regs.rflags |= 1; // Set CF
+                            set_regs(regs);
+                        } else {
+                            // TODO: Get rid of these assertions
+                            auto page_off = dest & 0xFFF;
+                            ASSERT(size <= (0x1000 - page_off));
 
-                        auto hpa = vm->get_phys(dest);
-                        ASSERT(hpa); // Assert that the page is actually mapped
-                        auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
+                            auto hpa = vm->get_phys(dest);
+                            ASSERT(hpa); // Assert that the page is actually mapped
+                            auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
 
-                        memcpy(host_buf + page_off, buffer, size);
+                            memcpy(host_buf + page_off, buffer, size);
+                        }
+
+                        delete[] buffer;
                     }
-
-                    delete[] buffer;
                 }
             } else {
                 print("vm: Unknown VMMCALL opcode {:#x}\n", op);
