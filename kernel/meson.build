@@ -30,6 +30,7 @@ main_sources = files(
     'source/drivers/iommu.cpp',
     'source/drivers/laihost.cpp',
     'source/drivers/pci.cpp',
+    'source/drivers/vga.cpp',
 
     'source/fs/echfs.cpp',
     'source/fs/fs.cpp',
