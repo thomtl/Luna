@@ -39,12 +39,18 @@ namespace paging
         mapPageUser = (1 << 3),
     };
 
+    enum {
+        cacheWriteback = 0,
+        cacheWritethrough,
+        cacheDisable,
+    };
+
     class context {
         public:
         context(uint8_t levels);
         ~context();
 
-        void map(uintptr_t pa, uintptr_t va, uint64_t flags);
+        void map(uintptr_t pa, uintptr_t va, uint64_t flags, uint64_t caching = cacheWriteback);
         uintptr_t unmap(uintptr_t va);
         uintptr_t get_phys(uintptr_t va);
 
