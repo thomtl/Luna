@@ -125,12 +125,56 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     fault_recording_regs = (FaultRecordingRegister*)(va + (16 * ((regs->capabilities >> 24) & 0x3FF)));
     iotlb_regs = (IOTLB*)(va + (16 * ((regs->extended_capabilities >> 8) & 0x3FF)));
 
-    const auto d = *drhd;
-    ASSERT(d.flags.pci_include_all);
+    const auto& d = *drhd;
     print("    - DMA Remapping Engine\n");
     print("      PCI Segment: {:d}\n", d.segment);
-    print("      MMIO Base: {:#x}\n", d.mmio_base);
     print("      Version {}.{}\n", (uint64_t)((regs->version >> 4) & 0xF), (uint64_t)(regs->version & 0xF));
+
+    if(d.flags.pci_include_all)
+        print("      Includes all devices on Segment\n");
+
+    all_devices_on_segment = d.flags.pci_include_all;
+
+    print("      Device Scopes: \n");
+    auto* scope = d.device_scope;
+    auto scope_end = scope + (d.length - sizeof(d));
+    while(scope < scope_end) {
+        const auto& dev = *(DeviceScope*)scope;
+
+        auto parse_path = [&]() -> SourceID {
+            size_t n = (dev.length - 6) / 2;
+
+            SourceID cur{};
+            cur.bus = dev.start_bus;
+            cur.slot = dev.path[0].device;
+            cur.func = dev.path[0].function;
+
+            for(size_t i = 1; i < n; i++) {
+                SourceID next{};
+                next.bus = pci::read<uint8_t>(d.segment, cur.bus, cur.slot, cur.func, 19); // Secondary bus number
+                next.slot = dev.path[i].device;
+                next.func = dev.path[i].function;
+
+                cur = next;
+            }
+
+            return cur;
+        };
+        
+        if(dev.type == 1) {
+            ASSERT(!d.flags.pci_include_all);
+
+            auto sid = parse_path();
+            source_id_ranges.push_back({sid, sid});
+
+            auto bus = sid.bus; auto slot = sid.slot; auto func = sid.func;
+            print("       - PCI Endpoint Device: {}.{}.{}.{}\n", d.segment, bus, slot, func);
+        } else {
+            print("       - Unknown type: {:#x}\n", (uint16_t)dev.type);
+        }
+
+        scope += dev.length;
+    }
 
     segment = d.segment;
 
@@ -499,21 +543,25 @@ vt_d::IOMMU::IOMMU() {
     }
 }
 
-vt_d::RemappingEngine& vt_d::IOMMU::get_engine(const pci::Device& device) {
-    for(auto& engine : engines)
-        if(engine.segment == device.seg)
-            return engine;
+vt_d::RemappingEngine& vt_d::IOMMU::get_engine(uint16_t seg, SourceID source) {
+    for(auto& engine : engines) {
+        if(engine.segment == seg) {
+            if(engine.all_devices_on_segment)
+                return engine; // If it includes all devices on segment we already found it
+            
+            for(const auto [begin, end] : engine.source_id_ranges)
+                if(source >= begin && source <= end)
+                    return engine;
+        }
+    }
 
     PANIC("Couldn't find engine for segment");
 }
 
 void vt_d::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova, uint64_t flags) {
-    SourceID id{};
-    id.bus = device.bus;
-    id.slot = device.slot;
-    id.func = device.func;
+    auto id = SourceID::from_device(device);
 
-    auto& engine = get_engine(device);
+    auto& engine = get_engine(device.seg, id);
 
     std::lock_guard guard{engine.lock};
 
@@ -524,7 +572,7 @@ void vt_d::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova, u
 uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
     auto id = SourceID::from_device(device);
 
-    auto& engine = get_engine(device);
+    auto& engine = get_engine(device.seg, id);
 
     std::lock_guard guard{engine.lock};
 
@@ -537,7 +585,7 @@ uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
 void vt_d::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova) {
     auto id = SourceID::from_device(device);
 
-    auto& engine = get_engine(device);
+    auto& engine = get_engine(device.seg, id);
 
     std::lock_guard guard{engine.lock};
     

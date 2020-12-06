@@ -45,6 +45,19 @@ namespace vt_d {
         uint8_t device_scope[];
     };
 
+    struct [[gnu::packed]] DevicePathEntry {
+        uint8_t device, function;
+    };
+
+    struct [[gnu::packed]] DeviceScope {
+        uint8_t type;
+        uint8_t length;
+        uint16_t reserved;
+        uint8_t enum_id;
+        uint8_t start_bus;
+        DevicePathEntry path[];
+    };
+
     struct [[gnu::packed]] RootTable {
         struct [[gnu::packed]] {
             uint64_t present : 1;
@@ -252,6 +265,14 @@ namespace vt_d {
 
             return id;
         }
+
+        constexpr bool operator<=(const SourceID& other) const {
+            return raw <= other.raw;
+        }
+
+        constexpr bool operator>=(const SourceID& other) const {
+            return raw >= other.raw;
+        }
     };
     static_assert(sizeof(SourceID) == 2);
 
@@ -340,9 +361,6 @@ namespace vt_d {
         public:
         RemappingEngine(Drhd* drhd);
         sl_paging::context& get_device_translation(SourceID device);
-
-        size_t segment;
-
         void invalidate_iotlb_addr(SourceID device, uintptr_t iova);
 
         private:
@@ -373,8 +391,11 @@ namespace vt_d {
 
         std::lazy_initializer<InvalidationQueue> iq;
 
-        bool x2apic_mode, wbflush_needed, read_draining, write_draining, page_selective_invalidation;
+        bool all_devices_on_segment, x2apic_mode, wbflush_needed, read_draining, write_draining, page_selective_invalidation;
         uint64_t page_cache_mode;
+
+        size_t segment;
+        std::vector<std::pair<SourceID, SourceID>> source_id_ranges;
 
         TicketLock lock;
 
@@ -389,7 +410,7 @@ namespace vt_d {
         void invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova);
 
         private:
-        RemappingEngine& get_engine(const pci::Device& device);
+        RemappingEngine& get_engine(uint16_t seg, SourceID source);
 
         Dmar* dmar;
         std::linked_list<RemappingEngine> engines;
