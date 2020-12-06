@@ -566,7 +566,8 @@ void vt_d::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova, u
     std::lock_guard guard{engine.lock};
 
     engine.get_device_translation(id).map(pa, iova, flags);
-    engine.invalidate_iotlb_addr(id, iova);
+    engine.invalidate_iotlb_addr(id, iova); // Technicaly not needed in all cases
+    engine.wbflush();
 }
 
 uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
@@ -577,7 +578,8 @@ uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
     std::lock_guard guard{engine.lock};
 
     auto ret = engine.get_device_translation(id).unmap(iova);
-    engine.invalidate_iotlb_addr(id, iova);
+    engine.invalidate_iotlb_addr(id, iova); // Technicaly not needed in all cases
+    engine.wbflush();
 
     return ret;
 }
