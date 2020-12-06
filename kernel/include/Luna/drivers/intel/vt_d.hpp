@@ -307,7 +307,7 @@ namespace vt_d {
 
     class InvalidationQueue {
         public:
-        InvalidationQueue(volatile RemappingEngineRegs* regs);
+        InvalidationQueue(volatile RemappingEngineRegs* regs, uint64_t page_cache_mode);
         ~InvalidationQueue();
 
         void submit_sync(const uint8_t* cmd);
@@ -374,6 +374,7 @@ namespace vt_d {
         std::lazy_initializer<InvalidationQueue> iq;
 
         bool x2apic_mode, wbflush_needed, read_draining, write_draining, page_selective_invalidation;
+        uint64_t page_cache_mode;
 
         TicketLock lock;
 

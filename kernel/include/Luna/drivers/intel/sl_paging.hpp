@@ -35,7 +35,7 @@ namespace sl_paging
 
     class context {
         public:
-        context(uint8_t levels);
+        context(uint8_t levels, uint64_t cache_mode);
         ~context();
 
         void map(uintptr_t pa, uintptr_t iova, uint64_t flags);
@@ -45,8 +45,10 @@ namespace sl_paging
 
         private:
         page_entry* walk(uintptr_t iova, bool create_new_tables);
+        uintptr_t create_table();
 
         uint8_t levels;
+        uint64_t cache_mode;
         uintptr_t root_pa;
     };
 } // namespace sl_paging

@@ -8,17 +8,21 @@
 #include <Luna/drivers/pci.hpp>
 #include <Luna/drivers/ioapic.hpp>
 
-vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* regs): regs{regs} {
+vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* regs, uint64_t page_cache_mode): regs{regs} {
     ASSERT(regs->extended_capabilities & (1 << 1));
 
     queue_pa = pmm::alloc_block();
     ASSERT(queue_pa);
+    auto queue_va = queue_pa + phys_mem_map;
+    vmm::kernel_vmm::get_instance().map(queue_pa, queue_va, paging::mapPagePresent | paging::mapPageWrite, page_cache_mode);
 
     desc_pa = pmm::alloc_block();
     ASSERT(desc_pa);
+    auto desc_va = desc_pa + phys_mem_map;
+    vmm::kernel_vmm::get_instance().map(desc_pa, desc_va, paging::mapPagePresent | paging::mapPageWrite, page_cache_mode);
 
-    queue = (uint8_t*)(queue_pa + phys_mem_map);
-    desc = (QueueDescription*)(desc_pa + phys_mem_map);
+    queue = (uint8_t*)queue_va;
+    desc = (QueueDescription*)desc_va;
 
     memset((void*)queue, 0, pmm::block_size);
     memset((void*)desc, 0, pmm::block_size);
@@ -152,6 +156,10 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     read_draining = (regs->capabilities & (1ull << 55)) ? true : false;
     x2apic_mode = (regs->extended_capabilities & (1 << 4)) ? true : false;
     page_selective_invalidation = (regs->capabilities & (1ull << 39)) ? true : false;
+    if(regs->extended_capabilities & (1 << 0)) // Page-walk Coherency
+        page_cache_mode = paging::cacheWriteback;
+    else
+        page_cache_mode = paging::cacheDisable;
 
     print("      Setting up IRQ ... ");
     wbflush();
@@ -194,7 +202,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     ASSERT(root_block);
 
     auto root_table_va = root_block + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::kernel_vmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, page_cache_mode);
 
     root_table = (RootTable*)root_table_va;
     memset((void*)root_table, 0, pmm::block_size);
@@ -206,7 +214,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     wbflush();
     regs->root_table_address = root_addr.raw;
 
-    regs->global_command = global_command | GlobalCommand::SetRootTablePointer; // Update root ptr
+    regs->global_command |= GlobalCommand::SetRootTablePointer; // Update root ptr
 
     while(!(regs->global_status & GlobalCommand::SetRootTablePointer))
         asm("pause");
@@ -215,7 +223,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
 
     if(regs->extended_capabilities & (1 << 1)) {
         print("      Setting up Invalidation Queue ... ");
-        iq.init(regs);
+        iq.init(regs, page_cache_mode);
 
         {
             RemappingEngineRegs::InalidationQueueAddress addr{};
@@ -371,8 +379,9 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
     if(!root_entry->present) {
         auto pa = pmm::alloc_block();
         if(!pa)
-            PANIC("Couldn't allocate IOMMU table");
+            PANIC("Couldn't allocate IOMMU context table");
         auto va = pa + phys_mem_map;
+        vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, page_cache_mode);
 
         memset((void*)va, 0, pmm::block_size);
         
@@ -392,7 +401,7 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
 
         domain_id_map[device.raw] = domain_id;
 
-        auto* context = new sl_paging::context{secondary_page_levels};
+        auto* context = new sl_paging::context{secondary_page_levels, page_cache_mode};
         page_map[device.raw] = context;
 
         context_table_entry->translation_type = 0; // Legacy Translation
@@ -441,9 +450,13 @@ void vt_d::RemappingEngine::handle_irq() {
             if(fault.execute)
                 print("      Execute access\n");
 
+            print("      IOVA: {:#x}\n", fault.fault_info << 12);
+
             auto reason = fault.reason;
             switch (reason) {
+                case 1: print("      Reason: The Present field in the root-entry used to process a request is 0.\n"); break;
                 case 5: print("      Reason: A Write or AtomicOp request encountered lack of write permission.\n"); break;
+                case 0xA: print("      Reason: Non-zero reserved field in a root-entry with the Present field set\n"); break;
                 default: print("      Reason: Unknown ({:#x})\n", reason);
             }
         }

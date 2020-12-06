@@ -3,16 +3,7 @@
 #include <std/string.hpp>
 
 #include <Luna/cpu/paging.hpp>
-
-static std::pair<uintptr_t, uintptr_t> create_table(){
-    auto pa = pmm::alloc_block();
-    if(!pa)
-        PANIC("Couldn't allocate block for sl_paging structures");
-    auto va = pa + phys_mem_map;
-
-    memset((void*)va, 0, pmm::block_size);
-    return {pa, va};
-}
+#include <Luna/mm/vmm.hpp>
 
 static void delete_table(uintptr_t pa) {
     pmm::free_block(pa);
@@ -34,10 +25,10 @@ static void clean_table(uintptr_t pa, uint8_t level) {
     delete_table(pa);
 }
 
-sl_paging::context::context(uint8_t levels): levels{levels} {
+sl_paging::context::context(uint8_t levels, uint64_t cache_mode): levels{levels}, cache_mode{cache_mode} {
     ASSERT(levels == 3 || levels == 4 || levels == 5);
 
-    const auto [pa, _] = create_table();
+    auto pa = create_table();
     root_pa = pa;
 }
 
@@ -45,13 +36,24 @@ sl_paging::context::~context(){
     clean_table(root_pa, levels);
 }
 
+uintptr_t sl_paging::context::create_table(){
+    auto pa = pmm::alloc_block();
+    if(!pa)
+        PANIC("Couldn't allocate block for sl_paging structures");
+    auto va = pa + phys_mem_map;
+    vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, cache_mode);
+
+    memset((void*)va, 0, pmm::block_size);
+    return pa;
+}
+
 sl_paging::page_entry* sl_paging::context::walk(uintptr_t iova, bool create_new_tables) {
     auto get_index = [iova](size_t i){ return (iova >> ((9 * (i - 1)) + 12)) & 0x1FF; };
-    auto get_level_or_create = [create_new_tables](page_table* prev, size_t i) -> page_table* {
+    auto get_level_or_create = [this, create_new_tables](page_table* prev, size_t i) -> page_table* {
         auto& entry = (*prev)[i];
         if(!entry.r) {
             if(create_new_tables) {
-                const auto [pa, _] = create_table();
+                auto pa = create_table();
 
                 entry.frame = (pa >> 12);
                 entry.r = 1;
