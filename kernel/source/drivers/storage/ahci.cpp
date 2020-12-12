@@ -10,6 +10,7 @@
 ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{device} {
     auto bar = device->read_bar(5);
     ASSERT(bar.type == pci::Bar::Type::Mmio);
+    ASSERT(bar.base != 0);
 
     device->set_privileges(pci::privileges::Dma | pci::privileges::Mmio);
 

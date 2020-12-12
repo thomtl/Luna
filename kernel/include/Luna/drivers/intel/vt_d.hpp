@@ -259,9 +259,9 @@ namespace vt_d {
 
         static constexpr SourceID from_device(const pci::Device& device) {
             SourceID id{};
-            id.bus = device.bus;
-            id.slot = device.slot;
-            id.func = device.func;
+            id.bus = device.requester_id.bus;
+            id.slot = device.requester_id.slot;
+            id.func = device.requester_id.func;
 
             return id;
         }

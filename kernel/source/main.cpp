@@ -119,11 +119,13 @@ void kernel_main(const stivale2_struct* info) {
 
             vm.map(pa, 0xF0000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
 
-            auto& file = *vfs::get_vfs().open("A:/luna/bios.bin");
-            auto bios_size = file.get_size();
+            auto* file = vfs::get_vfs().open("A:/luna/bios.bin");
+            ASSERT(file);
+
+            auto bios_size = file->get_size();
             auto* bios_payload = new uint8_t[bios_size];
 
-            ASSERT(file.read(0, bios_size, bios_payload) == bios_size);
+            ASSERT(file->read(0, bios_size, bios_payload) == bios_size);
 
             memcpy(va, bios_payload, bios_size);
         }

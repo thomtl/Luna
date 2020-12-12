@@ -29,10 +29,22 @@ static acpi::Mcfg::Allocation get_mcfg_allocation(acpi::Mcfg* mcfg, uint16_t seg
     PANIC("Couldn't find MCFG Allocation");
 }
 
+static void parse_bus(const acpi::Mcfg::Allocation& allocation, uint8_t bus);
+
 static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus, uint8_t slot, uint8_t func) {
+    static bool is_on_child_bus = false; // TODO: Make this less ugly
+    static pci::RequesterID child_bus_req_id{.raw = 0};
+
     auto addr = get_mcfg_device_addr(allocation, bus, slot, func);
 
-    pci::Device dev{.seg = allocation.segment, .bus = bus, .slot = slot, .func = func, .mmio_base = addr};
+    pci::RequesterID req_id{.raw = 0};
+    req_id.bus = bus;
+    req_id.slot = slot;
+    req_id.func = func;
+    if(is_on_child_bus)
+        req_id = child_bus_req_id;
+
+    pci::Device dev{.seg = allocation.segment, .bus = bus, .slot = slot, .func = func, .mmio_base = addr, .requester_id = req_id};
     if(dev.read<uint16_t>(0) == 0xFFFF)
         return;
 
@@ -58,12 +70,26 @@ static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus
         }
     }
 
+    // PCI-to-PCI bridge
+    if(dev.read<uint8_t>(11) == 6 && dev.read<uint8_t>(10) == 4) {
+        auto prev_status = is_on_child_bus;
+        auto prev_req_id = child_bus_req_id;
+
+        is_on_child_bus = true;
+        child_bus_req_id = req_id;
+
+        parse_bus(allocation, dev.read<uint8_t>(0x19));
+
+        is_on_child_bus = prev_status;
+        child_bus_req_id = prev_req_id;
+    }
+
     devices.emplace_back(std::move(dev));
 }
 
 static void parse_slot(const acpi::Mcfg::Allocation& allocation, uint8_t bus, uint8_t slot) {
     auto addr = get_mcfg_device_addr(allocation, bus, slot, 0);
-    pci::Device dev{.seg = allocation.segment, .bus = bus, .slot = slot, .func = 0, .mmio_base = addr};
+    pci::Device dev{.seg = allocation.segment, .bus = bus, .slot = slot, .func = 0, .mmio_base = addr, .requester_id = {.raw = 0}};
     if(dev.read<uint16_t>(0) == 0xFFFF)
         return;
 
@@ -131,7 +157,8 @@ void pci::init() {
 
     print("pci: Enumerated devices:\n");
     for(auto& device : devices) {
-        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(11), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(9));
+        auto req_id = device.requester_id.raw;
+        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}, ReqID: {:#x}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(11), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(9), req_id);
 
         if(device.msi.supported)
             print(" MSI");
@@ -145,7 +172,7 @@ void pci::init() {
 pci::Device* pci::device_by_class(uint8_t class_code, uint8_t subclass_code, uint8_t prog_if, size_t i) {
     size_t curr = 0;
     for(auto& device : devices) {
-        if(device.read<uint8_t>(11) == class_code && subclass_code == device.read<uint8_t>(10) && device.read<uint8_t>(9) == prog_if) {
+        if(device.read<uint8_t>(11) == class_code && subclass_code == device.read<uint8_t>(10) && prog_if == device.read<uint8_t>(9)) {
             if(curr != i)
                 curr++;
             else

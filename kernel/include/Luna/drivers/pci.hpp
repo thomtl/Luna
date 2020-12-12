@@ -75,14 +75,24 @@ namespace pci {
             Mmio = (1 << 1),
             Dma = (1 << 2),
         };    
-    } // namespace 
-        
+    } // namespace privileges
+
+    union [[gnu::packed]] RequesterID {
+        struct {
+            uint16_t func : 3;
+            uint16_t slot : 5;
+            uint16_t bus : 8;
+        };
+        uint16_t raw;
+    };
         
 
     struct Device {
         uint16_t seg;
         uint8_t bus, slot, func;
         uintptr_t mmio_base;
+
+        RequesterID requester_id;
 
         struct {
             bool supported = false;
