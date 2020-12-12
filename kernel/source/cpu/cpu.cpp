@@ -58,4 +58,41 @@ void cpu::init() {
 
         cpu_data.cpu.stepping = a & 0xF;
     }
+
+    {
+        uint32_t a, b, c, d;
+        ASSERT(cpuid(1, a, b, c, d));
+        cpu_data.cpu.cache.clflush_size = ((b >> 8) & 0xFF) * 8;
+
+        if(d & (1 << 19))
+            cpu_data.cpu.cache.clflush = true;
+
+        ASSERT(cpuid(7, 0, a, b, c, d));
+
+        if(b & (1 << 23))
+            cpu_data.cpu.cache.clflushopt = true;
+    }
+}
+
+void cpu::cache_flush(void* addr, size_t size) {
+    auto& cpu = get_cpu().cpu;
+    if(cpu.cache.clflushopt) {
+        uintptr_t base = ((uintptr_t)addr & ~(cpu.cache.clflush_size - 1));
+        uintptr_t top = ((uintptr_t)addr) + size;
+
+        asm volatile("mfence" : : : "memory");
+
+        for(; base < top; base += cpu.cache.clflush_size)
+            asm volatile("clflushopt (%0)" : : "r"(base) : "memory");
+
+        asm volatile("mfence" : : : "memory");
+    } else if(cpu.cache.clflush) {
+        uintptr_t base = ((uintptr_t)addr & ~(cpu.cache.clflush_size - 1));
+        uintptr_t top = ((uintptr_t)addr) + size;
+
+        for(; base < top; base += cpu.cache.clflush_size)
+            asm volatile("clflush (%0)" : : "r"(base) : "memory");
+    } else {
+        PANIC("No known cache flush mechanism");
+    }
 }

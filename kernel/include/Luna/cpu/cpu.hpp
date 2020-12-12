@@ -15,6 +15,8 @@ namespace cpu {
 
     void early_init(); // Cannot access per_cpu struct
     void init(); // Can access per_cpu struct
+
+    void cache_flush(void* addr, size_t size);
 } // namespace cpu
 
 struct CpuData {
@@ -28,6 +30,12 @@ struct CpuData {
         uint16_t family;
         uint8_t model;
         uint8_t stepping;
+
+        struct {
+            bool clflush, clflushopt;
+
+            size_t clflush_size;
+        } cache;
 
         struct {
             uint8_t ept_levels;
