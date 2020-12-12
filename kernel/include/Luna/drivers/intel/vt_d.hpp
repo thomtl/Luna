@@ -45,6 +45,17 @@ namespace vt_d {
         uint8_t device_scope[];
     };
 
+    struct [[gnu::packed]] Rmrr {
+        static constexpr uint16_t id = 1;
+        uint16_t type;
+        uint16_t length;
+        uint16_t reserved;
+        uint16_t segment;
+        uint64_t base;
+        uint64_t limit;
+        uint8_t device_scope[];
+    };
+
     struct [[gnu::packed]] DevicePathEntry {
         uint8_t device, function;
     };

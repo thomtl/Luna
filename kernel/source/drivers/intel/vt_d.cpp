@@ -8,6 +8,26 @@
 #include <Luna/drivers/pci.hpp>
 #include <Luna/drivers/ioapic.hpp>
 
+static vt_d::SourceID parse_path(uint16_t segment, const vt_d::DeviceScope& dev) {
+    size_t n = (dev.length - 6) / 2;
+
+    vt_d::SourceID cur{};
+    cur.bus = dev.start_bus;
+    cur.slot = dev.path[0].device;
+    cur.func = dev.path[0].function;
+
+    for(size_t i = 1; i < n; i++) {
+        vt_d::SourceID next{};
+        next.bus = pci::read<uint8_t>(segment, cur.bus, cur.slot, cur.func, 19); // Secondary bus number
+        next.slot = dev.path[i].device;
+        next.func = dev.path[i].function;
+
+        cur = next;
+    }
+
+    return cur;
+};
+
 vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* regs, uint64_t page_cache_mode): regs{regs} {
     ASSERT(regs->extended_capabilities & (1 << 1));
 
@@ -141,30 +161,10 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     while(scope < scope_end) {
         const auto& dev = *(DeviceScope*)scope;
 
-        auto parse_path = [&]() -> SourceID {
-            size_t n = (dev.length - 6) / 2;
-
-            SourceID cur{};
-            cur.bus = dev.start_bus;
-            cur.slot = dev.path[0].device;
-            cur.func = dev.path[0].function;
-
-            for(size_t i = 1; i < n; i++) {
-                SourceID next{};
-                next.bus = pci::read<uint8_t>(d.segment, cur.bus, cur.slot, cur.func, 19); // Secondary bus number
-                next.slot = dev.path[i].device;
-                next.func = dev.path[i].function;
-
-                cur = next;
-            }
-
-            return cur;
-        };
-        
         if(dev.type == 1) {
             ASSERT(!d.flags.pci_include_all);
 
-            auto sid = parse_path();
+            auto sid = parse_path(d.segment, dev);
             source_id_ranges.push_back({sid, sid});
 
             auto bus = sid.bus; auto slot = sid.slot; auto func = sid.func;
@@ -537,6 +537,42 @@ vt_d::IOMMU::IOMMU() {
                 engines.emplace_back(drhd);
                 break;
             }
+            case Rmrr::id: {
+                auto* rmrr = (Rmrr*)type;
+                auto segment = rmrr->segment; auto base = rmrr->base; auto limit = rmrr->limit;
+                print("    - RMRR: {:#x} -> {:#x}\n", base, limit);
+                
+                print("      Device Scopes: \n");
+                auto* scope = rmrr->device_scope;
+                auto scope_end = scope + (rmrr->length - sizeof(Rmrr));
+                while(scope < scope_end) {
+                    const auto& dev = *(DeviceScope*)scope;
+
+                    if(dev.type == 1) {
+                        auto sid = parse_path(segment, dev);
+
+                        auto bus = sid.bus; auto slot = sid.slot; auto func = sid.func;
+                        print("       - PCI Endpoint Device: {}.{}.{}.{} ... ", segment, bus, slot, func);
+
+                        auto* dev = pci::device_by_location(segment, bus, slot, func);
+                        ASSERT(dev);
+
+                        for(size_t i = base; i < limit; i += pmm::block_size)
+                            map(*dev, i, i, paging::mapPagePresent | paging::mapPageWrite);
+
+                        print("Mapped\n");
+                    } else {
+                        print("       - Unknown type: {:#x}\n", (uint16_t)dev.type);
+                    }
+
+                    scope += dev.length;
+                }
+                break;
+            }
+
+            default:
+                print("    - Unknown DMAR entry type {:#x}\n", *type);
+                break;
         }
 
         offset += *(type + 1);
