@@ -369,12 +369,16 @@ namespace vt_d {
         void invalidate_iotlb_addr(SourceID device, uintptr_t iova);
 
         private:
+        void enable_translation();
+
         void wbflush();
         void invalidate_global_context();
         void invalidate_global_iotlb();
         void invalidate_domain_iotlb(SourceID device);
 
         void handle_irq();
+
+        void disable_protect_mem_regions();
 
         Drhd* drhd;
 

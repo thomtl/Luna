@@ -209,7 +209,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     wbflush();
     regs->root_table_address = root_addr.raw;
 
-    regs->global_command |= GlobalCommand::SetRootTablePointer; // Update root ptr
+    regs->global_command = global_command | GlobalCommand::SetRootTablePointer; // Update root ptr
 
     while(!(regs->global_status & GlobalCommand::SetRootTablePointer))
         asm("pause");
@@ -238,18 +238,18 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
 
         print("Done\n");
     }
-
-    print("      Enabling Translation ... ");
-
     this->invalidate_global_context();
     this->invalidate_global_iotlb();
 
+}
+
+void vt_d::RemappingEngine::enable_translation() {
     global_command |= GlobalCommand::TranslationEnable;
     regs->global_command = global_command;
     while(!(regs->global_status & GlobalCommand::TranslationEnable))
         asm("pause");
 
-    print("Done\n");
+    disable_protect_mem_regions();
 }
 
 void vt_d::RemappingEngine::wbflush() {
@@ -460,6 +460,15 @@ void vt_d::RemappingEngine::handle_irq() {
     asm("cli\nhlt");
 }
 
+
+void vt_d::RemappingEngine::disable_protect_mem_regions() {
+    regs->protected_mem_enable &= ~(1u << 31);
+
+    // Wait for protection region status to clear
+    while(regs->protected_mem_enable & (1 << 0))
+        asm("pause");
+}
+
 vt_d::IOMMU::IOMMU() {
     dmar = acpi::get_table<Dmar>();
     if(!dmar)
@@ -528,6 +537,11 @@ vt_d::IOMMU::IOMMU() {
 
         offset += *(type + 1);
     }
+
+    print("    - Enabling DMA Translation ... ");
+    for(auto& engine : engines)
+        engine.enable_translation();
+    print("Done\n");
 }
 
 vt_d::RemappingEngine& vt_d::IOMMU::get_engine(uint16_t seg, SourceID source) {
