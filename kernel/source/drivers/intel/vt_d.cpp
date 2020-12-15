@@ -28,118 +28,69 @@ static vt_d::SourceID parse_path(uint16_t segment, const vt_d::DeviceScope& dev)
     return cur;
 };
 
-vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* regs, uint64_t page_cache_mode): regs{regs} {
+vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* regs): regs{regs} {
     ASSERT(regs->extended_capabilities & (1 << 1));
 
     queue_pa = pmm::alloc_block();
     ASSERT(queue_pa);
     auto queue_va = queue_pa + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(queue_pa, queue_va, paging::mapPagePresent | paging::mapPageWrite, page_cache_mode);
-
-    desc_pa = pmm::alloc_block();
-    ASSERT(desc_pa);
-    auto desc_va = desc_pa + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(desc_pa, desc_va, paging::mapPagePresent | paging::mapPageWrite, page_cache_mode);
+    vmm::kernel_vmm::get_instance().map(queue_pa, queue_va, paging::mapPagePresent | paging::mapPageWrite); // Hardware access to the IQ is always snooped
 
     queue = (uint8_t*)queue_va;
-    desc = (QueueDescription*)desc_va;
 
     memset((void*)queue, 0, pmm::block_size);
-    memset((void*)desc, 0, pmm::block_size);
-
-    free_count = queue_length;
-    free_head = 0;
-    free_tail = 0;
+    
+    head = 0;
+    tail = 0;
 }
 
 vt_d::InvalidationQueue::~InvalidationQueue() {
     if(queue_pa)
         pmm::free_block(queue_pa);
+}
 
-    if(desc_pa)
-        pmm::free_block(desc_pa);
+void vt_d::InvalidationQueue::queue_command(const uint8_t* cmd) {
+    auto next_tail = (tail + 1) % queue_length;
+
+    memcpy((void*)(queue + (tail * queue_entry_size)), cmd, queue_entry_size);
+    tail = next_tail;
 }
 
 void vt_d::InvalidationQueue::submit_sync(const uint8_t* cmd) {
-    auto index = free_head;
-    auto wait_index = index + 1;
-
-    auto write_entry = [&](size_t i, const uint8_t* data) {
-        auto index = (i % queue_length);
-        auto offset = index * queue_entry_size;
-        memcpy((void*)(queue + offset), data, queue_entry_size);
-        desc[index] = QueueDescription::InUse;
-    };
-
     InvalidationWaitDescriptor wait{};
     wait.type = InvalidationWaitDescriptor::cmd;
-    wait.status_write = 1;
-    wait.status = (uint32_t)QueueDescription::Done;
-    wait.addr = (desc_pa + (wait_index * sizeof(uint32_t)));
+    wait.irq = 1;
 
-    write_entry(index, cmd);
-    write_entry(wait_index, (uint8_t*)&wait);
+    queue_command(cmd);
+    queue_command((uint8_t*)&wait);
 
-    free_head = (free_head + 2) % queue_length;
-    free_count -= 2;
+    regs->invalidation_queue_tail = (tail * queue_entry_size);
     
-    regs->invalidation_queue_tail = (free_head * queue_entry_size);
-
-    wait_index %= queue_length;
-    
-    while(desc[wait_index] != QueueDescription::Done) {
-        auto fault = regs->fault_status;
-
+    while((regs->invalidation_completion_status & 1) == 0) {
         // Invalidation Queue Error
-        if(fault & (1 << 4)) {
-            auto head = regs->invalidation_queue_head;
-            if((head / queue_entry_size) == index) {
-                auto* cmd = (uint64_t*)queue + head;
+        if(regs->fault_status & (1 << 4)) {
+            PANIC("Invalidation Queue Error");
+            regs->fault_status = (1 << 4);
+        }
 
-                print("vt-d: Invalidation Queue Error: qw0: {:#x}, qw1: {:#x}\n", cmd[0], cmd[1]);
-                memcpy((void*)cmd, (void*)(queue + (wait_index * queue_entry_size)), queue_entry_size);
-                PANIC("Invalidation Queue Error");
-            }
+        if(regs->fault_status & (1 << 5)) {
+            PANIC("Invalidation Completion Error\n");
+            regs->fault_status = (1 << 5);
         }
 
         // Invalidation Time-out
-        if(fault & (1 << 6)) {
-            auto head = regs->invalidation_queue_head;
-            head = ((head / queue_entry_size) - 1 + queue_length) % queue_length;
-            head |= 1;
-            auto tail = regs->invalidation_queue_tail;
-            tail = ((tail / queue_entry_size) - 1 + queue_length) % queue_length;
-
+        if(regs->fault_status & (1 << 6)) {
+            PANIC("Invalidation Queue Timeout");
             regs->fault_status = (1 << 6);
-
-            do {
-                if(desc[head] == QueueDescription::InUse)
-                    desc[head] = QueueDescription::Abort;
-
-                head = (head - 2 + queue_length) % queue_length;
-            } while(head != tail);
-
-            if(desc[wait_index] == QueueDescription::Abort)
-                PANIC("Invalidation Queue Timeout");
         }
-
-        if(fault & (1 << 5))
-            regs->fault_status = (1 << 5);
     }
 
-    desc[index % queue_length] = QueueDescription::Done;
-
-    // Reclaim old entries
-    while(desc[free_tail] == QueueDescription::Done || desc[free_tail] == QueueDescription::Abort) {
-        desc[free_tail] = QueueDescription::Free;
-        free_tail = (free_tail + 1) % queue_length;
-        free_count++;
-    }
+    regs->invalidation_completion_status = 1;
 }
 
 vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_command{0} {
     auto va = drhd->mmio_base + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::kernel_vmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite, paging::cacheDisable);
 
     regs = (RemappingEngineRegs*)va;
     fault_recording_regs = (FaultRecordingRegister*)(va + (16 * ((regs->capabilities >> 24) & 0x3FF)));

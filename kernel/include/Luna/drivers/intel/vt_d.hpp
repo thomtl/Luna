@@ -339,7 +339,7 @@ namespace vt_d {
 
     class InvalidationQueue {
         public:
-        InvalidationQueue(volatile RemappingEngineRegs* regs, uint64_t page_cache_mode);
+        InvalidationQueue(volatile RemappingEngineRegs* regs);
         ~InvalidationQueue();
 
         void submit_sync(const uint8_t* cmd);
@@ -351,19 +351,13 @@ namespace vt_d {
         static constexpr size_t queue_entry_size = (128 / 8);
         static constexpr size_t queue_length = (queue_page_size * pmm::block_size) / queue_entry_size;
         private:
-        enum class QueueDescription : uint32_t {
-            Free,
-            InUse,
-            Done,
-            Abort
-        };
+        void queue_command(const uint8_t* cmd);
 
         volatile RemappingEngineRegs* regs;
 
         volatile uint8_t* queue;
-        volatile QueueDescription* desc;
-        uintptr_t queue_pa, desc_pa;
-        size_t free_count, free_head, free_tail;
+        uintptr_t queue_pa;
+        size_t tail, head;
     };
 
     struct IOMMU;
