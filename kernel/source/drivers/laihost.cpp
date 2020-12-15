@@ -18,11 +18,11 @@ extern "C" {
         return (void*)hmm::alloc(s, 16);
     }
 
-    void* laihost_realloc(void* ptr, size_t s) {
+    void* laihost_realloc(void* ptr, size_t s, size_t) {
         return (void*)hmm::realloc((uintptr_t)ptr, s, 16);
     }
 
-    void laihost_free(void* ptr) {
+    void laihost_free(void* ptr, size_t) {
         hmm::free((uintptr_t)ptr);
     }
 
