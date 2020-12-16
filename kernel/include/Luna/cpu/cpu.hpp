@@ -32,7 +32,7 @@ struct CpuData {
         uint8_t stepping;
 
         struct {
-            bool clflush, clflushopt;
+            void (*flush)(uintptr_t ptr);
 
             size_t clflush_size;
         } cache;
