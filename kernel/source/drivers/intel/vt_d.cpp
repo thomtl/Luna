@@ -218,7 +218,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
 
     if(regs->extended_capabilities & (1 << 1)) {
         print("      Setting up Invalidation Queue ... ");
-        iq.init(regs, page_cache_mode);
+        iq.init(regs);
 
         {
             RemappingEngineRegs::InalidationQueueAddress addr{};
