@@ -69,13 +69,15 @@ namespace vt_d {
         DevicePathEntry path[];
     };
 
+    struct [[gnu::packed]] RootEntry {
+        uint64_t present : 1;
+        uint64_t reserved : 11;
+        uint64_t context_table : 52;
+        uint64_t reserved_0;
+    };
+
     struct [[gnu::packed]] RootTable {
-        struct [[gnu::packed]] {
-            uint64_t present : 1;
-            uint64_t reserved : 11;
-            uint64_t context_table : 52;
-            uint64_t reserved_0;
-        } entries[256];
+        RootEntry entries[256];
 
         auto& operator[](size_t i) {
             return entries[i];
@@ -83,19 +85,21 @@ namespace vt_d {
     };
     static_assert(sizeof(RootTable) == pmm::block_size);
 
+    struct [[gnu::packed]] ContextEntry {
+        uint64_t present : 1;
+        uint64_t fault_processing_disable : 1;
+        uint64_t translation_type : 2;
+        uint64_t reserved : 8;
+        uint64_t sl_translation_ptr : 52;
+        uint64_t address_width : 3;
+        uint64_t ignored : 4;
+        uint64_t reserved_0 : 1;
+        uint64_t domain_id : 16;
+        uint64_t reserved_1 : 40;
+    };
+
     struct [[gnu::packed]] ContextTable {
-        struct [[gnu::packed]] {
-            uint64_t present : 1;
-            uint64_t fault_processing_disable : 1;
-            uint64_t translation_type : 2;
-            uint64_t reserved : 8;
-            uint64_t sl_translation_ptr : 52;
-            uint64_t address_width : 3;
-            uint64_t ignored : 4;
-            uint64_t reserved_0 : 1;
-            uint64_t domain_id : 16;
-            uint64_t reserved_1 : 40;
-        } entries[256];
+        ContextEntry entries[256];
 
         auto& operator[](size_t i) {
             return entries[i];
@@ -368,15 +372,22 @@ namespace vt_d {
         sl_paging::context& get_device_translation(SourceID device);
         void invalidate_iotlb_addr(SourceID device, uintptr_t iova);
 
+        void map(vt_d::SourceID device, uintptr_t pa, uintptr_t iova, uint64_t flags);
+        uintptr_t unmap(vt_d::SourceID device, uintptr_t iova);
+
         private:
         void enable_translation();
 
         void wbflush();
         void invalidate_global_context();
+        void invalidate_device_context(uint16_t domain_id, SourceID device);
         void invalidate_global_iotlb();
         void invalidate_domain_iotlb(SourceID device);
 
         void handle_irq();
+        void handle_primary_fault();
+
+        void clear_faults();
 
         void disable_protect_mem_regions();
 
@@ -400,8 +411,10 @@ namespace vt_d {
 
         std::lazy_initializer<InvalidationQueue> iq;
 
-        bool all_devices_on_segment, x2apic_mode, wbflush_needed, read_draining, write_draining, page_selective_invalidation;
-        uint64_t page_cache_mode;
+        bool all_devices_on_segment, x2apic_mode, wbflush_needed, read_draining, write_draining, page_selective_invalidation, caching_mode;
+        bool zero_length_read, page_snoop, coherent;
+
+        uint64_t cache_mode;
 
         size_t segment;
         std::vector<std::pair<SourceID, SourceID>> source_id_ranges;

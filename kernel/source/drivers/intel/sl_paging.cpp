@@ -2,6 +2,7 @@
 #include <std/utility.hpp>
 #include <std/string.hpp>
 
+#include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/paging.hpp>
 #include <Luna/mm/vmm.hpp>
 
@@ -14,18 +15,22 @@ static void clean_table(uintptr_t pa, uint8_t level) {
     auto& pml = *(sl_paging::page_table*)va;
 
     if(level >= 3) {
-        for(size_t i = 0; i < 512; i++)
-            if(pml[i].r)
-                clean_table(pml[i].frame << 12, level - 1);
+        for(size_t i = 0; i < 512; i++) {
+            if(auto entry = pml[i]; entry.r || entry.w || entry.x) {
+                clean_table(entry.frame << 12, level - 1);
+            }
+        }
     } else {
-        for(size_t i = 0; i < 512; i++)
-            if(pml[i].r)
-                delete_table(pml[i].frame << 12);
+        for(size_t i = 0; i < 512; i++) {
+            if(auto entry = pml[i]; entry.r || entry.w || entry.x) {
+                delete_table(entry.frame << 12);
+            }
+        }
     }
     delete_table(pa);
 }
 
-sl_paging::context::context(uint8_t levels, uint64_t cache_mode): levels{levels}, cache_mode{cache_mode} {
+sl_paging::context::context(uint8_t levels, bool snoop, uint64_t cache_mode): levels{levels}, snoop{snoop}, cache_mode{cache_mode} {
     ASSERT(levels == 3 || levels == 4 || levels == 5);
 
     auto pa = create_table();
@@ -51,7 +56,7 @@ sl_paging::page_entry* sl_paging::context::walk(uintptr_t iova, bool create_new_
     auto get_index = [iova](size_t i){ return (iova >> ((9 * (i - 1)) + 12)) & 0x1FF; };
     auto get_level_or_create = [this, create_new_tables](page_table* prev, size_t i) -> page_table* {
         auto& entry = (*prev)[i];
-        if(!entry.r) {
+        if(!entry.r && !entry.w && !entry.x) {
             if(create_new_tables) {
                 auto pa = create_table();
 
@@ -80,10 +85,13 @@ sl_paging::page_entry* sl_paging::context::walk(uintptr_t iova, bool create_new_
 void sl_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
     auto& page = *walk(iova, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
+    if(snoop)
+        page.snoop = 1;
+    page.frame = (pa >> 12);
+
     page.r = (flags & paging::mapPagePresent) ? 1 : 0;
     page.w = (flags & paging::mapPageWrite) ? 1 : 0;
     page.x = (flags & paging::mapPageExecute) ? 1 : 0;
-    page.frame = (pa >> 12);
 }
 
 uintptr_t sl_paging::context::unmap(uintptr_t iova) {
@@ -91,14 +99,15 @@ uintptr_t sl_paging::context::unmap(uintptr_t iova) {
     if(!entry)
         return 0; // Page does not exist
 
+    auto old = (entry->frame << 12);
+
+    entry->frame = 0;
+    entry->snoop = 0;
     entry->r = 0;
     entry->w = 0;
     entry->x = 0;
 
-    auto pa = (entry->frame << 12);
-    entry->frame = 0;
-
-    return pa;
+    return old;
 }
 
 uintptr_t sl_paging::context::get_root_pa() const {

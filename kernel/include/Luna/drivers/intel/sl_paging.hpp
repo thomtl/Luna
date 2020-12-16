@@ -5,26 +5,29 @@
 
 namespace sl_paging
 {
-    struct [[gnu::packed]] page_entry {
-        uint64_t r : 1;
-        uint64_t w : 1;
-        uint64_t x : 1;
+    union [[gnu::packed]] page_entry {
+        struct {
+            uint64_t r : 1;
+            uint64_t w : 1;
+            uint64_t x : 1;
         
-        uint64_t ext_mem_type : 3;
-        uint64_t ignore_pat : 1;
-        uint64_t reserved : 1;
-        uint64_t accessed : 1;
-        uint64_t dirty : 1;
-        uint64_t reserved_0 : 1;
-        uint64_t snoop : 1;
-        uint64_t frame : 40;
-        uint64_t reserved_1 : 10;
-        uint64_t transient_mapping : 1;
-        uint64_t reserved_2 : 1;
+            uint64_t ext_mem_type : 3;
+            uint64_t ignore_pat : 1;
+            uint64_t reserved : 1;
+            uint64_t accessed : 1;
+            uint64_t dirty : 1;
+            uint64_t reserved_0 : 1;
+            uint64_t snoop : 1;
+            uint64_t frame : 40;
+            uint64_t reserved_1 : 10;
+            uint64_t transient_mapping : 1;
+            uint64_t reserved_2 : 1;
+        };
+        uint64_t raw;
     };
     static_assert(sizeof(page_entry) == sizeof(uint64_t));
 
-    struct [[gnu::packed]] page_table {
+    struct page_table {
         page_entry entries[512];
 
         page_entry& operator[](size_t i){
@@ -35,7 +38,7 @@ namespace sl_paging
 
     class context {
         public:
-        context(uint8_t levels, uint64_t cache_mode);
+        context(uint8_t levels, bool snoop, uint64_t cache_mode);
         ~context();
 
         void map(uintptr_t pa, uintptr_t iova, uint64_t flags);
@@ -48,6 +51,7 @@ namespace sl_paging
         uintptr_t create_table();
 
         uint8_t levels;
+        bool snoop;
         uint64_t cache_mode;
         uintptr_t root_pa;
     };

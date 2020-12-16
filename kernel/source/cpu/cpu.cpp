@@ -70,29 +70,27 @@ void cpu::init() {
         ASSERT(cpuid(7, 0, a, b, c, d));
 
         if(b & (1 << 23))
-            cpu_data.cpu.cache.clflushopt = true;
+            cpu_data.cpu.cache.clflushopt = false;
     }
 }
 
 void cpu::cache_flush(void* addr, size_t size) {
     auto& cpu = get_cpu().cpu;
+
+    uintptr_t base = align_down((uintptr_t)addr, cpu.cache.clflush_size);
+    uintptr_t end = base + size;
+    
+    asm volatile("mfence" : : : "memory");
+
     if(cpu.cache.clflushopt) {
-        uintptr_t base = ((uintptr_t)addr & ~(cpu.cache.clflush_size - 1));
-        uintptr_t top = ((uintptr_t)addr) + size;
-
-        asm volatile("mfence" : : : "memory");
-
-        for(; base < top; base += cpu.cache.clflush_size)
-            asm volatile("clflushopt (%0)" : : "r"(base) : "memory");
-
-        asm volatile("mfence" : : : "memory");
+        for(; base < end; base += cpu.cache.clflush_size)
+            asm volatile("clflushopt %0" : "+m"((volatile uint8_t*)base) : : "memory");
     } else if(cpu.cache.clflush) {
-        uintptr_t base = ((uintptr_t)addr & ~(cpu.cache.clflush_size - 1));
-        uintptr_t top = ((uintptr_t)addr) + size;
-
-        for(; base < top; base += cpu.cache.clflush_size)
-            asm volatile("clflush (%0)" : : "r"(base) : "memory");
+        for(; base < end; base += cpu.cache.clflush_size)
+            asm volatile("clflush %0" : "+m"((volatile uint8_t*)base) : : "memory");
     } else {
         PANIC("No known cache flush mechanism");
     }
+
+    asm volatile("mfence" : : : "memory");
 }

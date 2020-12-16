@@ -90,7 +90,7 @@ void vt_d::InvalidationQueue::submit_sync(const uint8_t* cmd) {
 
 vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_command{0} {
     auto va = drhd->mmio_base + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite, paging::cacheDisable);
+    vmm::kernel_vmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
 
     regs = (RemappingEngineRegs*)va;
     fault_recording_regs = (FaultRecordingRegister*)(va + (16 * ((regs->capabilities >> 24) & 0x3FF)));
@@ -143,21 +143,72 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     print("      Domain IDs: {:d}\n", n_domain_ids);
 
     domain_ids = std::bitmap{n_domain_ids};
-    if(regs->capabilities & (1 << 7)) // If cap.CM is set domain ID 0 is reserved
-        domain_ids.set(0);
+    domain_ids.set(0);
 
-    wbflush_needed = (regs->capabilities & (1 << 4)) ? true : false;
-    write_draining = (regs->capabilities & (1ull << 54)) ? true : false;
-    read_draining = (regs->capabilities & (1ull << 55)) ? true : false;
-    x2apic_mode = (regs->extended_capabilities & (1 << 4)) ? true : false;
-    page_selective_invalidation = (regs->capabilities & (1ull << 39)) ? true : false;
-    if(regs->extended_capabilities & (1 << 0)) // Page-walk Coherency
-        page_cache_mode = paging::cacheWriteback;
+    wbflush_needed = (regs->capabilities >> 4) & 1;
+    caching_mode = (regs->capabilities >> 7) & 1;
+    zero_length_read = (regs->capabilities >> 22) & 1;
+    page_selective_invalidation = (regs->capabilities >> 39) & 1;
+    write_draining = (regs->capabilities >> 54) & 1;
+    read_draining = (regs->capabilities >> 55) & 1;
+
+    coherent = (regs->extended_capabilities >> 0) & 1;
+    x2apic_mode = (regs->extended_capabilities >> 4) & 1;
+    page_snoop = (regs->extended_capabilities >> 7) & 1;
+
+    if(coherent)
+        cache_mode = paging::cacheWriteback;
     else
-        page_cache_mode = paging::cacheDisable;
+        cache_mode = paging::cacheDisable;
+
+    ASSERT(regs->global_status == 0);
+
+    clear_faults();
+    if(regs->extended_capabilities & (1 << 1)) {
+        if(regs->global_status & (uint32_t)GlobalCommand::QueuedInvalidationEnable) {
+            // QI was enabled from BIOS
+            print("      QI was enabled in preboot, disabling ... ");
+
+            // Give HW a chance to complete outstanding requests
+            while(regs->invalidation_queue_head != regs->invalidation_queue_tail)
+                asm("pause");
+
+            global_command &= ~(uint32_t)GlobalCommand::QueuedInvalidationEnable;
+            regs->global_command = global_command;
+
+            while(regs->global_status & (uint32_t)GlobalCommand::QueuedInvalidationEnable)
+                asm("pause");
+
+            print("Done\n");
+        }
+
+        print("      Setting up Invalidation Queue ... ");
+        iq.init(regs);
+
+        {
+            RemappingEngineRegs::InalidationQueueAddress addr{};
+            addr.size = (InvalidationQueue::queue_page_size - 1); // 2^N pages
+            addr.descriptor_width = 0; // 128-bit descriptors
+            addr.address = (iq->get_queue_pa() >> 12);
+
+            regs->invalidation_queue_address = addr.raw;
+        }
+
+        regs->invalidation_queue_tail = 0;
+
+        global_command |= GlobalCommand::QueuedInvalidationEnable; // Enable Queued Invalidations, NO NORMAL IOTLB BEYOND THIS POINT
+        regs->global_command = global_command;
+        while(!(regs->global_status & GlobalCommand::QueuedInvalidationEnable))
+            asm("pause");
+
+        regs->invalidation_completion_status = 1;
+
+        print("Done\n");
+    }
+
+    wbflush();
 
     print("      Setting up IRQ ... ");
-    wbflush();
 
     uint32_t destination_id = get_cpu().lapic_id;
     auto vector = idt::allocate_vector();
@@ -189,6 +240,8 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     regs->fault_event_control &= ~(1u << 31); // Unmask IRQ
     (void)(regs->fault_event_control); // Force flush
 
+    regs->fault_status = 0x7F; // Clear all faults
+
     print("Done\n");
 
     print("      Installing Root Table ... ");
@@ -197,7 +250,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     ASSERT(root_block);
 
     auto root_table_va = root_block + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, page_cache_mode);
+    vmm::kernel_vmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, cache_mode);
 
     root_table = (RootTable*)root_table_va;
     memset((void*)root_table, 0, pmm::block_size);
@@ -214,33 +267,10 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     while(!(regs->global_status & GlobalCommand::SetRootTablePointer))
         asm("pause");
 
-    print("Done\n");
-
-    if(regs->extended_capabilities & (1 << 1)) {
-        print("      Setting up Invalidation Queue ... ");
-        iq.init(regs);
-
-        {
-            RemappingEngineRegs::InalidationQueueAddress addr{};
-            addr.size = (InvalidationQueue::queue_page_size - 1); // 2^N pages
-            addr.descriptor_width = 0; // 128-bit descriptors
-            addr.address = (iq->get_queue_pa() >> 12);
-
-            regs->invalidation_queue_address = addr.raw;
-        }
-
-        regs->invalidation_queue_tail = 0;
-
-        global_command |= GlobalCommand::QueuedInvalidationEnable; // Enable Queued Invalidations, NO NORMAL IOTLB BEYOND THIS POINT
-        regs->global_command = global_command;
-        while(!(regs->global_status & GlobalCommand::QueuedInvalidationEnable))
-            asm("pause");
-
-        print("Done\n");
-    }
     this->invalidate_global_context();
     this->invalidate_global_iotlb();
 
+    print("Done\n");
 }
 
 void vt_d::RemappingEngine::enable_translation() {
@@ -264,7 +294,7 @@ void vt_d::RemappingEngine::wbflush() {
 
 void vt_d::RemappingEngine::invalidate_global_context() {
     wbflush();
-
+    
     if(iq) {
         ContextInvalidationDescriptor cmd{};
         cmd.type = ContextInvalidationDescriptor::cmd;
@@ -273,6 +303,25 @@ void vt_d::RemappingEngine::invalidate_global_context() {
         iq->submit_sync((uint8_t*)&cmd);
     } else {
         regs->context_command = (1ull << 63) | (1ull << 61);
+
+        while(regs->context_command & (1ull << 63))
+            asm("pause");
+    }
+}
+
+void vt_d::RemappingEngine::invalidate_device_context(uint16_t domain_id, SourceID device) {
+    wbflush();
+
+    if(iq) {
+        ContextInvalidationDescriptor cmd{};
+        cmd.type = ContextInvalidationDescriptor::cmd;
+        cmd.granularity = 0b11; // Device + Domain Invalidation
+        cmd.domain_id = domain_id;
+        cmd.source_id = device.raw;
+
+        iq->submit_sync((uint8_t*)&cmd);
+    } else {
+        regs->context_command = (1ull << 63) | (0b11ull << 61) | (device.raw << 16) | domain_id;
 
         while(regs->context_command & (1ull << 63))
             asm("pause");
@@ -337,8 +386,9 @@ void vt_d::RemappingEngine::invalidate_domain_iotlb(SourceID device) {
 void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iova) {
     if(!page_selective_invalidation)
         return invalidate_domain_iotlb(device);
-    
+
     wbflush();
+    
     if(iq) {
         IOTLBInvalidationDescriptor cmd{};
         cmd.type = IOTLBInvalidationDescriptor::cmd;
@@ -376,12 +426,16 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
         if(!pa)
             PANIC("Couldn't allocate IOMMU context table");
         auto va = pa + phys_mem_map;
-        vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, page_cache_mode);
+        vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, cache_mode);
 
         memset((void*)va, 0, pmm::block_size);
-        
+
         root_entry->context_table = (pa >> 12);
+        root_entry->reserved = 0;
+        root_entry->reserved_0 = 0;
         root_entry->present = 1;
+
+        wbflush();
     }
 
     auto& context_table = *(ContextTable*)((root_entry->context_table << 12) + phys_mem_map);
@@ -396,7 +450,7 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
 
         domain_id_map[device.raw] = domain_id;
 
-        auto* context = new sl_paging::context{secondary_page_levels, page_cache_mode};
+        auto* context = new sl_paging::context{secondary_page_levels, page_snoop, cache_mode};
         page_map[device.raw] = context;
 
         context_table_entry->translation_type = 0; // Legacy Translation
@@ -404,19 +458,39 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
         context_table_entry->domain_id = domain_id;
         context_table_entry->sl_translation_ptr = (context->get_root_pa() >> 12);
         context_table_entry->present = 1;
+        
+        if(caching_mode) {
+            invalidate_device_context(0, device);
+            invalidate_domain_iotlb(device);
+        } else {
+            wbflush();
+        }
     }
 
     return *page_map[device.raw];
 }
 
-void vt_d::RemappingEngine::handle_irq() {
-    auto fault_status = regs->fault_status;
-    if((fault_status & (1 << 1)) == 0) // No actual faults
-        return;
+void vt_d::RemappingEngine::map(vt_d::SourceID device, uintptr_t pa, uintptr_t iova, uint64_t flags) {
+    if(!zero_length_read)
+        flags |= paging::mapPagePresent;
+        
+    get_device_translation(device).map(pa, iova, flags);
 
-    size_t fault_index = (fault_status >> 8) & 0xFF;
+    if(caching_mode)
+        invalidate_iotlb_addr(device, iova);
+    else
+        wbflush();
+}
 
-    for(size_t i = fault_index; i < n_fault_recording_regs; i++) {
+uintptr_t vt_d::RemappingEngine::unmap(vt_d::SourceID device, uintptr_t iova) {
+    auto ret = get_device_translation(device).unmap(iova);
+
+    invalidate_iotlb_addr(device, iova);
+    return ret;
+}
+
+void vt_d::RemappingEngine::handle_primary_fault() {
+    for(size_t i = 0; i < n_fault_recording_regs; i++) {
         uint64_t* reg = (uint64_t*)&fault_recording_regs[i];
 
         FaultRecordingRegister fault{};
@@ -427,7 +501,7 @@ void vt_d::RemappingEngine::handle_irq() {
         fault.raw.b = reg[1];
 
         if(fault.fault) {
-            print("vt-d: Fault at index {}\n", i);
+            print("      Fault at index {}\n", i);
 
             uint8_t type = fault.type_bit_1 | (fault.type_bit_2 << 1);
             switch (type) {
@@ -451,15 +525,43 @@ void vt_d::RemappingEngine::handle_irq() {
             switch (reason) {
                 case 1: print("      Reason: The Present field in the root-entry used to process a request is 0.\n"); break;
                 case 5: print("      Reason: A Write or AtomicOp request encountered lack of write permission.\n"); break;
+                case 6: print("      Reason: A Read or AtomicOp request encountered lack of read permission.\n"); break;
                 case 0xA: print("      Reason: Non-zero reserved field in a root-entry with the Present field set\n"); break;
                 default: print("      Reason: Unknown ({:#x})\n", reason);
             }
+
+            reg[1] = (1 << 31); // Clear fault
         }
     }
 
     asm("cli\nhlt");
 }
 
+void vt_d::RemappingEngine::handle_irq() {
+    auto fault_status = regs->fault_status;
+    print("vt-d: Handling IRQ, FSTS: {:#b},n", fault_status);
+    if(fault_status & (1 << 0)) {
+        print("      Primary Fault Overflow\n");
+        regs->fault_status = (1 << 0); 
+    }
+
+    if(fault_status & (1 << 1)) {
+        handle_primary_fault();
+    }    
+
+    asm("cli\nhlt");
+}
+
+void vt_d::RemappingEngine::clear_faults() {
+    for(size_t i = 0; i < n_fault_recording_regs; i++) {
+        uint64_t* reg = (uint64_t*)&fault_recording_regs[i];
+
+        if(reg[1] & (1 << 31)) {
+            print("vt-d: Fault detected from BIOS\n");
+            reg[1] = (1 << 31); // Clear fault
+        }
+    }    
+}
 
 void vt_d::RemappingEngine::disable_protect_mem_regions() {
     regs->protected_mem_enable &= ~(1u << 31);
@@ -566,9 +668,7 @@ void vt_d::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova, u
 
     std::lock_guard guard{engine.lock};
 
-    engine.get_device_translation(id).map(pa, iova, flags);
-    engine.invalidate_iotlb_addr(id, iova); // Technicaly not needed in all cases
-    engine.wbflush();
+    engine.map(id, pa, iova, flags);
 }
 
 uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
@@ -578,11 +678,7 @@ uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
 
     std::lock_guard guard{engine.lock};
 
-    auto ret = engine.get_device_translation(id).unmap(iova);
-    engine.invalidate_iotlb_addr(id, iova); // Technicaly not needed in all cases
-    engine.wbflush();
-
-    return ret;
+    return engine.unmap(id, iova);
 }
 
 void vt_d::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova) {
