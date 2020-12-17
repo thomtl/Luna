@@ -4,8 +4,6 @@
 
 #include <Luna/cpu/paging.hpp>
 
-// TODO: Should we set Force Coherent? And how should we handle NextLevel
-
 static std::pair<uintptr_t, uintptr_t> create_table(){
     auto pa = pmm::alloc_block();
     if(!pa)
@@ -102,6 +100,14 @@ uintptr_t io_paging::context::unmap(uintptr_t iova) {
     entry->frame = 0;
 
     return pa;
+}
+
+io_paging::page_entry io_paging::context::get_page(uintptr_t iova) {
+    auto* entry = walk(iova, false);
+    if(!entry)
+        return {};
+
+    return *entry;
 }
 
 uintptr_t io_paging::context::get_root_pa() const {

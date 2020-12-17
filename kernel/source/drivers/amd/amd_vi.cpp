@@ -24,14 +24,8 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
         auto revision = (header >> 19) & 0x1F;
         print("     - Remapping Engine v{}\n", revision);
 
-        auto range = pci_dev->read<uint32_t>(ivhd->capability_offset + 0xC);
-        start = DeviceID{.raw = (uint16_t)((((range >> 8) & 0xFF) << 8) | ((range >> 16) & 0xFF))};
-        end = DeviceID{.raw = (uint16_t)((((range >> 8) & 0xFF) << 8) | ((range >> 24) & 0xFF))};
-
-        print("       PCI Range Start: {}.{}.{}.{}\n", segment, (uint16_t)start.bus, (uint16_t)start.slot, (uint16_t)start.func);
-        print("       PCI Range End: {}.{}.{}.{}\n", segment, (uint16_t)end.bus, (uint16_t)end.slot, (uint16_t)end.func);
-
-        max_device_id = end.raw;
+        if(header & (1 << 26))
+            non_present_cache = true;
     }
 
     domain_ids.set(0); // Reserve Domain 0 for caching modes
@@ -45,15 +39,13 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
 
     // According to the spec we should program the SMI Filter first, but linux doesn't seem to do it
     // TODO: Program SMI Filter, How do you figure out the BMC DeviceID??
-
-
     
     disable();
     init_flags();
 
     {
-        // This is what linux does, however that info should be available in the Capabilities too as done above
-        //max_device_id = get_highest_device_id();
+        max_device_id = get_highest_device_id(); // get_highest_device_id will also initialize the device_id ranges
+        print("       Max DeviceID: {:#x}\n", max_device_id);
 
         auto device_table_size = (max_device_id + 1) * sizeof(DeviceTableEntry);
         auto n_pages = div_ceil(device_table_size, pmm::block_size);
@@ -80,6 +72,8 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
 
         cmd_sem = (volatile uint64_t*)(cmd_sem_pa + phys_mem_map);
         memset((void*)cmd_sem, 0, pmm::block_size);
+
+        cmd_sem_val = 0;
 
         auto cmd_ring_pa = pmm::alloc_block();
         ASSERT(cmd_ring_pa);
@@ -130,9 +124,71 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
 
         auto vector = idt::allocate_vector();
 
-        idt::set_handler(vector, {.f = [](idt::regs*, void*){
-            PANIC("TODO: AMD-Vi IRQ");
-        }, .is_irq = true, .should_iret = false, .userptr = nullptr});
+        idt::set_handler(vector, {.f = [](idt::regs*, void* userptr){
+            auto& self = *(IOMMUEngine*)userptr;
+            auto status = self.regs->iommu_status;
+            while(status & (1 << 1)) {
+                self.regs->iommu_status = (1 << 1);
+
+                self.evt_ring.head = self.regs->cmd_evt_ptrs.event_log_head;
+                self.evt_ring.tail = self.regs->cmd_evt_ptrs.event_log_tail;
+
+                while(self.evt_ring.head != self.evt_ring.tail) {
+                    auto* evt = (uint32_t*)(self.evt_ring.ring + self.evt_ring.head);
+                    auto type = evt[1] >> 28;
+                    if(type == 0b10) {
+                        const auto pf = *(EvtIOPageFault*)evt;
+                        DeviceID device{.raw = (uint16_t)pf.device_id};
+
+                        print("amdvi: I/O Page Fault\n");
+                        auto bus = device.bus, slot = device.slot, func = device.func;
+                        print("       Device: {}.{}.{}.{}\n", self.segment, bus, slot, func);
+                        print("       Address {:#x}\n", pf.address);
+                        print("       {} Privileges\n", pf.user ? "User" : "Supervisor");
+
+                        if(pf.interrupt_request) {
+                            print("       Interrupt Request\n");
+                        } else {
+                            print("       Memory Request\n");
+
+                            auto* io = self.page_map[device.raw];
+                            auto a = device.raw;
+                            if(!io)
+                                print("       Device ({:#x}) has no IO Paging structures\n", a);
+                            else {
+                                auto page = io->get_page(pf.address);
+
+                                if(page.present)
+                                    print("       Page: {:#x}, {}{}\n", page.frame << 12, page.r ? "R" : "", page.w ? "W" : "");
+                            }
+                        }
+
+                        if(pf.translation) {
+                            print("       Translation Request\n");
+                        } else {
+                            print("       Transaction Request\n");
+                            if(!pf.present) {
+                                print("       Not present\n");
+                            } else {
+                                print("       {} Operation\n", pf.write ? "Write" : "Read");
+                                print("{}", pf.reserved_bit_set ? "       Reserved bit was set\n" : "");
+                            }
+                        }
+                    } else {
+                        print("amdvi: Unknown event ring type: {:#b}\n", (uint16_t)type);
+                    }
+
+                    memset(evt, 0, 16);
+
+                    self.evt_ring.head = (self.evt_ring.head + 16) % 0x1000;
+                }
+
+                self.regs->cmd_evt_ptrs.event_log_head = self.evt_ring.head;
+
+                // Some errata, the iommu might re-set everything, and we need to loop through again
+                status = self.regs->iommu_status;
+            }
+        }, .is_irq = true, .should_iret = false, .userptr = this});
 
         pci_dev->enable_irq(vector);
 
@@ -157,7 +213,7 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
 
     {
         // flush_all_caches() will flush the devtable later
-        for(uint16_t i = 0; i <= max_device_id; i++)
+        for(size_t i = 0; i <= max_device_id; i++)
             device_table[i].valid = 1; // Disallow all accesses, when valid = 1 but translation_info_valid = 0
 
         auto update_device_info_from_acpi = [&](uint16_t devid, uint8_t flags) {
@@ -188,21 +244,57 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
         }
 
         auto* entries = (uint8_t*)ivhd + header_size;
+        uint16_t devid_start = 0, devid_to = 0;
+        uint8_t flags = 0;
+        uint32_t ext_flags = 0;
+        bool alias = false;
         for(size_t i = 0; i < (ivhd->length - header_size);) {
             const auto& entry = *(IVHDEntry*)(entries + i);
             auto type = (IVHDEntryTypes)entry.type;
 
             switch (type) {
             case IVHDEntryTypes::DeviceAll:
-                for(uint16_t i = 0; i <= max_device_id; i++)
+                for(size_t i = 0; i <= max_device_id; i++)
                     update_device_info_from_acpi(i, entry.flags);
                 break;
             case IVHDEntryTypes::DeviceSelect:
                 update_device_info_from_acpi(entry.device_id, entry.flags);
                 break;
+            case IVHDEntryTypes::DeviceAlias:
+                update_device_info_from_acpi(entry.device_id, entry.flags);
+                update_device_info_from_acpi((entry.ext >> 8) & 0xFFFF, entry.flags);
+
+                alias_map[entry.device_id] = (entry.ext >> 8) & 0xFFFF;
+                break;
+
+            case IVHDEntryTypes::DeviceSelectRangeStart:
+                devid_start = entry.device_id;
+                flags = entry.flags;
+                ext_flags = entry.ext;
+                alias = false;
+                break;
+            case IVHDEntryTypes::DeviceRangeEnd:
+                (void)ext_flags;
+                for(size_t i = devid_start; i <= entry.device_id; i++) {
+                    if(alias) {
+                        alias_map[i] = devid_to;
+                        update_device_info_from_acpi(devid_to, flags);
+                    } else
+                        update_device_info_from_acpi(i, flags);
+                }
+                break;
+            case IVHDEntryTypes::DeviceAliasRange:
+                devid_start = entry.device_id;
+                devid_to = entry.ext >> 8;
+                flags = entry.flags;
+                ext_flags = 0;
+                alias = true;
+                break;
+            case IVHDEntryTypes::DeviceSpecial:
+                update_device_info_from_acpi((entry.ext >> 8) & 0xFFFF, entry.flags);
+                break;
             default:
-                print("amdvi: Unknown IVHD entry type {:#x}\n", (uint16_t)type);
-                PANIC("Unknown Entry Type");
+                break;
             }
 
             size_t entry_size = 0;
@@ -292,20 +384,34 @@ uint16_t amd_vi::IOMMUEngine::get_highest_device_id() {
     }
 
     auto* entries = (uint8_t*)ivhd + header_size;
+    uint16_t devid_start = 0;
     for(size_t i = 0; i < (ivhd->length - header_size);) {
         const auto& entry = *(IVHDEntry*)(entries + i);
         auto type = (IVHDEntryTypes)entry.type;
 
         switch (type) {
         case IVHDEntryTypes::DeviceAll:
+            device_id_ranges.push_back({0, 0xFFFF});
             update(0xFFFF);
             break;
         case IVHDEntryTypes::DeviceSelect: [[fallthrough]];
-        case IVHDEntryTypes::DeviceRangeEnd: [[fallthrough]];
-        case IVHDEntryTypes::DeviceAlias: [[fallthrough]];
-        case IVHDEntryTypes::DeviceExtSelect:
+        case IVHDEntryTypes::DeviceExtSelect: [[fallthrough]];
+        case IVHDEntryTypes::DeviceAlias:
+            device_id_ranges.push_back({entry.device_id, entry.device_id});
             update(entry.device_id);
             break;
+        case IVHDEntryTypes::DeviceSelectRangeStart:
+            devid_start = entry.device_id;
+            break;
+        case IVHDEntryTypes::DeviceRangeEnd:
+            device_id_ranges.push_back({devid_start, entry.device_id});
+            update(entry.device_id);
+            break;
+        case IVHDEntryTypes::DeviceSpecial: {
+            auto devid = (entry.ext >> 8) & 0xFFFF;
+            device_id_ranges.push_back({devid, devid});
+            break;
+        }
         default:
             break;
         }
@@ -374,15 +480,17 @@ void amd_vi::IOMMUEngine::completion_wait() {
     if(!cmd_ring.need_sync)
         return;
 
+    auto data = ++cmd_sem_val;
+
     CmdCompletionWait cmd{};
     cmd.op = CmdCompletionWait::opcode;
     cmd.store = 1;
     cmd.store_address = (cmd_sem_pa >> 3);
-    cmd.store_data = 1;
+    cmd.store_data = data;
 
     ASSERT(queue_command(cmd));
 
-    while(*cmd_sem == 0)
+    while(*cmd_sem != data)
         asm("pause");
 
     cmd_ring.need_sync = false;
@@ -415,6 +523,17 @@ io_paging::context& amd_vi::IOMMUEngine::get_translation(const amd_vi::DeviceID&
         entry.io_write_permission = 1;
 
         cmd_invalidate_devtab_entry(device);
+
+        if(alias_map.contains(device.raw)) {
+            auto alias = alias_map[device.raw];
+
+            domain_id_map[alias] = domain_id;
+            page_map[alias] = context;
+
+            memcpy((void*)&device_table[alias], (void*)&entry, sizeof(DeviceTableEntry));
+
+            cmd_invalidate_devtab_entry(DeviceID{.raw = alias});
+        }
     }
 
     return *page_map[device.raw];
@@ -432,6 +551,18 @@ void amd_vi::IOMMUEngine::invalidate_iotlb_addr(const DeviceID& device, uintptr_
 
     ASSERT(queue_command(cmd));
     completion_wait();
+}
+
+void amd_vi::IOMMUEngine::map(const DeviceID& device, uintptr_t pa, uintptr_t iova, uint64_t flags) {
+    get_translation(device).map(pa, iova, flags);
+
+    invalidate_iotlb_addr(device, iova);
+}
+
+uintptr_t amd_vi::IOMMUEngine::unmap(const DeviceID& device, uintptr_t iova) {
+    auto ret = get_translation(device).unmap(iova);
+
+    return ret;
 }
 
 amd_vi::IOMMU::IOMMU() {
@@ -463,11 +594,15 @@ amd_vi::IOMMU::IOMMU() {
 }
 
 amd_vi::IOMMUEngine& amd_vi::IOMMU::engine_for_device(uint16_t seg, const DeviceID& id) {
-    for(auto& engine : engines)
-        if(engine.segment == seg && id >= engine.start && id <= engine.end)
-            return engine;
+    for(auto& engine : engines) {
+        if(engine.segment == seg) {
+            for(const auto [begin, end] : engine.device_id_ranges)
+                if(id >= begin && id <= end)
+                    return engine;
+        }
+    }
 
-    PANIC("No engine for segment");
+    PANIC("Couldn't find engine for segment");
 }
         
 void amd_vi::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova, uint64_t flags) {
@@ -477,8 +612,7 @@ void amd_vi::IOMMU::map(const pci::Device& device, uintptr_t pa, uintptr_t iova,
 
     std::lock_guard guard{engine.lock};
 
-    engine.get_translation(id).map(pa, iova, flags);
-    engine.invalidate_iotlb_addr(id, iova);
+    engine.map(id, pa, iova, flags);
 }
 
 uintptr_t amd_vi::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
@@ -488,10 +622,7 @@ uintptr_t amd_vi::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
 
     std::lock_guard guard{engine.lock};
 
-    auto ret = engine.get_translation(id).unmap(iova);
-    engine.invalidate_iotlb_addr(id, iova);
-
-    return ret;
+    return engine.unmap(id, iova);
 }
 
 void amd_vi::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova) {

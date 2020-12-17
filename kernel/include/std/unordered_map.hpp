@@ -29,6 +29,21 @@ namespace std
             return e.second;
         }
 
+        bool contains(const Key& key) {
+            auto hash = _hasher(key);
+
+            for(auto& e : _map)
+                if(e.first == hash)
+                    return true;
+
+            return false;
+        }
+
+        auto begin() { return _map.begin(); }
+        const auto begin() const { return _map.begin(); }
+        auto end() { return _map.end(); }
+        const auto end() const { return _map.end(); }
+
         private:
         using entry_type = std::pair<size_t, T>;
         std::vector<entry_type> _map;

@@ -76,7 +76,7 @@ namespace amd_vi {
 
         static constexpr DeviceID from_device(const pci::Device& device) {
             DeviceID id{};
-            id.bus = device.bus;
+            id.bus = device.bus; // AMD doesn't seem to use the RequesterIDs here? So child busses don't "take ownership" of the transaction?
             id.slot = device.slot;
             id.func = device.func;
 
@@ -289,6 +289,31 @@ namespace amd_vi {
     };
     static_assert(IOMMUCommand<CmdInvalidateIOMMUAll>);
 
+    template<typename T>
+    concept IOMMUEvent = requires(T t) {
+        { t.type } -> std::convertible_to<uint8_t>;
+    } && (sizeof(T) == 16);
+
+    struct [[gnu::packed]] EvtIOPageFault {
+        uint32_t device_id : 16;
+        uint32_t pasid : 4;
+        uint32_t reserved : 12;
+        uint32_t domain_id : 16;
+        uint32_t gn : 1;
+        uint32_t no_execute : 1;
+        uint32_t user : 1;
+        uint32_t interrupt_request : 1;
+        uint32_t present : 1;
+        uint32_t write : 1;
+        uint32_t permission : 1;
+        uint32_t reserved_bit_set : 1;
+        uint32_t translation : 1;
+        uint32_t reserved_0 : 3;
+        uint32_t type : 4;
+        uint64_t address;
+    };
+    static_assert(IOMMUEvent<EvtIOPageFault>);
+
     enum class EngineControl : uint64_t {
         IOMMUEnable = (1ull << 0),
         HyperTransportTunnelEnable = (1ull << 1),
@@ -327,8 +352,7 @@ namespace amd_vi {
     enum class IVHDEntryTypes : uint8_t {
         DeviceAll = 0x1,
         DeviceSelect = 0x2,
-        DeviceSelectRangeStart = 0x2,
-        DeviceSelectRangeEnd = 0x3,
+        DeviceSelectRangeStart = 0x3,
         DeviceRangeEnd = 0x4,
         DeviceAlias = 0x42,
         DeviceAliasRange = 0x43,
@@ -345,11 +369,11 @@ namespace amd_vi {
     struct IOMMUEngine {
         IOMMUEngine(Type10IVHD* ivhd);
 
-        io_paging::context& get_translation(const DeviceID& device);
-        void invalidate_iotlb_addr(const DeviceID& device, uintptr_t iova);
+        void map(const DeviceID& device, uintptr_t pa, uintptr_t iova, uint64_t flags);
+        uintptr_t unmap(const DeviceID& device, uintptr_t iova);
 
         uint16_t segment;
-        DeviceID start, end;
+        std::vector<std::pair<DeviceID, DeviceID>> device_id_ranges;
 
         private:
         void disable();
@@ -371,6 +395,9 @@ namespace amd_vi {
         bool queue_command(const uint8_t* cmd, size_t size);
         void completion_wait();
 
+        io_paging::context& get_translation(const DeviceID& device);
+        void invalidate_iotlb_addr(const DeviceID& device, uintptr_t iova);
+
         volatile IOMMUEngineRegs* regs;
         volatile DeviceTableEntry* device_table;
 
@@ -380,6 +407,10 @@ namespace amd_vi {
 
         std::unordered_map<uint16_t, io_paging::context*> page_map;
         std::unordered_map<uint16_t, uint16_t> domain_id_map;
+
+        std::unordered_map<uint16_t, uint16_t> alias_map;
+
+        bool non_present_cache;
 
         struct {
             volatile uint8_t* ring;
@@ -391,6 +422,7 @@ namespace amd_vi {
 
         volatile uint64_t* cmd_sem;
         uintptr_t cmd_sem_pa;
+        uint64_t cmd_sem_val;
 
         Type10IVHD* ivhd;
         pci::Device* pci_dev;
