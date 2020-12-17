@@ -24,6 +24,7 @@
 #include <Luna/fs/vfs.hpp>
 
 #include <Luna/vmm/vm.hpp>
+#include <Luna/vmm/drivers/e9.hpp>
 
 #include <std/mutex.hpp>
 
@@ -135,6 +136,9 @@ void kernel_main(const stivale2_struct* info) {
     ASSERT(disk);
 
     vm.disks.push_back(disk);
+
+    auto* e9_dev = new vm::e9::Driver{};
+    e9_dev->register_driver(&vm);
     
     ASSERT(vm.run());
 
