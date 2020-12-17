@@ -336,12 +336,28 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             next_instruction();
 
             return true;
+        } else if(basic_reason == VMExitReasons::PIO) {
+            IOQualification info{.raw = read(vm_exit_qualification)};
+
+            exit.reason = vm::VmExit::Reason::PIO;
+
+            exit.instruction_len = read(vm_exit_instruction_len);
+
+            exit.pio.size = info.size + 1;
+            exit.pio.port = info.port;
+            exit.pio.rep = info.rep;
+            exit.pio.string = info.string;
+            exit.pio.write = !info.dir;
+
+            next_instruction();
+
+            return true;
         } else if(basic_reason == VMExitReasons::InvalidGuestState) {
             print("vmx: VM-Entry Failure due to invalid guest state\n");
             return false;
         } else if(basic_reason == VMExitReasons::EPTViolation) {
             auto addr = read(ept_violation_addr);
-            EPTViolationQualification info{.raw = read(ept_violation_flags)};
+            EPTViolationQualification info{.raw = read(vm_exit_qualification)};
 
             exit.reason = vm::VmExit::Reason::MMUViolation;
 
@@ -357,7 +373,7 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
             return true;
         } else {
-            print("vmx: Unknown VMExit Reason: {:#x}\n", (uint64_t)basic_reason);
+            print("vmx: Unknown VMExit Reason: {:d}\n", (uint64_t)basic_reason);
             PANIC("Unknown exit reason");
         }
     }

@@ -85,8 +85,23 @@ namespace vmx {
     enum class VMExitReasons : uint32_t {
         Hlt = 12,
         Vmcall = 18,
+        PIO = 30,
         InvalidGuestState = 33,
         EPTViolation = 48
+    };
+
+    union [[gnu::packed]] IOQualification {
+        struct {
+            uint64_t size : 3;
+            uint64_t dir : 1;
+            uint64_t string : 1;
+            uint64_t rep : 1;
+            uint64_t operand : 1;
+            uint64_t reserved : 9;
+            uint64_t port : 16;
+            uint64_t reserved_0 : 32;
+        };
+        uint64_t raw;
     };
 
     union [[gnu::packed]] EPTViolationQualification {
@@ -194,10 +209,11 @@ namespace vmx {
 
     constexpr uint64_t ept_control = 0x201A;
     constexpr uint64_t ept_violation_addr = 0x2400;
-    constexpr uint64_t ept_violation_flags = 0x6400;
     
     constexpr uint64_t vm_instruction_error = 0x4400;
     constexpr uint64_t vm_exit_reason = 0x4402;
+    constexpr uint64_t vm_exit_instruction_len = 0x440C;
+    constexpr uint64_t vm_exit_qualification = 0x6400;
 
     void init();
     bool is_supported();

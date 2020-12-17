@@ -35,13 +35,14 @@ namespace vm {
 
     constexpr size_t max_x86_instruction_size = 15;
     struct VmExit {
-        enum class Reason { Unknown, Hlt, Vmcall, MMUViolation };
+        enum class Reason { Unknown, Hlt, Vmcall, MMUViolation, PIO };
         static constexpr const char* reason_to_string(const Reason& reason) {
             switch (reason) {
                 case Reason::Unknown: return "Unknown";
                 case Reason::Hlt: return "HLT";
                 case Reason::Vmcall: return "VM{M}CALL";
                 case Reason::MMUViolation: return "MMUViolation";
+                case Reason::PIO: return "Port IO";
                 default: return "Unknown";
             }
         }
@@ -60,7 +61,24 @@ namespace vm {
                 } access, page;
                 uint64_t gpa;
             } mmu;
+
+            struct {
+                uint8_t size;
+                bool write, string, rep;
+                uint16_t port;
+            } pio;
         };
+    };
+
+    struct Vm;
+
+    struct AbstractDriver {
+        virtual ~AbstractDriver() {}
+
+        virtual void register_driver(Vm* vm) = 0;
+
+        virtual void pio_write(uint16_t port, uint32_t value, uint8_t size) = 0;
+        virtual uint32_t pio_read(uint16_t port, uint8_t size) = 0;
     };
 
     struct AbstractVm {
@@ -86,6 +104,9 @@ namespace vm {
         bool run();
 
         std::vector<vfs::File*> disks;
+
+        std::vector<AbstractDriver*> drivers;
+        std::unordered_map<uint16_t, AbstractDriver*> pio_map;
 
 
         private:

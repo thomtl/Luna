@@ -140,6 +140,45 @@ bool vm::Vm::run() {
             print("    Access: {:s}{:s}{:s}\n", exit.mmu.access.r ? "R" : "", exit.mmu.access.w ? "W" : "", exit.mmu.access.x ? "X" : "");
             print("    Page: {:s}{:s}{:s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "");
             return false;
+
+        case VmExit::Reason::PIO: {
+            get_regs(regs); 
+
+            ASSERT(!exit.pio.rep); // TODO
+            ASSERT(!exit.pio.rep);
+
+            auto reg_clear = [&](uint64_t& value) {
+                switch(exit.pio.size) {
+                    case 1: value &= 0xFF; break;
+                    case 2: value &= 0xFFFF; break;
+                    case 4: value &= 0xFFFF'FFFF; break;
+                    default: PANIC("Unknown PIO Size");
+                }
+            };
+
+            if(!pio_map.contains(exit.pio.port)) {
+                print("vm: Unhandled PIO Access to port {:#x}\n", exit.pio.port);
+                return false;
+            }
+
+            auto* driver = pio_map[exit.pio.port];
+
+            if(exit.pio.write) {
+                auto value = regs.rax;
+                reg_clear(value);
+
+                driver->pio_write(exit.pio.port, value, exit.pio.size);
+            } else {
+                auto value = driver->pio_read(exit.pio.port, exit.pio.size);
+
+                reg_clear(regs.rax);
+                regs.rax |= value;
+
+                set_regs(regs);
+            }
+
+            break;
+        }
         
         default:
             print("vm: Exit due to {:s}\n", exit.reason_to_string(exit.reason));
