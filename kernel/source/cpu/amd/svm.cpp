@@ -173,6 +173,19 @@ bool svm::Vm::run(vm::VmExit& exit) {
 
             return true;
         }
+
+        case 0x81: { // VMMCALL
+            exit.reason = vm::VmExit::Reason::Vmcall;
+
+            exit.instruction_len = 3;
+            exit.instruction[0] = 0x0F;
+            exit.instruction[1] = 0x01;
+            exit.instruction[2] = 0xD9;
+
+            next_instruction();
+
+            return true;
+        }
         
         case 0x400: { // Nested Page Fault
             auto addr = vmcb->exitinfo2;
