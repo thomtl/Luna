@@ -83,11 +83,24 @@ namespace vmx {
     };
 
     enum class VMExitReasons : uint32_t {
+        Exception = 0,
         Hlt = 12,
         Vmcall = 18,
         PIO = 30,
         InvalidGuestState = 33,
         EPTViolation = 48
+    };
+
+    union [[gnu::packed]] InterruptionInfo {
+        struct {
+            uint32_t vector : 8;
+            uint32_t type : 3;
+            uint32_t error : 1;
+            uint32_t nmi_unblocking : 1;
+            uint32_t reserved : 18;
+            uint32_t valid : 1;
+        };
+        uint32_t raw;
     };
 
     union [[gnu::packed]] IOQualification {
@@ -212,6 +225,8 @@ namespace vmx {
     
     constexpr uint64_t vm_instruction_error = 0x4400;
     constexpr uint64_t vm_exit_reason = 0x4402;
+    constexpr uint64_t vm_exit_interruption_info = 0x4404;
+    constexpr uint64_t vm_exit_interruption_error_code = 0x4406;
     constexpr uint64_t vm_exit_instruction_len = 0x440C;
     constexpr uint64_t vm_exit_qualification = 0x6400;
 

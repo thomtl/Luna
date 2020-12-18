@@ -316,7 +316,34 @@ bool vmx::Vm::run(vm::VmExit& exit) {
         auto next_instruction = [&]() { write(guest_rip, read(guest_rip) + exit.instruction_len); };
 
         auto basic_reason = (VMExitReasons)(read(vm_exit_reason) & 0xFFFF);
-        if(basic_reason == VMExitReasons::Hlt) {
+        if(basic_reason == VMExitReasons::Exception) {
+            InterruptionInfo info{.raw = (uint32_t)read(vm_exit_interruption_info)};
+            auto grip = read(guest_cs_base) + read(guest_rip);
+            // Hardware exception
+            if(info.type == 3) {
+                if(info.vector == 6) { // #UD
+                    auto* instruction = (uint8_t*)(guest_page.get_phys(grip) + phys_mem_map); // TODO: Make sure this doesn't cross page boundaries
+
+                    // Make sure we can run AMD's VMMCALL on Intel
+                    if(instruction[0] == 0x0F && instruction[1] == 0x01 && instruction[2] == 0xD9) {
+                        exit.reason = vm::VmExit::Reason::Vmcall;
+
+                        exit.instruction_len = 3;
+                        exit.instruction[0] = 0x0F;
+                        exit.instruction[1] = 0x01;
+                        exit.instruction[2] = 0xD9;
+
+                        next_instruction();
+
+                        return true;
+                    }
+                }
+
+                auto type = info.type, vector = info.vector;
+                print("VT-x: Interruption: Type: {}, Vector: {}\n", type, vector);
+                return false;
+            }
+        } else if(basic_reason == VMExitReasons::Hlt) {
             exit.reason = vm::VmExit::Reason::Hlt;
 
             exit.instruction_len = 1;
