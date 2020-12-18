@@ -58,7 +58,9 @@ namespace vm {
                     uint8_t r : 1;
                     uint8_t w : 1;
                     uint8_t x : 1;
+                    uint8_t user : 1;
                 } access, page;
+                bool reserved_bits_set;
                 uint64_t gpa;
             } mmu;
 

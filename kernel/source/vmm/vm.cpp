@@ -3,8 +3,9 @@
 #include <Luna/misc/format.hpp>
 
 #include <Luna/cpu/intel/vmx.hpp>
+#include <Luna/cpu/amd/svm.hpp>
 
-enum class Vendor { Intel };
+enum class Vendor { Intel, Amd };
 static Vendor vendor;
 
 void vm::init() {
@@ -12,18 +13,28 @@ void vm::init() {
         vendor = Vendor::Intel;
 
         vmx::init();
-    } else 
+    } else if(svm::is_supported()) {
+        vendor = Vendor::Amd;
+
+        svm::init();
+    } else
         PANIC("Unknown virtualization vendor");
 }
 
 vm::Vm::Vm() {
-    uint64_t cr0_constraint = 0, cr4_constraint = 0;
+    uint64_t cr0_constraint = 0, cr4_constraint = 0, efer_constraint = 0;
     switch (vendor) {
         case Vendor::Intel:
             vm = new vmx::Vm{};
 
             cr0_constraint = vmx::get_cr0_constraint();
             cr4_constraint = vmx::get_cr4_constraint();
+            break;
+        case Vendor::Amd:
+            vm = new svm::Vm{};
+
+            cr0_constraint = svm::get_cr0_constraint();
+            efer_constraint = svm::get_efer_constraint();
             break;
         default:
             PANIC("Unknown virtualization vendor");
@@ -61,7 +72,7 @@ vm::Vm::Vm() {
     regs.cr4 = cr4_constraint;
 
     regs.cr3 = 0;
-    regs.efer = 0;
+    regs.efer = efer_constraint;
 
     vm->set_regs(regs);
 
@@ -121,7 +132,7 @@ bool vm::Vm::run() {
                             ASSERT(hpa); // Assert that the page is actually mapped
                             auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
 
-                            memcpy(host_buf + page_off, buffer, size);
+                            memcpy(host_buf, buffer, size);
                         }
 
                         delete[] buffer;
@@ -137,8 +148,10 @@ bool vm::Vm::run() {
             get_regs(regs);
             print("vm: MMU Violation\n");
             print("    gRIP: {:#x}, gPA: {:#x}\n", regs.cs.base + regs.rip, exit.mmu.gpa);
-            print("    Access: {:s}{:s}{:s}\n", exit.mmu.access.r ? "R" : "", exit.mmu.access.w ? "W" : "", exit.mmu.access.x ? "X" : "");
-            print("    Page: {:s}{:s}{:s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "");
+            print("    Access: {:s}{:s}{:s}, {:s}\n", exit.mmu.access.r ? "R" : "", exit.mmu.access.w ? "W" : "", exit.mmu.access.x ? "X" : "", exit.mmu.access.user ? "User" : "Supervisor");
+            print("    Page: {:s}{:s}{:s}, {:#s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "", exit.mmu.page.user ? "User" : "Supervisor");
+            if(exit.mmu.reserved_bits_set)
+                print("    Reserved bits set\n");
             return false;
 
         case VmExit::Reason::PIO: {

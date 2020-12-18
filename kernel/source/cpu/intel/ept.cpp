@@ -104,11 +104,12 @@ uintptr_t ept::context::unmap(uintptr_t va) {
 }
 
 uintptr_t ept::context::get_phys(uintptr_t va) {
+    auto off = va & 0xFFF;
     auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return 0; // Page does not exist
 
-    return (entry->frame << 12);
+    return (entry->frame << 12) + off;
 }
 
 uintptr_t ept::context::get_root_pa() const {

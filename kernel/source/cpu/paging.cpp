@@ -115,11 +115,20 @@ uintptr_t paging::context::unmap(uintptr_t va) {
 }
 
 uintptr_t paging::context::get_phys(uintptr_t va) {
+    uintptr_t off = va & 0xFFF;
     auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return 0; // Page does not exist
 
-    return (entry->frame << 12);
+    return (entry->frame << 12) + off;
+}
+
+paging::page_entry paging::context::get_page(uintptr_t va) {
+    auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
+    if(!entry)
+        return {}; // Page does not exist
+
+    return *entry;
 }
 
 uintptr_t paging::context::get_root_pa() const {

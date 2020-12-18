@@ -329,7 +329,7 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.reason = vm::VmExit::Reason::Vmcall;
 
             exit.instruction_len = 3;
-            exit.instruction[0] = 0xF0;
+            exit.instruction[0] = 0x0F;
             exit.instruction[1] = 0x01;
             exit.instruction[2] = 0xC1;
 
@@ -364,12 +364,15 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.mmu.access.r = info.r;
             exit.mmu.access.w = info.w;
             exit.mmu.access.x = info.x;
+            exit.mmu.access.user = 0;
 
             exit.mmu.page.r = info.page_r;
             exit.mmu.page.w = info.page_w;
             exit.mmu.page.x = info.page_x;
+            exit.mmu.page.user = 0;
 
             exit.mmu.gpa = addr;
+            exit.mmu.reserved_bits_set = false;
 
             return true;
         } else {

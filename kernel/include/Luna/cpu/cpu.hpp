@@ -26,6 +26,8 @@ struct CpuData {
     tss::Table tss_table;
     lapic::Lapic lapic;
 
+    uint16_t tss_sel;
+
     struct {
         uint16_t family;
         uint8_t model;

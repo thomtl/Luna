@@ -33,6 +33,9 @@ namespace msr {
     constexpr uint32_t gs_base = 0xC0000101;
     constexpr uint32_t kernel_gs_base = 0xC0000102;
 
+    constexpr uint32_t vm_cr = 0xC0010114;
+    constexpr uint32_t vm_hsave_pa = 0xC0010117;
+
     uint64_t read(uint32_t msr);
     void write(uint32_t msr, uint64_t v);
 } // namespace msr

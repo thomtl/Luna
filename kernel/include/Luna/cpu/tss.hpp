@@ -12,8 +12,10 @@ namespace tss {
         uint16_t reserved_2;
         uint16_t io_bitmap_off;
 
-        static void load(uint16_t sel) {
+        static uint16_t load(uint16_t sel) {
             asm volatile("ltr %0" : : "r"(sel) : "memory");
+
+            return sel;
         }
 
         static uint16_t store() {

@@ -53,6 +53,7 @@ namespace paging
         void map(uintptr_t pa, uintptr_t va, uint64_t flags, uint64_t caching = cacheWriteback);
         uintptr_t unmap(uintptr_t va);
         uintptr_t get_phys(uintptr_t va);
+        page_entry get_page(uintptr_t va);
 
         uintptr_t get_root_pa() const;
         void set() const;

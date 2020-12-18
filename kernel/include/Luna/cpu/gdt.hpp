@@ -35,20 +35,30 @@ namespace gdt
             flush();
         }
 
-        uint16_t push_tss(tss::Table* table) {
+        uint16_t push_tss(tss::Table* table, uint16_t sel = 0) {
             auto ptr = (uintptr_t)table;
             auto size = (sizeof(tss::Table) - 1);
 
             uint32_t a_low = (size & 0xFFFF) | ((ptr & 0xFFFF) << 16);
             uint32_t a_high = ((ptr >> 16) & 0xFF) | (1 << 8) | (1 << 11) | (1 << 15) | (size & 0xF0000) | (ptr & 0xFF000000);
 
-            uint16_t sel = i * 8;
-            entries[i++] = a_low | ((uint64_t)a_high << 32);
-            entries[i++] = (ptr >> 32);
+            if(sel == 0) {
+                uint16_t ret = i * 8;
+                entries[i++] = a_low | ((uint64_t)a_high << 32);
+                entries[i++] = (ptr >> 32);
 
-            set();
+                set();
 
-            return sel;
+                return ret;
+            } else {
+                size_t index = sel / 8;
+                entries[index++] = a_low | ((uint64_t)a_high << 32);
+                entries[index++] = (ptr >> 32);
+
+                set();
+
+                return sel;
+            }
         }
 
         void set(){

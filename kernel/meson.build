@@ -4,6 +4,8 @@ main_sources = files(
     'source/cpp_support.cpp',
     'source/main.cpp',
 
+    'source/cpu/amd/svm.cpp',
+
     'source/cpu/intel/ept.cpp',
     'source/cpu/intel/vmx.cpp',
 
@@ -52,6 +54,7 @@ main_sources = files(
 cpp_includes = include_directories('include')
 
 nasm_sources = files(
+    'source/cpu/amd/svm_low.asm',
     'source/cpu/intel/vmx_low.asm',
     'source/cpu/irqs.asm')
 
