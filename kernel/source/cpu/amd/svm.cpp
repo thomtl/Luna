@@ -19,6 +19,9 @@ void svm::init() {
             PANIC("SVM disabled in BIOS");
     }
 
+    auto& svm = get_cpu().cpu.svm;
+    svm.n_asids = b;
+
     if(!(d & (1 << 0)))
         PANIC("Required feature NPT is unsupported");
 
@@ -28,6 +31,8 @@ void svm::init() {
     ASSERT(hsave);
 
     msr::write(msr::vm_hsave_pa, hsave);
+
+    svm.asid_manager.init(svm.n_asids);
 }
 
 bool svm::is_supported() {
@@ -49,16 +54,12 @@ uint64_t svm::get_efer_constraint() {
     return (1 << 12);
 }
 
-svm::Vm::Vm(): guest_page{4} {
+svm::Vm::Vm() {
     vmcb_pa = pmm::alloc_block();
     ASSERT(vmcb_pa);
 
     vmcb = (Vmcb*)(vmcb_pa + phys_mem_map);
     memset((void*)vmcb, 0, pmm::block_size);
-
-    vmcb->npt_enable = 1;
-    vmcb->npt_cr3 = guest_page.get_root_pa();
-    vmcb->pat = 0x0007040600070406; // Default PAT
 
     vmcb->icept_exceptions = (1 << 1) | (1 << 6) | (1 << 14) | (1 << 17) | (1 << 18);
     vmcb->icept_cr_writes = (1 << 8);
@@ -93,8 +94,24 @@ svm::Vm::Vm(): guest_page{4} {
     vmcb->icept_msr = 1;
     vmcb->icept_io = 1;
 
-    vmcb->guest_asid = 1;
-    vmcb->tlb_control = 1; // Flush all ASIDs every vmrun, TODO: Actually use ASIDs
+    asid = get_cpu().cpu.svm.asid_manager->alloc();
+    ASSERT(asid != ~0u);
+
+    auto page_tables = npt::context{4, asid};
+    guest_page = std::move(page_tables);
+
+    vmcb->npt_enable = 1;
+    vmcb->npt_cr3 = guest_page.get_root_pa();
+    vmcb->pat = 0x0007040600070406; // Default PAT
+
+    vmcb->guest_asid = asid;
+    vmcb->tlb_control = 0; // Do no TLB flushes on vmrun, all TLB flushes are done by the NPT using invlpga
+}
+
+svm::Vm::~Vm() {
+    get_cpu().cpu.svm.asid_manager->free(vmcb->guest_asid);
+    
+    pmm::free_block(vmcb_pa);
 }
 
 extern "C" void svm_vmrun(svm::GprState* guest_gprs, uint64_t vmcb_pa);

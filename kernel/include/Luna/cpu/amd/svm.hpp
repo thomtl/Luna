@@ -3,6 +3,7 @@
 #include <Luna/common.hpp>
 #include <Luna/cpu/regs.hpp>
 
+#include <Luna/cpu/amd/npt.hpp>
 #include <Luna/cpu/paging.hpp>
 
 #include <Luna/vmm/vm.hpp>
@@ -189,6 +190,7 @@ namespace svm {
 
     struct Vm : public vm::AbstractVm {
         Vm();
+        ~Vm();
         bool run(vm::VmExit& exit);
 
         void get_regs(vm::RegisterState& regs) const;
@@ -205,8 +207,10 @@ namespace svm {
         uintptr_t vmcb_pa;
         volatile Vmcb* vmcb;
 
+        uint32_t asid;
+
         simd::Context host_simd, guest_simd;
-        paging::context guest_page;
+        npt::context guest_page;
         GprState guest_gprs;
     };
 } // namespace svm

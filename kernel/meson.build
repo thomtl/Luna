@@ -4,6 +4,8 @@ main_sources = files(
     'source/cpp_support.cpp',
     'source/main.cpp',
 
+    'source/cpu/amd/asid.cpp',
+    'source/cpu/amd/npt.cpp',
     'source/cpu/amd/svm.cpp',
 
     'source/cpu/intel/ept.cpp',

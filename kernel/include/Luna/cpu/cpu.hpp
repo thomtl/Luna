@@ -4,6 +4,10 @@
 #include <Luna/cpu/gdt.hpp>
 #include <Luna/cpu/lapic.hpp>
 
+#include <Luna/cpu/amd/asid.hpp>
+
+#include <std/utility.hpp>
+
 namespace cpu {
     constexpr uint32_t signature_intel_ebx = 0x756e6547;
     constexpr uint32_t signature_intel_edx = 0x49656e69;
@@ -49,6 +53,11 @@ struct CpuData {
             uint8_t ept_levels;
             bool ept_dirty_accessed;
         } vmx;
+
+        struct {
+            uint32_t n_asids;
+            std::lazy_initializer<svm::AsidManager> asid_manager;
+        } svm;
     } cpu;
 
     struct {
