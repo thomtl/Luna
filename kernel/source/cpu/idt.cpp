@@ -115,6 +115,8 @@ extern "C" void isr_handler(idt::regs* regs) {
 
         print("GS: {:#x}\n", msr::read(msr::gs_base));
 
+        print("CPU: {:#x}\n", get_cpu().lapic_id);
+
         while(1)
             ;
     }

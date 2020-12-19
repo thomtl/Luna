@@ -148,7 +148,7 @@ void kernel_main(const stivale2_struct* info) {
 }
 
 void kernel_main_ap(stivale2_smp_info* info){
-    (void)info;
+    (void)info; // info is a physical address
 
     cpu::early_init();
     vmm::kernel_vmm::get_instance().set();
@@ -165,6 +165,8 @@ void kernel_main_ap(stivale2_smp_info* info){
     simd::init();
 
     idt::load();
+
+    vm::init();
 
     asm("sti");
     while(1)

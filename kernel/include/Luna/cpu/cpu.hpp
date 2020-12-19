@@ -19,6 +19,8 @@ namespace cpu {
     void cache_flush(void* addr, size_t size);
 } // namespace cpu
 
+enum class CpuVendor { Unknown, AMD, Intel };
+
 struct CpuData {
     void* self;
     uint32_t lapic_id;
@@ -38,6 +40,10 @@ struct CpuData {
 
             size_t clflush_size;
         } cache;
+
+        struct {
+            CpuVendor vendor;
+        } vm;
 
         struct {
             uint8_t ept_levels;

@@ -5,16 +5,13 @@
 #include <Luna/cpu/intel/vmx.hpp>
 #include <Luna/cpu/amd/svm.hpp>
 
-enum class Vendor { Intel, Amd };
-static Vendor vendor;
-
 void vm::init() {
     if(vmx::is_supported()) {
-        vendor = Vendor::Intel;
+        get_cpu().cpu.vm.vendor = CpuVendor::Intel;
 
         vmx::init();
     } else if(svm::is_supported()) {
-        vendor = Vendor::Amd;
+        get_cpu().cpu.vm.vendor = CpuVendor::AMD;
 
         svm::init();
     } else
@@ -23,14 +20,14 @@ void vm::init() {
 
 vm::Vm::Vm() {
     uint64_t cr0_constraint = 0, cr4_constraint = 0, efer_constraint = 0;
-    switch (vendor) {
-        case Vendor::Intel:
+    switch (get_cpu().cpu.vm.vendor) {
+        case CpuVendor::Intel:
             vm = new vmx::Vm{};
 
             cr0_constraint = vmx::get_cr0_constraint();
             cr4_constraint = vmx::get_cr4_constraint();
             break;
-        case Vendor::Amd:
+        case CpuVendor::AMD:
             vm = new svm::Vm{};
 
             cr0_constraint = svm::get_cr0_constraint();
