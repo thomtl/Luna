@@ -193,6 +193,19 @@ namespace vt_d {
             uint64_t raw;
         };
         uint64_t root_table_address;
+
+        union [[gnu::packed]] ContextCommand {
+            struct {
+                uint64_t domain_id : 16;
+                uint64_t source_id : 16;
+                uint64_t function_mask : 2;
+                uint64_t reserved : 25;
+                uint64_t actual_granularity : 2;
+                uint64_t granularity : 2;
+                uint64_t invalidate : 1;
+            };
+            uint64_t raw;
+        };
         uint64_t context_command;
         uint32_t reserved_0;
         uint32_t fault_status;
@@ -339,6 +352,18 @@ namespace vt_d {
     };
     static_assert(sizeof(IOTLBInvalidationDescriptor) == (128 / 8));
 
+    enum {
+        ContextInvalidateGlobal = 0b01ull,
+        ContextInvalidateDomain = 0b10ull,
+        ContextInvalidateDevice = 0b11ull,
+    };
+
+    enum {
+        IOTLBInvalidateGlobal = 0b01,
+        IOTLBInvalidateDomain = 0b10,
+        IOTLBInvalidatePage = 0b11
+    };
+
 
 
     class InvalidationQueue {
@@ -370,7 +395,6 @@ namespace vt_d {
         public:
         RemappingEngine(Drhd* drhd);
         sl_paging::context& get_device_translation(SourceID device);
-        void invalidate_iotlb_addr(SourceID device, uintptr_t iova);
 
         void map(vt_d::SourceID device, uintptr_t pa, uintptr_t iova, uint64_t flags);
         uintptr_t unmap(vt_d::SourceID device, uintptr_t iova);
@@ -382,7 +406,9 @@ namespace vt_d {
         void invalidate_global_context();
         void invalidate_device_context(uint16_t domain_id, SourceID device);
         void invalidate_global_iotlb();
-        void invalidate_domain_iotlb(SourceID device);
+        void invalidate_domain_iotlb(uint16_t domain_id);
+        void invalidate_iotlb_addr(uint16_t domain_id, uintptr_t iova);
+
 
         void handle_irq();
         void handle_primary_fault();
@@ -402,17 +428,14 @@ namespace vt_d {
         uint8_t secondary_page_levels;
         size_t n_domain_ids, n_fault_recording_regs;
 
-
-        uint32_t global_command;
-
         std::bitmap domain_ids;
         std::unordered_map<uint16_t, sl_paging::context*> page_map;
         std::unordered_map<uint16_t, uint16_t> domain_id_map;
 
         std::lazy_initializer<InvalidationQueue> iq;
 
-        bool all_devices_on_segment, x2apic_mode, wbflush_needed, read_draining, write_draining, page_selective_invalidation, caching_mode;
-        bool zero_length_read, page_snoop, coherent;
+        bool all_devices_on_segment, eim, wbflush_needed, read_draining, write_draining, page_selective_invalidation, caching_mode;
+        bool zero_length_read, page_snoop, coherent, plmr, phmr, qi;
 
         uint64_t cache_mode;
 
@@ -429,8 +452,7 @@ namespace vt_d {
         
         void map(const pci::Device& device, uintptr_t pa, uintptr_t iova, uint64_t flags);
         uintptr_t unmap(const pci::Device& device, uintptr_t iova);
-        void invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova);
-
+        
         private:
         RemappingEngine& get_engine(uint16_t seg, SourceID source);
 

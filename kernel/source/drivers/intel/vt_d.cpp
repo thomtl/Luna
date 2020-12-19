@@ -88,7 +88,7 @@ void vt_d::InvalidationQueue::submit_sync(const uint8_t* cmd) {
     regs->invalidation_completion_status = 1;
 }
 
-vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_command{0} {
+vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     auto va = drhd->mmio_base + phys_mem_map;
     vmm::kernel_vmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
 
@@ -146,6 +146,8 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     domain_ids.set(0);
 
     wbflush_needed = (regs->capabilities >> 4) & 1;
+    plmr = (regs->capabilities >> 5) & 1;
+    phmr = (regs->capabilities >> 6) & 1;
     caching_mode = (regs->capabilities >> 7) & 1;
     zero_length_read = (regs->capabilities >> 22) & 1;
     page_selective_invalidation = (regs->capabilities >> 39) & 1;
@@ -153,7 +155,8 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     read_draining = (regs->capabilities >> 55) & 1;
 
     coherent = (regs->extended_capabilities >> 0) & 1;
-    x2apic_mode = (regs->extended_capabilities >> 4) & 1;
+    qi = (regs->extended_capabilities >> 1) & 1;
+    eim = (regs->extended_capabilities >> 4) & 1;
     page_snoop = (regs->extended_capabilities >> 7) & 1;
 
     if(coherent)
@@ -164,7 +167,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     ASSERT(regs->global_status == 0);
 
     clear_faults();
-    if(regs->extended_capabilities & (1 << 1)) {
+    if(qi) {
         if(regs->global_status & (uint32_t)GlobalCommand::QueuedInvalidationEnable) {
             // QI was enabled from BIOS
             print("      QI was enabled in preboot, disabling ... ");
@@ -173,8 +176,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
             while(regs->invalidation_queue_head != regs->invalidation_queue_tail)
                 asm("pause");
 
-            global_command &= ~(uint32_t)GlobalCommand::QueuedInvalidationEnable;
-            regs->global_command = global_command;
+            regs->global_command = regs->global_status & ~(uint32_t)GlobalCommand::QueuedInvalidationEnable;
 
             while(regs->global_status & (uint32_t)GlobalCommand::QueuedInvalidationEnable)
                 asm("pause");
@@ -196,8 +198,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
 
         regs->invalidation_queue_tail = 0;
 
-        global_command |= GlobalCommand::QueuedInvalidationEnable; // Enable Queued Invalidations, NO NORMAL IOTLB BEYOND THIS POINT
-        regs->global_command = global_command;
+        regs->global_command = regs->global_status | GlobalCommand::QueuedInvalidationEnable; // Enable Queued Invalidations, NO NORMAL IOTLB BEYOND THIS POINT
         while(!(regs->global_status & GlobalCommand::QueuedInvalidationEnable))
             asm("pause");
 
@@ -225,7 +226,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     regs->fault_event_data = msi_data.raw;
     regs->fault_event_address = msi_addr.raw;
 
-    if(x2apic_mode) {
+    if(eim) {
         RemappingEngineRegs::FaultEventUpperAddress msi_upper_addr{.raw = 0};
         msi_upper_addr.upper_dest_id = (destination_id >> 24) & 0xFFFFFF;
         
@@ -262,20 +263,20 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd}, global_com
     wbflush();
     regs->root_table_address = root_addr.raw;
 
-    regs->global_command = global_command | GlobalCommand::SetRootTablePointer; // Update root ptr
+    regs->global_command = regs->global_status | GlobalCommand::SetRootTablePointer; // Update root ptr
 
     while(!(regs->global_status & GlobalCommand::SetRootTablePointer))
         asm("pause");
 
-    this->invalidate_global_context();
-    this->invalidate_global_iotlb();
+    wbflush();
+    invalidate_global_context();
+    invalidate_global_iotlb();
 
     print("Done\n");
 }
 
 void vt_d::RemappingEngine::enable_translation() {
-    global_command |= GlobalCommand::TranslationEnable;
-    regs->global_command = global_command;
+    regs->global_command = regs->global_status | GlobalCommand::TranslationEnable;
     while(!(regs->global_status & GlobalCommand::TranslationEnable))
         asm("pause");
 
@@ -286,7 +287,7 @@ void vt_d::RemappingEngine::wbflush() {
     if(!wbflush_needed)
         return;
 
-    regs->global_command = global_command | GlobalCommand::FlushWriteBuffer;
+    regs->global_command = regs->global_status | GlobalCommand::FlushWriteBuffer;
 
     while(regs->global_status & GlobalCommand::FlushWriteBuffer)
         asm("pause");
@@ -298,11 +299,15 @@ void vt_d::RemappingEngine::invalidate_global_context() {
     if(iq) {
         ContextInvalidationDescriptor cmd{};
         cmd.type = ContextInvalidationDescriptor::cmd;
-        cmd.granularity = 0b01; // Global Invalidation
+        cmd.granularity = ContextInvalidateGlobal;
 
         iq->submit_sync((uint8_t*)&cmd);
     } else {
-        regs->context_command = (1ull << 63) | (1ull << 61);
+        RemappingEngineRegs::ContextCommand cmd{};
+        cmd.granularity = ContextInvalidateGlobal;
+        cmd.invalidate = 1;
+
+        regs->context_command = cmd.raw;
 
         while(regs->context_command & (1ull << 63))
             asm("pause");
@@ -315,13 +320,19 @@ void vt_d::RemappingEngine::invalidate_device_context(uint16_t domain_id, Source
     if(iq) {
         ContextInvalidationDescriptor cmd{};
         cmd.type = ContextInvalidationDescriptor::cmd;
-        cmd.granularity = 0b11; // Device + Domain Invalidation
+        cmd.granularity = ContextInvalidateDevice;
         cmd.domain_id = domain_id;
         cmd.source_id = device.raw;
 
         iq->submit_sync((uint8_t*)&cmd);
     } else {
-        regs->context_command = (1ull << 63) | (0b11ull << 61) | (device.raw << 16) | domain_id;
+        RemappingEngineRegs::ContextCommand cmd{};
+        cmd.domain_id = domain_id;
+        cmd.source_id = device.raw;
+        cmd.granularity = ContextInvalidateDevice;
+        cmd.invalidate = 1;
+
+        regs->context_command = cmd.raw;
 
         while(regs->context_command & (1ull << 63))
             asm("pause");
@@ -337,15 +348,14 @@ void vt_d::RemappingEngine::invalidate_global_iotlb() {
         
         cmd.drain_reads = read_draining ? 1 : 0;
         cmd.drain_writes = write_draining ? 1 : 0;
-        cmd.granularity = 0b01; // Global Invalidation
+        cmd.granularity = IOTLBInvalidateGlobal;
 
         iq->submit_sync((uint8_t*)&cmd);
     } else {
         IOTLBCmd cmd{};
-
         cmd.drain_reads = read_draining ? 1 : 0;
         cmd.drain_writes = write_draining ? 1 : 0;
-        cmd.req_granularity = 0b01; // Global invalidation
+        cmd.req_granularity = IOTLBInvalidateGlobal;
         cmd.invalidate = 1;
 
         iotlb_regs->cmd = cmd.raw;
@@ -355,25 +365,24 @@ void vt_d::RemappingEngine::invalidate_global_iotlb() {
     }
 }
 
-void vt_d::RemappingEngine::invalidate_domain_iotlb(SourceID device) {
+void vt_d::RemappingEngine::invalidate_domain_iotlb(uint16_t domain_id) {
     wbflush();
 
     if(iq) {
         IOTLBInvalidationDescriptor cmd{};
         cmd.type = IOTLBInvalidationDescriptor::cmd;
-
         cmd.drain_reads = read_draining ? 1 : 0;
         cmd.drain_writes = write_draining ? 1 : 0;
-        cmd.granularity = 0b10; // Domain
-        cmd.domain_id = domain_id_map[device.raw];
+        cmd.granularity = IOTLBInvalidateDomain;
+        cmd.domain_id = domain_id;
         
         iq->submit_sync((uint8_t*)&cmd);
     } else {
         IOTLBCmd cmd{};
         cmd.drain_reads = read_draining ? 1 : 0;
         cmd.drain_writes = write_draining ? 1 : 0;
-        cmd.req_granularity = 0b10; // Domain
-        cmd.domain_id = domain_id_map[device.raw];
+        cmd.req_granularity = IOTLBInvalidateDomain; // Domain
+        cmd.domain_id = domain_id;
         cmd.invalidate = 1;
 
         iotlb_regs->cmd = cmd.raw;
@@ -383,9 +392,9 @@ void vt_d::RemappingEngine::invalidate_domain_iotlb(SourceID device) {
     }
 }
 
-void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iova) {
+void vt_d::RemappingEngine::invalidate_iotlb_addr(uint16_t domain_id, uintptr_t iova) {
     if(!page_selective_invalidation)
-        return invalidate_domain_iotlb(device);
+        return invalidate_domain_iotlb(domain_id);
 
     wbflush();
     
@@ -395,8 +404,8 @@ void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iov
 
         cmd.drain_reads = read_draining ? 1 : 0;
         cmd.drain_writes = write_draining ? 1 : 0;
-        cmd.granularity = 0b11; // Domain + Addr Local
-        cmd.domain_id = domain_id_map[device.raw];
+        cmd.granularity = IOTLBInvalidatePage;
+        cmd.domain_id = domain_id;
         cmd.addr = iova >> 12;
         
         iq->submit_sync((uint8_t*)&cmd);
@@ -404,8 +413,8 @@ void vt_d::RemappingEngine::invalidate_iotlb_addr(SourceID device, uintptr_t iov
         IOTLBCmd cmd{};
         cmd.drain_reads = read_draining ? 1 : 0;
         cmd.drain_writes = write_draining ? 1 : 0;
-        cmd.req_granularity = 0b11; // Domain local invalidation + Addr
-        cmd.domain_id = domain_id_map[device.raw];
+        cmd.req_granularity = IOTLBInvalidatePage;
+        cmd.domain_id = domain_id;
         cmd.invalidate = 1;
 
         IOTLBAddr addr{};
@@ -431,11 +440,7 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
         memset((void*)va, 0, pmm::block_size);
 
         root_entry->context_table = (pa >> 12);
-        root_entry->reserved = 0;
-        root_entry->reserved_0 = 0;
         root_entry->present = 1;
-
-        wbflush();
     }
 
     auto& context_table = *(ContextTable*)((root_entry->context_table << 12) + phys_mem_map);
@@ -448,20 +453,21 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
             PANIC("No Domain IDs left");
         domain_ids.set(domain_id);
 
-        domain_id_map[device.raw] = domain_id;
-
         auto* context = new sl_paging::context{secondary_page_levels, page_snoop, cache_mode};
+
+        domain_id_map[device.raw] = domain_id;
         page_map[device.raw] = context;
 
-        context_table_entry->translation_type = 0; // Legacy Translation
-        context_table_entry->address_width = (secondary_page_levels - 2);
         context_table_entry->domain_id = domain_id;
         context_table_entry->sl_translation_ptr = (context->get_root_pa() >> 12);
+        context_table_entry->address_width = (secondary_page_levels - 2);
+        context_table_entry->translation_type = 0; // Legacy Translation
+        context_table_entry->fault_processing_disable = 0;
         context_table_entry->present = 1;
         
         if(caching_mode) {
             invalidate_device_context(0, device);
-            invalidate_domain_iotlb(device);
+            invalidate_domain_iotlb(domain_id);
         } else {
             wbflush();
         }
@@ -477,7 +483,7 @@ void vt_d::RemappingEngine::map(vt_d::SourceID device, uintptr_t pa, uintptr_t i
     get_device_translation(device).map(pa, iova, flags);
 
     if(caching_mode)
-        invalidate_iotlb_addr(device, iova);
+        invalidate_iotlb_addr(domain_id_map[device.raw], iova);
     else
         wbflush();
 }
@@ -485,7 +491,7 @@ void vt_d::RemappingEngine::map(vt_d::SourceID device, uintptr_t pa, uintptr_t i
 uintptr_t vt_d::RemappingEngine::unmap(vt_d::SourceID device, uintptr_t iova) {
     auto ret = get_device_translation(device).unmap(iova);
 
-    invalidate_iotlb_addr(device, iova);
+    invalidate_iotlb_addr(domain_id_map[device.raw], iova);
     return ret;
 }
 
@@ -564,6 +570,9 @@ void vt_d::RemappingEngine::clear_faults() {
 }
 
 void vt_d::RemappingEngine::disable_protect_mem_regions() {
+    if(!plmr && !phmr)
+        return;
+    
     regs->protected_mem_enable &= ~(1u << 31);
 
     // Wait for protection region status to clear
@@ -679,16 +688,6 @@ uintptr_t vt_d::IOMMU::unmap(const pci::Device& device, uintptr_t iova) {
     std::lock_guard guard{engine.lock};
 
     return engine.unmap(id, iova);
-}
-
-void vt_d::IOMMU::invalidate_iotlb_entry(const pci::Device& device, uintptr_t iova) {
-    auto id = SourceID::from_device(device);
-
-    auto& engine = get_engine(device.seg, id);
-
-    std::lock_guard guard{engine.lock};
-    
-    return engine.invalidate_iotlb_addr(id, iova);
 }
 
 bool vt_d::has_iommu() {
