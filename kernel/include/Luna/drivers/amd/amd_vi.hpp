@@ -186,52 +186,71 @@ namespace amd_vi {
         } ppr_log_overflow_protection;
     };
 
-    struct [[gnu::packed]] DeviceTableEntry {
-        uint64_t valid : 1;
-        uint64_t translation_info_valid : 1;
-        uint64_t reserved : 5;
-        uint64_t dirty_control : 2;
-        uint64_t paging_mode : 3;
-        uint64_t page_table_root_ptr : 40;
-        uint64_t ppr_enable : 1;
-        uint64_t gprp_enable : 1;
-        uint64_t guest_io_protection_valid : 1;
-        uint64_t guest_translation_valid : 1;
-        uint64_t guest_levels_translated : 2;
-        uint64_t guest_cr3_table_root_pointer_low : 3;
-        uint64_t io_read_permission : 1;
-        uint64_t io_write_permission : 1;
-        uint64_t reserved_0 : 1;
-        uint64_t domain_id : 16;
-        uint64_t guest_cr3_table_root_pointer_middle : 16;
-        uint64_t iotlb_enable : 1;
-        uint64_t suppress_io_page_faults : 1;
-        uint64_t supress_all_io_page_faults : 1;
-        uint64_t port_io_control : 2;
-        uint64_t iotlb_cache_hint : 1;
-        uint64_t snoop_disable : 1;
-        uint64_t allow_exclusion : 1;
-        uint64_t sysmgt1 : 1;
-        uint64_t sysmgt2 : 1;
-        uint64_t reserved_1 : 1;
-        uint64_t guest_cr3_table_root_pointer_high : 21;
-        uint64_t interrupt_map_valid : 1;
-        uint64_t interrupt_table_length : 4;
-        uint64_t ignore_unmapped_interrupts : 1;
-        uint64_t interrupt_table_root_ptr : 46;
-        uint64_t reserved_2 : 4;
-        uint64_t init_pass : 1;
-        uint64_t einit_pass : 1;
-        uint64_t nmi_pass : 1;
-        uint64_t reserved_3 : 1;
-        uint64_t interrupt_control : 2;
-        uint64_t lint0_pass : 1;
-        uint64_t lint1_pass : 1;
-        uint64_t reserved_4 : 32;
-        uint64_t reserved_5 : 22;
-        uint64_t attribute_override : 1;
-        uint64_t mode0fc : 1;
-        uint64_t snoop_attribute : 8;
+    union [[gnu::packed]] DeviceTableEntry {
+        void load(const volatile DeviceTableEntry* other) {
+            data[3] = other->data[3];
+            data[2] = other->data[2];
+            data[1] = other->data[1];
+            data[0] = other->data[0];
+        }
+
+        void store(volatile DeviceTableEntry* other) const {
+            other->data[3] = data[3];
+            other->data[2] = data[2];
+            other->data[1] = data[1];
+            other->data[0] = data[0];
+        }
+
+        struct {
+            uint64_t valid : 1;
+            uint64_t translation_info_valid : 1;
+            uint64_t reserved : 5;
+            uint64_t dirty_control : 2;
+            uint64_t paging_mode : 3;
+            uint64_t page_table_root_ptr : 40;
+            uint64_t ppr_enable : 1;
+            uint64_t gprp_enable : 1;
+            uint64_t guest_io_protection_valid : 1;
+            uint64_t guest_translation_valid : 1;
+            uint64_t guest_levels_translated : 2;
+            uint64_t guest_cr3_table_root_pointer_low : 3;
+            uint64_t io_read_permission : 1;
+            uint64_t io_write_permission : 1;
+            uint64_t reserved_0 : 1;
+            uint64_t domain_id : 16;
+            uint64_t guest_cr3_table_root_pointer_middle : 16;
+            uint64_t iotlb_enable : 1;
+            uint64_t suppress_io_page_faults : 1;
+            uint64_t supress_all_io_page_faults : 1;
+            uint64_t port_io_control : 2;
+            uint64_t iotlb_cache_hint : 1;
+            uint64_t snoop_disable : 1;
+            uint64_t allow_exclusion : 1;
+            uint64_t sysmgt1 : 1;
+            uint64_t sysmgt2 : 1;
+            uint64_t reserved_1 : 1;
+            uint64_t guest_cr3_table_root_pointer_high : 21;
+            uint64_t interrupt_map_valid : 1;
+            uint64_t interrupt_table_length : 4;
+            uint64_t ignore_unmapped_interrupts : 1;
+            uint64_t interrupt_table_root_ptr : 46;
+            uint64_t reserved_2 : 4;
+            uint64_t init_pass : 1;
+            uint64_t einit_pass : 1;
+            uint64_t nmi_pass : 1;
+            uint64_t reserved_3 : 1;
+            uint64_t interrupt_control : 2;
+            uint64_t lint0_pass : 1;
+            uint64_t lint1_pass : 1;
+            uint64_t reserved_4 : 32;
+            uint64_t reserved_5 : 22;
+            uint64_t attribute_override : 1;
+            uint64_t mode0fc : 1;
+            uint64_t snoop_attribute : 8;
+        };
+        struct {
+            uint64_t data[4];
+        };
     };
     static_assert(sizeof(DeviceTableEntry) == (256 / 8));
 
@@ -345,8 +364,8 @@ namespace amd_vi {
         XTIRQGen = (1ull << 51),
         AccessedUpdateDisable = (1ull << 54),
 
-        ControlInvalidateTimeout = 5,
-        ControlInvalidateTimeoutMask = (0b111 < ControlInvalidateTimeout)
+        ControlInvalidateTimeout = 4,
+        ControlInvalidateTimeoutMask = (0b111 << ControlInvalidateTimeout)
     };
 
     enum class IVHDEntryTypes : uint8_t {

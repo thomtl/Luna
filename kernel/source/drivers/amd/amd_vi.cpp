@@ -20,6 +20,8 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
         pci_dev = pci::device_by_location(ivhd->pci_segment, id.bus, id.slot, id.func);
         ASSERT(pci_dev);
 
+        pci_dev->set_privileges(pci::privileges::Pio | pci::privileges::Mmio | pci::privileges::Dma);
+
         auto header = pci_dev->read<uint32_t>(ivhd->capability_offset + 0x0);
         auto revision = (header >> 19) & 0x1F;
         print("     - Remapping Engine v{}\n", revision);
@@ -214,12 +216,15 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
     {
         // flush_all_caches() will flush the devtable later
         for(size_t i = 0; i <= max_device_id; i++)
-            device_table[i].valid = 1; // Disallow all accesses, when valid = 1 but translation_info_valid = 0
+            device_table[i].data[0] |= 1; // Set valid, disallow all accesses, when valid = 1 but translation_info_valid = 0
 
         auto update_device_info_from_acpi = [&](uint16_t devid, uint8_t flags) {
+            DeviceTableEntry entry{};
+            entry.load(&device_table[devid]);
+
             #define BIT_TEST(n, field) \
                 if(flags & (1 << n)) \
-                    device_table[devid].field = 1;
+                    entry.field = 1;
 
             BIT_TEST(0, init_pass);
             BIT_TEST(1, einit_pass);
@@ -230,9 +235,11 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
             BIT_TEST(7, lint1_pass);
 
             // Apply Erratum 63
-            uint8_t sysmgt = device_table[devid].sysmgt1 | (device_table[devid].sysmgt2 << 1);
+            uint8_t sysmgt = entry.sysmgt1 | (entry.sysmgt2 << 1);
             if(sysmgt == 1)
-                device_table[devid].io_write_permission = 1;
+                entry.io_write_permission = 1;
+
+            entry.store(&device_table[devid]);
         };
 
         size_t header_size = 0;
@@ -500,8 +507,10 @@ io_paging::context& amd_vi::IOMMUEngine::get_translation(const amd_vi::DeviceID&
     if(device.raw > max_device_id)
         PANIC("Trying to access device table over max device id");
 
-    auto& entry = device_table[device.raw];
-    if(entry.domain_id == 0) {
+    volatile auto* entry_ptr = &device_table[device.raw];
+    DeviceTableEntry entry{};
+    entry.load(entry_ptr);
+    if(!entry.translation_info_valid) {
         auto domain_id = domain_ids.get_free_bit();
         if(domain_id == ~0u)
             PANIC("No Domain IDs left");
@@ -512,7 +521,6 @@ io_paging::context& amd_vi::IOMMUEngine::get_translation(const amd_vi::DeviceID&
         auto* context = new io_paging::context{page_levels};
         page_map[device.raw] = context;
 
-        entry.valid = 1;
         entry.translation_info_valid = 1;
         entry.paging_mode = (page_levels & 0b111);
         entry.dirty_control = 0;
@@ -522,7 +530,9 @@ io_paging::context& amd_vi::IOMMUEngine::get_translation(const amd_vi::DeviceID&
         entry.io_read_permission = 1;
         entry.io_write_permission = 1;
 
-        cmd_invalidate_devtab_entry(device);
+        entry.valid = 1;
+
+        entry.store(entry_ptr);
 
         if(alias_map.contains(device.raw)) {
             auto alias = alias_map[device.raw];
@@ -530,9 +540,7 @@ io_paging::context& amd_vi::IOMMUEngine::get_translation(const amd_vi::DeviceID&
             domain_id_map[alias] = domain_id;
             page_map[alias] = context;
 
-            memcpy((void*)&device_table[alias], (void*)&entry, sizeof(DeviceTableEntry));
-
-            cmd_invalidate_devtab_entry(DeviceID{.raw = alias});
+            entry.store(&device_table[alias]);
         }
     }
 
