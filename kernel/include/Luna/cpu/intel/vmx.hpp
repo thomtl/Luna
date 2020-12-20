@@ -84,6 +84,7 @@ namespace vmx {
 
     enum class VMExitReasons : uint32_t {
         Exception = 0,
+        CPUID = 10,
         Hlt = 12,
         Vmcall = 18,
         PIO = 30,

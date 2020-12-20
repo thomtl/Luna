@@ -191,7 +191,6 @@ vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
     {
         uint32_t min = (uint32_t)ProcBasedControls2::EPTEnable \
                      | (uint32_t)ProcBasedControls2::UnrestrictedGuest \
-                     | (uint32_t)ProcBasedControls2::VMExitOnDescriptorLoadStore \
                      | (uint32_t)ProcBasedControls2::VMExitOnWbinvd;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls2, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls2));
@@ -343,6 +342,16 @@ bool vmx::Vm::run(vm::VmExit& exit) {
                 print("VT-x: Interruption: Type: {}, Vector: {}\n", type, vector);
                 return false;
             }
+        } else if(basic_reason == VMExitReasons::CPUID) {
+            exit.reason = vm::VmExit::Reason::CPUID;
+
+            exit.instruction_len = 2;
+            exit.instruction[0] = 0x0F;
+            exit.instruction[1] = 0xA2;
+
+            next_instruction();
+
+            return true;
         } else if(basic_reason == VMExitReasons::Hlt) {
             exit.reason = vm::VmExit::Reason::Hlt;
 
