@@ -25,3 +25,10 @@ constexpr uint32_t bswap32(uint32_t v) {
 constexpr uint16_t bswap16(uint16_t v) {
     return (v >> 8) | (v << 8);
 }
+
+constexpr bool ranges_overlap(uint64_t a, size_t len_a, uint64_t b, size_t len_b) {
+    auto last_a = (a + len_a) - 1;
+    auto last_b = (b + len_b) - 1;
+
+    return !(last_b < a || last_a < b);
+}
