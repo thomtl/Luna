@@ -28,7 +28,7 @@ bios:
 
 	nasm bios/main.asm -o build/bios/bios.bin
 	nasm bios/test.asm -o build/bios/test.bin
-	echfs-utils -m -p0 luna.hdd import build/bios/bios.bin luna/bios.bin
+	echfs-utils -m -p0 luna.hdd import /home/thomas/Desktop/Projects/seabios/out/bios.bin luna/bios.bin
 	echfs-utils -m -p0 luna.hdd import build/bios/test.bin disk.img
 
 run: kernel bios

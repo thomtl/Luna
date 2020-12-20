@@ -12,6 +12,8 @@ void vga::Writer::putc(const char c) const {
             scroll();
             y--;
         }
+    } else if(c == '\r') {
+        x = 0;  
     } else {
         size_t index = y * screen_width + x;
 

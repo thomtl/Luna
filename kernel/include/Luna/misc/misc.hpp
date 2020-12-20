@@ -14,6 +14,14 @@ constexpr uintptr_t align_up(uintptr_t n, uintptr_t a) {
     return align_down(n + a - 1, a);
 }
 
+constexpr uint64_t min(uint64_t a, uint64_t b) {
+    return (a < b) ? a : b;
+}
+
+constexpr uint64_t max(uint64_t a, uint64_t b) {
+    return (a > b) ? a : b;
+}
+
 constexpr size_t div_ceil(size_t a, size_t b) {
     return (a + b - 1) / b;
 }

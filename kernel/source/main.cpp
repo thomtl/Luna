@@ -25,6 +25,13 @@
 
 #include <Luna/vmm/vm.hpp>
 #include <Luna/vmm/drivers/e9.hpp>
+#include <Luna/vmm/drivers/uart.hpp>
+#include <Luna/vmm/drivers/cmos.hpp>
+#include <Luna/vmm/drivers/fast_a20.hpp>
+#include <Luna/vmm/drivers/pci/pci.hpp>
+#include <Luna/vmm/drivers/pci/pio_access.hpp>
+
+#include <Luna/vmm/drivers/q35/q35_dram.hpp>
 
 #include <std/mutex.hpp>
 
@@ -96,39 +103,43 @@ void kernel_main(const stivale2_struct* info) {
 
     vm::Vm vm{};
     {
-        vm.map(pmm::alloc_block(), 0x0, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
-        vm.map(pmm::alloc_block(), 0x1000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
-        vm.map(pmm::alloc_block(), 0x7000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+        // Setup lowmem
+        for(size_t i = 0; i < 0x9FFFF; i += 0x1000) {
+            auto block = pmm::alloc_block();
+            ASSERT(block);
 
-        {
-            auto pa = pmm::alloc_block();
-            uint8_t* va = (uint8_t*)(pa + phys_mem_map);
+            auto* va = (uint8_t*)(block + phys_mem_map);
+            memset(va, 0, pmm::block_size);
 
-            vm.map(pa, 0xFFFF'F000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
-
-            uint8_t payload[] = {
-                0xEA, 0x00, 0x00, 0x00, 0xF0 // JMP 0xF000:0
-            };
-            ASSERT(sizeof(payload) <= 16);
-
-            memcpy(va + 0xFF0, payload, sizeof(payload));
+            vm.map(block, i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
         }
 
-        {
-            auto pa = pmm::alloc_block();
-            uint8_t* va = (uint8_t*)(pa + phys_mem_map);
 
-            vm.map(pa, 0xF0000, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+        auto* file = vfs::get_vfs().open("A:/luna/bios.bin");
+        ASSERT(file);
 
-            auto* file = vfs::get_vfs().open("A:/luna/bios.bin");
-            ASSERT(file);
+        auto bios_size = file->get_size();
+        ASSERT((bios_size % 0x1000) == 0);
+        
+        auto isa_bios_size = min(bios_size, 128 * (0x1000 / 4));
+        auto isa_bios_start = 0x10'0000 - isa_bios_size;
+        size_t isa_curr = 0;
 
-            auto bios_size = file->get_size();
-            auto* bios_payload = new uint8_t[bios_size];
 
-            ASSERT(file->read(0, bios_size, bios_payload) == bios_size);
+        uintptr_t map = 0x1'0000'0000 - bios_size;
+        for(size_t curr = 0; curr < bios_size; curr += 0x1000) {
+            auto block = pmm::alloc_block();
+            ASSERT(block);
 
-            memcpy(va, bios_payload, bios_size);
+            if((bios_size - curr) <= isa_bios_size) {
+                vm.map(block, isa_bios_start + isa_curr, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+                isa_curr += 0x1000;
+            }
+
+            vm.map(block, map + curr, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+
+            auto* va = (uint8_t*)(block + phys_mem_map);
+            ASSERT(file->read(curr, 0x1000, va) == 0x1000);
         }
     }
 
@@ -139,6 +150,22 @@ void kernel_main(const stivale2_struct* info) {
 
     auto* e9_dev = new vm::e9::Driver{};
     e9_dev->register_driver(&vm);
+
+    auto* cmos_dev = new vm::cmos::Driver{};
+    cmos_dev->register_driver(&vm);
+
+    auto* a20_dev = new vm::fast_a20::Driver{};
+    a20_dev->register_driver(&vm);
+
+    auto* uart_dev = new vm::uart::Driver{0x3F8};
+    uart_dev->register_driver(&vm);
+
+    auto* pci_root_bus = new vm::pci::pio_access::Driver{vm::pci::pio_access::default_base};
+    pci_root_bus->register_driver(&vm);
+
+    auto* dram_dev = new vm::q35::dram::Driver{};
+    dram_dev->register_driver(&vm);
+    dram_dev->register_pci_driver(pci_root_bus);
     
     ASSERT(vm.run());
 
