@@ -146,7 +146,7 @@ bool vm::Vm::run() {
             print("vm: MMU Violation\n");
             print("    gRIP: {:#x}, gPA: {:#x}\n", regs.cs.base + regs.rip, exit.mmu.gpa);
             print("    Access: {:s}{:s}{:s}, {:s}\n", exit.mmu.access.r ? "R" : "", exit.mmu.access.w ? "W" : "", exit.mmu.access.x ? "X" : "", exit.mmu.access.user ? "User" : "Supervisor");
-            print("    Page: {:s}{:s}{:s}, {:#s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "", exit.mmu.page.user ? "User" : "Supervisor");
+            print("    Page: {:s}{:s}{:s}, {:s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "", exit.mmu.page.user ? "User" : "Supervisor");
             if(exit.mmu.reserved_bits_set)
                 print("    Reserved bits set\n");
             return false;
@@ -155,9 +155,9 @@ bool vm::Vm::run() {
             get_regs(regs); 
 
             ASSERT(!exit.pio.rep); // TODO
-            ASSERT(!exit.pio.rep);
+            ASSERT(!exit.pio.string);
 
-            auto reg_clear = [&](uint64_t& value) {
+            auto reg_clear = [&]<typename T>(T& value) {
                 switch(exit.pio.size) {
                     case 1: value &= 0xFF; break;
                     case 2: value &= 0xFFFF; break;
@@ -181,7 +181,14 @@ bool vm::Vm::run() {
             } else {
                 auto value = driver->pio_read(exit.pio.port, exit.pio.size);
 
-                reg_clear(regs.rax);
+                switch(exit.pio.size) {
+                    case 1: regs.rax &= ~0xFF; break;
+                    case 2: regs.rax &= ~0xFFFF; break;
+                    case 4: regs.rax &= ~0xFFFF'FFFF; break;
+                    default: PANIC("Unknown PIO Size");
+                }
+                reg_clear(value);
+
                 regs.rax |= value;
 
                 set_regs(regs);

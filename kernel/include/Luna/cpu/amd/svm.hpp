@@ -39,6 +39,9 @@ namespace svm {
         uint64_t raw;
     };
 
+    constexpr size_t io_bitmap_size = 3;
+    constexpr size_t msr_bitmap_size = 2;
+
     struct [[gnu::packed]] Vmcb {
         uint32_t icept_cr_reads : 16;
         uint32_t icept_cr_writes : 16;
@@ -212,5 +215,8 @@ namespace svm {
         simd::Context host_simd, guest_simd;
         npt::context guest_page;
         GprState guest_gprs;
+
+        uint8_t* io_bitmap;
+        uintptr_t io_bitmap_pa;
     };
 } // namespace svm

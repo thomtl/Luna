@@ -91,8 +91,7 @@ svm::Vm::Vm() {
     vmcb->icept_efer_write = 1;
     vmcb->v_intr_masking = 1;
 
-    vmcb->icept_msr = 1;
-    vmcb->icept_io = 1;
+    
 
     asid = get_cpu().cpu.svm.asid_manager->alloc();
     ASSERT(asid != ~0u);
@@ -106,12 +105,23 @@ svm::Vm::Vm() {
 
     vmcb->guest_asid = asid;
     vmcb->tlb_control = 0; // Do no TLB flushes on vmrun, all TLB flushes are done by the NPT using invlpga
+
+    vmcb->icept_msr = 1;
+
+    io_bitmap_pa = pmm::alloc_n_blocks(io_bitmap_size);
+    io_bitmap = (uint8_t*)(io_bitmap_pa + phys_mem_map);
+
+    memset(io_bitmap, 0xFF, io_bitmap_size * pmm::block_size); // Intercept everything
+    vmcb->iopm_base_pa = io_bitmap_pa;
+    vmcb->icept_io = 1;
 }
 
 svm::Vm::~Vm() {
     get_cpu().cpu.svm.asid_manager->free(vmcb->guest_asid);
     
     pmm::free_block(vmcb_pa);
+    for(size_t i = 0; i < io_bitmap_size; i++)
+        pmm::free_block(io_bitmap_pa + (i * pmm::block_size));
 }
 
 extern "C" void svm_vmrun(svm::GprState* guest_gprs, uint64_t vmcb_pa);
@@ -306,30 +316,30 @@ void svm::Vm::get_regs(vm::RegisterState& regs) const {
 void svm::Vm::set_regs(const vm::RegisterState& regs) {
     vmcb->rax = regs.rax;
 
-    guest_gprs.rbx = guest_gprs.rbx;
-    guest_gprs.rcx = guest_gprs.rcx;
-    guest_gprs.rdx = guest_gprs.rdx;
-    guest_gprs.rsi = guest_gprs.rsi;
-    guest_gprs.rdi = guest_gprs.rdi;
-    guest_gprs.rbp = guest_gprs.rbp;
+    guest_gprs.rbx = regs.rbx;
+    guest_gprs.rcx = regs.rcx;
+    guest_gprs.rdx = regs.rdx;
+    guest_gprs.rsi = regs.rsi;
+    guest_gprs.rdi = regs.rdi;
+    guest_gprs.rbp = regs.rbp;
 
-    guest_gprs.r8 = guest_gprs.r8;
-    guest_gprs.r9 = guest_gprs.r9;
-    guest_gprs.r10 = guest_gprs.r10;
-    guest_gprs.r11 = guest_gprs.r11;
-    guest_gprs.r12 = guest_gprs.r12;
-    guest_gprs.r13 = guest_gprs.r13;
-    guest_gprs.r14 = guest_gprs.r14;
-    guest_gprs.r15 = guest_gprs.r15;
+    guest_gprs.r8 = regs.r8;
+    guest_gprs.r9 = regs.r9;
+    guest_gprs.r10 = regs.r10;
+    guest_gprs.r11 = regs.r11;
+    guest_gprs.r12 = regs.r12;
+    guest_gprs.r13 = regs.r13;
+    guest_gprs.r14 = regs.r14;
+    guest_gprs.r15 = regs.r15;
 
     vmcb->rsp = regs.rsp;
     vmcb->rip = regs.rip;
     vmcb->rflags = regs.rflags;
 
-    guest_gprs.dr0 = guest_gprs.dr0;
-    guest_gprs.dr1 = guest_gprs.dr1;
-    guest_gprs.dr2 = guest_gprs.dr2;
-    guest_gprs.dr3 = guest_gprs.dr3;
+    guest_gprs.dr0 = regs.dr0;
+    guest_gprs.dr1 = regs.dr1;
+    guest_gprs.dr2 = regs.dr2;
+    guest_gprs.dr3 = regs.dr3;
     vmcb->dr6 = regs.dr6;
     vmcb->dr7 = regs.dr7;
 
