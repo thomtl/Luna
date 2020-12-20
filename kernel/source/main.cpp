@@ -103,25 +103,13 @@ void kernel_main(const stivale2_struct* info) {
 
     vm::Vm vm{};
     {
-        // Setup lowmem
-        for(size_t i = 0; i < 0x9FFFF; i += 0x1000) {
-            auto block = pmm::alloc_block();
-            ASSERT(block);
-
-            auto* va = (uint8_t*)(block + phys_mem_map);
-            memset(va, 0, pmm::block_size);
-
-            vm.map(block, i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
-        }
-
-
         auto* file = vfs::get_vfs().open("A:/luna/bios.bin");
         ASSERT(file);
 
         auto bios_size = file->get_size();
         ASSERT((bios_size % 0x1000) == 0);
         
-        auto isa_bios_size = min(bios_size, 128 * (0x1000 / 4));
+        auto isa_bios_size = min(bios_size, 128 * 1024);
         auto isa_bios_start = 0x10'0000 - isa_bios_size;
         size_t isa_curr = 0;
 
@@ -140,6 +128,17 @@ void kernel_main(const stivale2_struct* info) {
 
             auto* va = (uint8_t*)(block + phys_mem_map);
             ASSERT(file->read(curr, 0x1000, va) == 0x1000);
+        }
+
+        // Setup lowmem
+        for(size_t i = 0; i < isa_bios_start; i += 0x1000) {
+            auto block = pmm::alloc_block();
+            ASSERT(block);
+
+            auto* va = (uint8_t*)(block + phys_mem_map);
+            memset(va, 0, pmm::block_size);
+
+            vm.map(block, i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
         }
     }
 

@@ -56,6 +56,7 @@ namespace vm {
         union {
             struct {
                 struct {
+                    uint8_t present : 1;
                     uint8_t r : 1;
                     uint8_t w : 1;
                     uint8_t x : 1;

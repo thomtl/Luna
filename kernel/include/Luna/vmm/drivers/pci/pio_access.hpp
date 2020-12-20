@@ -38,6 +38,8 @@ namespace vm::pci::pio_access {
                 addr.dev.slot = (value >> 11) & 0x1F;
                 addr.dev.func = (value >> 8) & 0x7;
                 addr.reg = value & 0xFC;
+
+                addr_raw = value;
             } else if(port >= (base + config_data) && port <= (base + config_data + 4) && addr.enable) {
                 auto off = port - (base + config_data);
                 if(drivers.contains(addr.dev.raw)) {
@@ -52,7 +54,9 @@ namespace vm::pci::pio_access {
         }
 
         uint32_t pio_read(uint16_t port, uint8_t size) {
-            if(port >= (base + config_data) && port <= (base + config_data + 4) && addr.enable) {
+            if(port == (base + config_address) && size == 4) {
+                return addr_raw;
+            } else if(port >= (base + config_data) && port <= (base + config_data + 4) && addr.enable) {
                 auto off = port - (base + config_data);
                 if(drivers.contains(addr.dev.raw)) {
                     return drivers[addr.dev.raw]->pci_read(addr.dev, addr.reg + off, size);
@@ -78,5 +82,6 @@ namespace vm::pci::pio_access {
             uint16_t reg;
             DeviceID dev;
         } addr;
+        uint32_t addr_raw;
     };
 } // namespace vm::system_control

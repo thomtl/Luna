@@ -232,9 +232,6 @@ bool svm::Vm::run(vm::VmExit& exit) {
 
             exit.reason = vm::VmExit::Reason::MMUViolation;
 
-            if(!info.present)
-                print("svm: NPT Fault page not present");
-
             exit.mmu.access.r = !info.write;
             exit.mmu.access.w = info.write;
             exit.mmu.access.x = info.execute;
@@ -242,6 +239,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
 
             auto page = guest_page.get_page(addr);
 
+            exit.mmu.page.present = info.present;
             exit.mmu.page.r = page.present;
             exit.mmu.page.w = page.writeable;
             exit.mmu.page.x = !page.no_execute;
@@ -249,8 +247,6 @@ bool svm::Vm::run(vm::VmExit& exit) {
 
             exit.mmu.gpa = addr;
             exit.mmu.reserved_bits_set = info.reserved_bit_set;
-
-            print("svm: {:#b}\n", vmcb->exitinfo1 >> 32);
 
             return true;
         }

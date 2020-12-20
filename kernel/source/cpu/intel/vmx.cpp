@@ -402,6 +402,7 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.mmu.access.x = info.x;
             exit.mmu.access.user = 0;
 
+            exit.mmu.page.present = info.page_r;
             exit.mmu.page.r = info.page_r;
             exit.mmu.page.w = info.page_w;
             exit.mmu.page.x = info.page_x;

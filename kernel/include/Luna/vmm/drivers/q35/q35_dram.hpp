@@ -59,15 +59,6 @@ namespace vm::q35::dram {
             space.data8[cap_off + 2] = 0xB; // Length
             space.data8[cap_off + 3] = 1; // Low Nybble = version
             // Rest of the cap fields are 0
-
-            // Initialize PAM registers, TODO? Is this correct, everything is read-only
-            space.data8[pam0] = 0x10;
-            space.data8[pam0 + 1] = 0x11;
-            space.data8[pam0 + 2] = 0x11;
-            space.data8[pam0 + 3] = 0x11;
-            space.data8[pam0 + 4] = 0x11;
-            space.data8[pam0 + 5] = 0x11;
-            space.data8[pam0 + 6] = 0x11;
         }
 
         void register_driver([[maybe_unused]] Vm* vm) { }
