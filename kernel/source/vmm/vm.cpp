@@ -196,6 +196,29 @@ bool vm::Vm::run() {
 
             break;
         }
+
+        case VmExit::Reason::CPUID: {
+            get_regs(regs);
+
+            auto write_low32 = [&](uint64_t& reg, uint32_t val) { reg &= ~0xFFFF'FFFF; reg |= val; };
+
+            auto leaf = regs.rax & 0xFFFF'FFFF;
+            auto subleaf = regs.rcx & 0xFFFF'FFFF;
+
+            if(leaf == 0x4000'0000) {
+                uint32_t luna_sig = 0x616E754C; // Luna in ASCII
+
+                write_low32(regs.rax, 0);
+                write_low32(regs.rbx, luna_sig);
+                write_low32(regs.rcx, luna_sig);
+                write_low32(regs.rdx, luna_sig);
+            } else {
+                print("vm: Unhandled CPUID: {:#x}:{}\n", leaf, subleaf);
+            }
+
+            set_regs(regs);
+            break;
+        }
         
         default:
             print("vm: Exit due to {:s}\n", exit.reason_to_string(exit.reason));

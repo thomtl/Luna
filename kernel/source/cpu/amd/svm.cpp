@@ -183,6 +183,18 @@ bool svm::Vm::run(vm::VmExit& exit) {
             return false;
         }
 
+        case 0x72: { // CPUID
+            exit.reason = vm::VmExit::Reason::CPUID;
+
+            exit.instruction_len = 2;
+            exit.instruction[0] = 0x0F;
+            exit.instruction[1] = 0xA2;
+
+            next_instruction();
+
+            return true;
+        }
+
         case 0x7B: { // Port IO
             IOInterceptInfo info{.raw = vmcb->exitinfo1};
 
