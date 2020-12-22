@@ -30,6 +30,7 @@
 #include <Luna/vmm/drivers/fast_a20.hpp>
 #include <Luna/vmm/drivers/pci/pci.hpp>
 #include <Luna/vmm/drivers/pci/pio_access.hpp>
+#include <Luna/vmm/drivers/pci/ecam.hpp>
 
 #include <Luna/vmm/drivers/q35/q35_dram.hpp>
 
@@ -148,23 +149,27 @@ void kernel_main(const stivale2_struct* info) {
     vm.disks.push_back(disk);
 
     auto* e9_dev = new vm::e9::Driver{};
-    e9_dev->register_driver(&vm);
+    e9_dev->register_pio_driver(&vm);
 
     auto* cmos_dev = new vm::cmos::Driver{};
-    cmos_dev->register_driver(&vm);
+    cmos_dev->register_pio_driver(&vm);
 
     auto* a20_dev = new vm::fast_a20::Driver{};
-    a20_dev->register_driver(&vm);
+    a20_dev->register_pio_driver(&vm);
 
     auto* uart_dev = new vm::uart::Driver{0x3F8};
-    uart_dev->register_driver(&vm);
+    uart_dev->register_pio_driver(&vm);
 
-    auto* pci_root_bus = new vm::pci::pio_access::Driver{vm::pci::pio_access::default_base};
-    pci_root_bus->register_driver(&vm);
+    auto* pci_host_bridge = new vm::pci::HostBridge{};
 
-    auto* dram_dev = new vm::q35::dram::Driver{};
-    dram_dev->register_driver(&vm);
-    dram_dev->register_pci_driver(pci_root_bus);
+    auto* pci_pio_access = new vm::pci::pio_access::Driver{vm::pci::pio_access::default_base, 0, pci_host_bridge};
+    pci_pio_access->register_pio_driver(&vm);
+
+    auto* pci_mmio_access = new vm::pci::ecam::Driver{0, pci_host_bridge};
+    pci_mmio_access->register_mmio_driver(&vm);
+
+    auto* dram_dev = new vm::q35::dram::Driver{pci_mmio_access};
+    dram_dev->register_pci_driver(pci_host_bridge);
     
     ASSERT(vm.run());
 

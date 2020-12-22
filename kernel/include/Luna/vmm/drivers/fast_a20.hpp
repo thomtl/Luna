@@ -9,8 +9,8 @@ namespace vm::fast_a20 {
     constexpr uint16_t reg_a = 0x92;
     constexpr uint16_t reg_b = 0x61;
 
-    struct Driver : public vm::AbstractDriver {
-        void register_driver(Vm* vm) {
+    struct Driver : public vm::AbstractPIODriver {
+        void register_pio_driver(Vm* vm) {
             vm->pio_map[reg_a] = this;
             vm->pio_map[reg_b] = this;
         }

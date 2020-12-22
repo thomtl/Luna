@@ -76,14 +76,24 @@ namespace vm {
 
     struct Vm;
 
-    struct AbstractDriver {
-        virtual ~AbstractDriver() {}
+    struct AbstractPIODriver {
+        virtual ~AbstractPIODriver() {}
 
-        virtual void register_driver(Vm* vm) = 0;
+        virtual void register_pio_driver(Vm* vm) = 0;
 
         virtual void pio_write(uint16_t port, uint32_t value, uint8_t size) = 0;
         virtual uint32_t pio_read(uint16_t port, uint8_t size) = 0;
     };
+
+    struct AbstractMMIODriver {
+        virtual ~AbstractMMIODriver() {}
+
+        virtual void register_mmio_driver(Vm* vm) = 0;
+
+        virtual void mmio_write(uintptr_t addr, uint64_t value, uint8_t size) = 0;
+        virtual uint64_t mmio_read(uintptr_t addr, uint8_t size) = 0;
+    };
+
 
     struct AbstractVm {
         virtual ~AbstractVm() {}
@@ -109,8 +119,9 @@ namespace vm {
 
         std::vector<vfs::File*> disks;
 
-        std::vector<AbstractDriver*> drivers;
-        std::unordered_map<uint16_t, AbstractDriver*> pio_map;
+        std::vector<AbstractPIODriver*> drivers;
+        std::unordered_map<uint16_t, AbstractPIODriver*> pio_map;
+        std::unordered_map<uintptr_t, std::pair<AbstractMMIODriver*, size_t>> mmio_map;
 
 
         private:

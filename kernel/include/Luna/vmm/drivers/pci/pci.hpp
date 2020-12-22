@@ -10,25 +10,16 @@
 namespace vm::pci {
     union [[gnu::packed]] DeviceID {
         struct {
-            uint16_t func : 3;
-            uint16_t slot : 5;
-            uint16_t bus : 8;
+            uint32_t seg : 16;
+            uint32_t func : 3;
+            uint32_t slot : 5;
+            uint32_t bus : 8;
         };
-        uint16_t raw;
-    };
-
-    struct AbstractPCIDriver;
-
-    struct AbstractPCIAccess {
-        virtual ~AbstractPCIAccess() {}
-
-        virtual void register_pci_driver(DeviceID device, AbstractPCIDriver* driver) = 0;
+        uint32_t raw;
     };
 
     struct AbstractPCIDriver {
         virtual ~AbstractPCIDriver() {}
-
-        virtual void register_pci_driver(AbstractPCIAccess* vm) = 0;
 
         virtual void pci_write(const DeviceID dev, uint16_t reg, uint32_t value, uint8_t size) = 0;
         virtual uint32_t pci_read(const DeviceID dev, uint16_t reg, uint8_t size) = 0;
@@ -55,4 +46,9 @@ namespace vm::pci {
         uint32_t data32[64];
     };
     static_assert(sizeof(ConfigSpace) == 256);
+
+    struct HostBridge {
+        void register_pci_driver(const DeviceID& did, AbstractPCIDriver* driver) { drivers[did.raw] = driver; }
+        std::unordered_map<uint32_t, vm::pci::AbstractPCIDriver*> drivers; 
+    };
 } // namespace vm::pci

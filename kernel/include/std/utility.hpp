@@ -4,6 +4,7 @@
 
 #include <std/type_traits.hpp>
 #include <std/bits/declval.hpp>
+#include <std/functional.hpp>
 
 namespace std
 {
@@ -121,5 +122,14 @@ namespace std
         public:
         bool _initialized;
         std::aligned_storage_t<sizeof(T), alignof(T)> _storage;
+    };
+
+    template<>
+    struct hash<std::pair<uint64_t, uint64_t>> {
+        size_t operator()(const std::pair<uint64_t, uint64_t> v) const {
+            size_t seed = v.first;
+            seed ^= std::hash<uint64_t>{}(v.second) + 0x9E3779B9 + (seed << 6) + (seed >> 2);
+            return seed;
+        }
     };
 } // namespace std

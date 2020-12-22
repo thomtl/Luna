@@ -6,8 +6,8 @@
 #include <Luna/misc/format.hpp>
 
 namespace vm::e9 {
-    struct Driver : public vm::AbstractDriver {
-        void register_driver(Vm* vm) {
+    struct Driver : public vm::AbstractPIODriver {
+        void register_pio_driver(Vm* vm) {
             vm->pio_map[0xe9] = this;
         }
 

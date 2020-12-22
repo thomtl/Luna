@@ -6,6 +6,7 @@
 #include <Luna/misc/format.hpp>
 
 #include <Luna/vmm/drivers/pci/pci.hpp>
+#include <Luna/vmm/drivers/pci/ecam.hpp>
 
 namespace vm::q35::dram {
     constexpr uint16_t cap_off = 0xE0;
@@ -13,6 +14,14 @@ namespace vm::q35::dram {
     constexpr uint16_t pam0 = 0x90;
     constexpr uint16_t pam_size = 7;
     constexpr uint16_t n_pam = 13;
+
+    constexpr uint16_t pciexbar = 0x60;
+    constexpr uint16_t pciexbar_size = 0x8;
+
+    constexpr uint64_t pciexbar_len_256 = 0b00;
+    constexpr uint64_t pciexbar_len_128 = 0b01;
+    constexpr uint64_t pciexbar_len_64 = 0b10;
+    constexpr uint64_t pciexbar_enable = (1 << 0);
 
     constexpr struct {
         uintptr_t base, limit;
@@ -35,8 +44,8 @@ namespace vm::q35::dram {
         {.base = 0xE'C000, .limit = 0xE'FFFF}, //      hi
     };
 
-    struct Driver : public vm::AbstractDriver, public vm::pci::AbstractPCIDriver {
-        Driver() {
+    struct Driver : public vm::pci::AbstractPCIDriver {
+        Driver(pci::ecam::Driver* ecam): ecam{ecam} {
             space.header.vendor_id = 0x8086;
             space.header.device_id = 0x29C0;
 
@@ -61,20 +70,8 @@ namespace vm::q35::dram {
             // Rest of the cap fields are 0
         }
 
-        void register_driver([[maybe_unused]] Vm* vm) { }
-
-        void register_pci_driver(vm::pci::AbstractPCIAccess* bus) {
+        void register_pci_driver(vm::pci::HostBridge* bus) {
             bus->register_pci_driver(vm::pci::DeviceID{.raw = 0}, this); // Bus 0, Slot 0, Func 0
-        }
-
-        void pio_write(uint16_t port, uint32_t value, [[maybe_unused]] uint8_t size) {
-            print("q35::dram: Unhandled PIO write, port: {:#x}, value: {:#x}\n", port, value);
-        }
-
-        uint32_t pio_read(uint16_t port, [[maybe_unused]] uint8_t size) {
-            print("q35::dram: Unhandled PIO read, port: {:#x}\n", port);
-
-            return 0;
         }
 
         void pci_write([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint32_t value, uint8_t size) {
@@ -89,6 +86,8 @@ namespace vm::q35::dram {
                 ; // TODO: Handle header accesses
             else if(ranges_overlap(reg, size, pam0, pam_size))
                 pam_update();
+            else if(ranges_overlap(reg, size, pciexbar, pciexbar_size))
+                pciexbar_update();
             else
                 print("q35::dram: Unhandled PCI write, reg: {:#x}, value: {:#x}\n", reg, value);
         }
@@ -112,6 +111,30 @@ namespace vm::q35::dram {
             return ret;
         }
 
+        void pciexbar_update() {
+            uint64_t ecam_base = space.data32[pciexbar / 4] | ((uint64_t)space.data32[(pciexbar / 4) + 1] << 32);
+            auto base = (ecam_base >> 26) << 26;
+            auto length = (ecam_base >> 1) & 0b11;
+            bool enabled = (ecam_base >> 0) & 0b1;
+
+            size_t size = 0;
+            uint8_t bus_end = 0;
+            if(length == pciexbar_len_256) {
+                size = 256; bus_end = 255;
+            } else if(length == pciexbar_len_128) {
+                size = 128; bus_end = 127;
+            } else if(length == pciexbar_len_64) {
+                size = 64; bus_end = 63;
+            }
+
+            print("q35::dram: PCIe ECAM: {:#x}, Len: {}MiB, {}\n", base, size, enabled ? "Enabled" : "Disabled");
+
+            size *= 1024 * 1024; // MiB -> Bytes
+
+            pci::ecam::EcamConfig config{.base = base, .size = size, .bus_start = 0, .bus_end = bus_end, .enabled = enabled};
+            ecam->update_region(config);
+        }
+
         void pam_update() {
             // TODO: Handle PAMs correctly, update r/w status
             /*for(size_t i = 0; i < 13; i++) {
@@ -121,6 +144,7 @@ namespace vm::q35::dram {
             }*/
         }
 
+        pci::ecam::Driver* ecam;
         pci::ConfigSpace space;
     };
 } // namespace vm::q35::dram

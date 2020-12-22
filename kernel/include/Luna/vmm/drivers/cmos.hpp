@@ -10,8 +10,8 @@ namespace vm::cmos {
     constexpr uint8_t cmd = 0;
     constexpr uint8_t data = 1;
 
-    struct Driver : public vm::AbstractDriver {
-        void register_driver(Vm* vm) {
+    struct Driver : public vm::AbstractPIODriver {
+        void register_pio_driver(Vm* vm) {
             vm->pio_map[base + cmd] = this;
             vm->pio_map[base + data] = this;
 

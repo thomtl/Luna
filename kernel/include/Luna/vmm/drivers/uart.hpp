@@ -17,11 +17,11 @@ namespace vm::uart {
     constexpr uint8_t modem_status_reg = 6;
     constexpr uint8_t scratch_reg = 7;
 
-    struct Driver : public vm::AbstractDriver {
+    struct Driver : public vm::AbstractPIODriver {
         Driver(uint16_t base): base{base}, baud{3}, dlab{false} {}
 
 
-        void register_driver(Vm* vm) {
+        void register_pio_driver(Vm* vm) {
             vm->pio_map[base + data_reg] = this;
             vm->pio_map[base + irq_enable_reg] = this;
             vm->pio_map[base + fifo_control_reg] = this;
