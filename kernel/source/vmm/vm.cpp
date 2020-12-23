@@ -244,13 +244,47 @@ bool vm::Vm::run() {
             auto leaf = regs.rax & 0xFFFF'FFFF;
             auto subleaf = regs.rcx & 0xFFFF'FFFF;
 
-            if(leaf == 0x4000'0000) {
-                uint32_t luna_sig = 0x616E754C; // Luna in ASCII
+            constexpr uint32_t luna_sig = 0x616E754C; // Luna in ASCII
+            
+            auto passthrough = [&]() {
+                uint32_t a, b, c, d;
+                ASSERT(cpu::cpuid(leaf, subleaf, a, b, c, d));
 
+                write_low32(regs.rax, a);
+                write_low32(regs.rbx, b);
+                write_low32(regs.rcx, c);
+                write_low32(regs.rdx, d);
+            };
+
+            auto os_support_bit = [&](uint64_t& reg, uint8_t cr4_bit, uint8_t bit) {
+                reg &= ~(1 << bit);
+
+                bool os = (regs.cr4 >> cr4_bit) & 1;
+                reg |= (os << bit);
+            };
+
+            if(leaf == 0) {
+                passthrough();
+            } else if(leaf == 1) {
+                passthrough();
+
+                regs.rcx |= (1 << 31); // Set Hypervisor Present bit
+
+                os_support_bit(regs.rdx, 9, 24);
+                os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
+            } else if(leaf == 0x4000'0000) {
                 write_low32(regs.rax, 0);
                 write_low32(regs.rbx, luna_sig);
                 write_low32(regs.rcx, luna_sig);
                 write_low32(regs.rdx, luna_sig);
+            } else if(leaf == 0x8000'0000) {
+                passthrough();
+            } else if(leaf == 0x8000'0001) {
+                passthrough();
+                os_support_bit(regs.rdx, 9, 24);
+            } else if(leaf == 0x8000'0008) {
+                passthrough(); // TODO: Do we want this to be passthrough?
+                write_low32(regs.rcx, 0); // Clear out core info
             } else {
                 print("vm: Unhandled CPUID: {:#x}:{}\n", leaf, subleaf);
             }
