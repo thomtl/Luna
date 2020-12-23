@@ -5,6 +5,8 @@
 #include <Luna/cpu/intel/vmx.hpp>
 #include <Luna/cpu/amd/svm.hpp>
 
+#include <Luna/vmm/emulate.hpp>
+
 void vm::init() {
     if(vmx::is_supported()) {
         get_cpu().cpu.vm.vendor = CpuVendor::Intel;
@@ -138,10 +140,33 @@ bool vm::Vm::run() {
             }
             break;
         }
-        case VmExit::Reason::MMUViolation:
+
+        case VmExit::Reason::MMUViolation: {
             get_regs(regs);
+
+            auto grip = regs.cs.base + regs.rip;
+            
+            for(const auto [base, driver] : mmio_map) {
+                if(exit.mmu.gpa >= base && exit.mmu.gpa <= (base + driver.second))  {
+                    // Access is in an MMIO region
+                    ASSERT((grip + 15) < align_up(grip, pmm::block_size)); // TODO: Support page boundary instructions
+                    
+                    auto hpa = vm->get_phys(grip);
+                    ASSERT(hpa); // Assert that the page is actually mapped
+                    auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
+
+                    uint8_t instruction[max_x86_instruction_size];
+                    memcpy(instruction, host_buf, 15);
+
+                    vm::emulate::emulate_instruction(instruction, regs, driver.first);
+                    set_regs(regs);
+                    goto did_mmio;
+                }
+            }
+
+            // No MMIO region, so a page violation
             print("vm: MMU Violation\n");
-            print("    gRIP: {:#x}, gPA: {:#x}\n", regs.cs.base + regs.rip, exit.mmu.gpa);
+            print("    gRIP: {:#x}, gPA: {:#x}\n", grip, exit.mmu.gpa);
             print("    Access: {:s}{:s}{:s}, {:s}\n", exit.mmu.access.r ? "R" : "", exit.mmu.access.w ? "W" : "", exit.mmu.access.x ? "X" : "", exit.mmu.access.user ? "User" : "Supervisor");
             if(exit.mmu.page.present)
                 print("    Page: {:s}{:s}{:s}, {:s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "", exit.mmu.page.user ? "User" : "Supervisor");
@@ -150,6 +175,10 @@ bool vm::Vm::run() {
             if(exit.mmu.reserved_bits_set)
                 print("    Reserved bits set\n");
             return false;
+
+            did_mmio:
+            break;
+        }
 
         case VmExit::Reason::PIO: {
             get_regs(regs); 

@@ -46,6 +46,7 @@ main_sources = files(
     'source/mm/vmm.cpp',
     'source/mm/hmm.cpp',
 
+    'source/vmm/emulate.cpp',
     'source/vmm/vm.cpp',
 
     'source/misc/misc.cpp',
