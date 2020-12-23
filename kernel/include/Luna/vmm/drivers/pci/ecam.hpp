@@ -56,8 +56,8 @@ namespace vm::pci::ecam {
 
             if(bridge->drivers.contains(did.raw))
                 bridge->drivers[did.raw]->pci_write(did, dev.reg, value, size);
-            else
-                print("pci: Unhandled PCI write, dev: {}:{}.{}, reg: {:#x}, size: {}\n", did.bus, did.slot, did.func, dev.reg, (uint16_t)size);
+            //else
+            //    print("pci: Unhandled PCI write, dev: {}:{}.{}, reg: {:#x}, size: {}\n", did.bus, did.slot, did.func, dev.reg, (uint16_t)size);
         }
 
         uint64_t mmio_read(uintptr_t addr, uint8_t size) {
@@ -72,7 +72,7 @@ namespace vm::pci::ecam {
             if(bridge->drivers.contains(did.raw))
                 return bridge->drivers[did.raw]->pci_read(did, dev.reg, size);
             
-            print("pci: Unhandled PCI write, dev: {}:{}.{}, reg: {:#x}, size: {}\n", did.bus, did.slot, did.func, dev.reg, (uint16_t)size);
+            //print("pci: Unhandled PCI write, dev: {}:{}.{}, reg: {:#x}, size: {}\n", did.bus, did.slot, did.func, dev.reg, (uint16_t)size);
             return ~0;
         }
 

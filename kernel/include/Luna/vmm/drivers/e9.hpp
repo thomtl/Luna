@@ -15,7 +15,7 @@ namespace vm::e9 {
             ASSERT(port == 0xe9);
             ASSERT(size == 1);
 
-            print("vm: Port e9: {}\n", (char)value);
+            vga::Writer{}.putc(value);
         }
 
         uint32_t pio_read(uint16_t port, uint8_t size) {

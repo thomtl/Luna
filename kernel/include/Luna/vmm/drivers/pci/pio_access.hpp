@@ -42,10 +42,10 @@ namespace vm::pci::pio_access {
                 auto off = port - (base + config_data);
                 if(bridge->drivers.contains(addr.dev.raw)) {
                     bridge->drivers[addr.dev.raw]->pci_write(addr.dev, addr.reg + off, value, size);
-                } else {
+                }/* else {
                     const auto dev = addr.dev;
                     print("pci: Unhandled PCI write, dev: {}:{}.{}, reg: {:#x}, size: {}, value: {:#x}\n", dev.bus, dev.slot, dev.func, addr.reg + off, (uint16_t)size, value);
-                }
+                }*/
             } else {
                 print("pci: Unhandled write to port {:#x}: {:#x}\n", port, value);
             }
@@ -59,8 +59,8 @@ namespace vm::pci::pio_access {
                 if(bridge->drivers.contains(addr.dev.raw)) {
                     return bridge->drivers[addr.dev.raw]->pci_read(addr.dev, addr.reg + off, size);
                 } else {
-                    const auto dev = addr.dev;
-                    print("pci: Unhandled PCI read, dev: {}:{}.{}, reg: {:#x}, size: {}\n", dev.bus, dev.slot, dev.func, addr.reg + off, (uint16_t)size);
+                    //const auto dev = addr.dev;
+                    //print("pci: Unhandled PCI read, dev: {}:{}.{}, reg: {:#x}, size: {}\n", dev.bus, dev.slot, dev.func, addr.reg + off, (uint16_t)size);
 
                     return ~0; // PCI Returns all ones for non-existing devices
                 }

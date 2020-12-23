@@ -54,13 +54,13 @@ namespace vm::uart {
 
                 dlab = new_dlab;
 
-                char parity = 'U';
+                /*char parity = 'U';
                 switch ((value >> 3) & 0b111) {
                     case 0b000: parity = 'N'; break;
                     case 0b001: parity = 'O'; break;
                     case 0b011: parity = 'E'; break;
                 }
-                print("uart: Set config {}{}{}\n", (value & 0b11) + 5, parity, (value & (1 << 2)) ? 2 : 1);
+                print("uart: Set config {}{}{}\n", (value & 0b11) + 5, parity, (value & (1 << 2)) ? 2 : 1);*/
             } else {
                 print("uart: Unhandled write to reg {} (Port: {:#x}): {:#x}\n", port - base, port, value);
             }

@@ -127,7 +127,7 @@ namespace vm::q35::dram {
                 size = 64; bus_end = 63;
             }
 
-            print("q35::dram: PCIe ECAM: {:#x}, Len: {}MiB, {}\n", base, size, enabled ? "Enabled" : "Disabled");
+            //print("q35::dram: PCIe ECAM: {:#x}, Len: {}MiB, {}\n", base, size, enabled ? "Enabled" : "Disabled");
 
             size *= 1024 * 1024; // MiB -> Bytes
 
