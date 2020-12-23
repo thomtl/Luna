@@ -306,8 +306,15 @@ void svm::Vm::get_regs(vm::RegisterState& regs) const {
     #define GET_SEGMENT(segment) \
         regs.segment.base = vmcb->segment.base; \
         regs.segment.limit = vmcb->segment.limit; \
-        regs.segment.attrib = vmcb->segment.attrib; \
-        regs.segment.selector = vmcb->segment.selector
+        regs.segment.selector = vmcb->segment.selector; \
+        regs.segment.attrib.type = vmcb->segment.attrib & 0xF; \
+        regs.segment.attrib.s = (vmcb->segment.attrib >> 4) & 1; \
+        regs.segment.attrib.dpl = (vmcb->segment.attrib >> 5) & 0b11; \
+        regs.segment.attrib.present = (vmcb->segment.attrib >> 7) & 1; \
+        regs.segment.attrib.avl = (vmcb->segment.attrib >> 8) & 1; \
+        regs.segment.attrib.l = (vmcb->segment.attrib >> 9) & 1; \
+        regs.segment.attrib.db = (vmcb->segment.attrib >> 10) & 1; \
+        regs.segment.attrib.g = (vmcb->segment.attrib >> 11) & 1
 
     GET_SEGMENT(cs);
     GET_SEGMENT(ds);
@@ -367,8 +374,11 @@ void svm::Vm::set_regs(const vm::RegisterState& regs) {
     #define SET_SEGMENT(segment) \
         vmcb->segment.base = regs.segment.base; \
         vmcb->segment.limit = regs.segment.limit; \
-        vmcb->segment.attrib = regs.segment.attrib; \
-        vmcb->segment.selector = regs.segment.selector
+        vmcb->segment.selector = regs.segment.selector; \
+        vmcb->segment.attrib = regs.segment.attrib.type | (regs.segment.attrib.s << 4) | \
+                               (regs.segment.attrib.dpl << 5) | (regs.segment.attrib.present << 7) | \
+                               (regs.segment.attrib.avl << 8) | (regs.segment.attrib.l << 9) | \
+                               (regs.segment.attrib.db << 10) | (regs.segment.attrib.g << 11)
 
     SET_SEGMENT(cs);
     SET_SEGMENT(ds);

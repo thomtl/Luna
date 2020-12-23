@@ -39,21 +39,18 @@ vm::Vm::Vm() {
 
     vm::RegisterState regs{};
 
-    constexpr uint16_t code_access = 0b11 | (1 << 4) | (1 << 7) | (1 << 13);
-    constexpr uint16_t data_access = 0b11 | (1 << 4) | (1 << 7);
-    constexpr uint16_t ldtr_access = 0b10 | (1 << 7);
-    constexpr uint16_t tr_access = 0b11 | (1 << 7);
+    
 
-    regs.cs = {.selector = 0xF000, .base = 0xFFFF0000, .limit = 0xFFFF, .attrib = code_access};
+    regs.cs = {.selector = 0xF000, .base = 0xFFFF0000, .limit = 0xFFFF, .attrib = {.type = 0b1010, .s = 1, .present = 1}};
 
-    regs.ds = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = data_access};
-    regs.es = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = data_access};
-    regs.ss = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = data_access};
-    regs.fs = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = data_access};
-    regs.gs = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = data_access};
+    regs.ds = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = {.type = 0b10, .s = 1, .present = 1}};
+    regs.es = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = {.type = 0b10, .s = 1, .present = 1}};
+    regs.ss = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = {.type = 0b10, .s = 1, .present = 1}};
+    regs.fs = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = {.type = 0b10, .s = 1, .present = 1}};
+    regs.gs = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = {.type = 0b10, .s = 1, .present = 1}};
 
-    regs.tr = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = tr_access};
-    regs.ldtr = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = ldtr_access};
+    regs.tr = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = {.type = 2, .present = 1}};
+    regs.ldtr = {.selector = 0, .base = 0, .limit = 0xFFFF, .attrib = {.type = 3, .present = 1}};
 
     regs.idtr = {.base = 0, .limit = 0xFFFF};
     regs.gdtr = {.base = 0, .limit = 0xFFFF};

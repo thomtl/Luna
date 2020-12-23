@@ -18,7 +18,16 @@ namespace vm {
             uint16_t selector;
             uint64_t base;
             uint32_t limit;
-            uint16_t attrib;
+            struct {
+                uint16_t type : 4 = 0;
+                uint16_t s : 1 = 0;
+                uint16_t dpl : 3 = 0;
+                uint16_t present : 1 = 0;
+                uint16_t avl : 1 = 0;
+                uint64_t l : 1 = 0;
+                uint16_t db : 1 = 0;
+                uint16_t g : 1 = 0;
+            } attrib;
         };
         Segment cs, ds, ss, es, fs, gs, ldtr, tr;
 

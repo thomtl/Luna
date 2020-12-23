@@ -465,8 +465,18 @@ void vmx::Vm::get_regs(vm::RegisterState& regs) const {
     #define GET_SEGMENT(segment) \
         regs.segment.base = read(guest_##segment##_base); \
         regs.segment.limit = read(guest_##segment##_limit); \
-        regs.segment.attrib = read(guest_##segment##_access_right); \
-        regs.segment.selector = read(guest_##segment##_selector)
+        regs.segment.selector = read(guest_##segment##_selector); \
+        { \
+            auto seg = read(guest_##segment##_access_right); \
+            regs.segment.attrib.type = seg & 0xF; \
+            regs.segment.attrib.s = (seg >> 4) & 1; \
+            regs.segment.attrib.dpl = (seg >> 5) & 3; \
+            regs.segment.attrib.present = (seg >> 7) & 1; \
+            regs.segment.attrib.avl = (seg >> 12) & 1; \
+            regs.segment.attrib.l = (seg >> 13) & 1; \
+            regs.segment.attrib.db = (seg >> 14) & 1; \
+            regs.segment.attrib.g = (seg >> 15) & 1; \
+        } 
 
     GET_SEGMENT(cs);
     GET_SEGMENT(ds);
@@ -525,8 +535,14 @@ void vmx::Vm::set_regs(const vm::RegisterState& regs) {
     #define SET_SEGMENT(segment) \
         write(guest_##segment##_base, regs.segment.base); \
         write(guest_##segment##_limit, regs.segment.limit); \
-        write(guest_##segment##_access_right, regs.segment.attrib); \
-        write(guest_##segment##_selector, regs.segment.selector)
+        write(guest_##segment##_selector, regs.segment.selector); \
+        { \
+            uint32_t attrib = regs.segment.attrib.type | (regs.segment.attrib.s << 4) | \
+                              (regs.segment.attrib.dpl << 5) | (regs.segment.attrib.present << 7) | \
+                              (regs.segment.attrib.avl << 12) | (regs.segment.attrib.l << 13) | \
+                              (regs.segment.attrib.db << 14) | (regs.segment.attrib.g << 15); \
+            write(guest_##segment##_access_right, attrib); \
+        }
 
     SET_SEGMENT(cs);
     SET_SEGMENT(ds);
