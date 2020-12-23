@@ -143,11 +143,6 @@ void kernel_main(const stivale2_struct* info) {
         }
     }
 
-    auto* disk = vfs::get_vfs().open("A:/disk.img");
-    ASSERT(disk);
-
-    vm.disks.push_back(disk);
-
     auto* e9_dev = new vm::e9::Driver{};
     e9_dev->register_pio_driver(&vm);
 

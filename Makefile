@@ -24,12 +24,7 @@ kernel:
 	echfs-utils -m -p0 luna.hdd import build/kernel/luna.bin boot/luna.bin
 
 bios:
-	mkdir -p build/bios
-
-	nasm bios/main.asm -o build/bios/bios.bin
-	nasm bios/test.asm -o build/bios/test.bin
 	echfs-utils -m -p0 luna.hdd import /home/thomas/Desktop/Projects/seabios/out/bios.bin luna/bios.bin
-	echfs-utils -m -p0 luna.hdd import build/bios/test.bin disk.img
 
 run: kernel bios
 	# -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
