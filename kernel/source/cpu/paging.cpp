@@ -74,21 +74,19 @@ paging::page_entry* paging::context::walk(uintptr_t va, bool create_new_tables) 
     return &pml1[get_index(1)];
 }
 
-void paging::context::map(uintptr_t pa, uintptr_t va, uint64_t flags, uint64_t cache) {
+void paging::context::map(uintptr_t pa, uintptr_t va, uint64_t flags, uint8_t cache) {
     auto& page = *walk(va, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
-    page.present = (flags & mapPagePresent) ? 1 : 0;
     page.writeable = (flags & mapPageWrite) ? 1 : 0;
     page.user = (flags & mapPageUser) ? 1 : 0;
     page.no_execute = (flags & mapPageExecute) ? 0 : 1;
     page.frame = (pa >> 12);
 
-    // TODO: Use PAT
-    if(cache == cacheDisable)
-        page.cache_disable = 1;
-    else if(cache == cacheWritethrough)
-        page.writethrough = 1;
-    // Writeback is default so don't do anything
+    page.pat = (cache >> 2) & 1;
+    page.cache_disable = (cache >> 1) & 1;
+    page.writethrough = cache & 1;
+
+    page.present = (flags & mapPagePresent) ? 1 : 0;
 
     asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }

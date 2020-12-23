@@ -2,6 +2,7 @@
 
 #include <Luna/common.hpp>
 #include <Luna/mm/pmm.hpp>
+#include <Luna/cpu/regs.hpp>
 
 namespace paging
 {
@@ -39,18 +40,12 @@ namespace paging
         mapPageUser = (1 << 3),
     };
 
-    enum {
-        cacheWriteback = 0,
-        cacheWritethrough,
-        cacheDisable,
-    };
-
     class context {
         public:
         context(uint8_t levels);
         ~context();
 
-        void map(uintptr_t pa, uintptr_t va, uint64_t flags, uint64_t caching = cacheWriteback);
+        void map(uintptr_t pa, uintptr_t va, uint64_t flags, uint8_t caching = msr::pat::write_back);
         uintptr_t unmap(uintptr_t va);
         uintptr_t get_phys(uintptr_t va);
         page_entry get_page(uintptr_t va);

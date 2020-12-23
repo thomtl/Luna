@@ -79,6 +79,7 @@ void kernel_main(const stivale2_struct* info) {
     for(const auto entry : boot_info.mmap())
         for(size_t i = entry.base; i < (entry.base + entry.length); i += pmm::block_size)
             kernel_vmm.map(i, i + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
+    msr::write(msr::ia32_pat, msr::pat::default_pat);
     kernel_vmm.set();
     print("vmm: Set kernel page tables\n");
 
@@ -177,6 +178,7 @@ void kernel_main_ap(stivale2_smp_info* info){
     (void)info; // info is a physical address
 
     cpu::early_init();
+    msr::write(msr::ia32_pat, msr::pat::default_pat);
     vmm::kernel_vmm::get_instance().set();
 
     auto& cpu_data = allocate_cpu_data();

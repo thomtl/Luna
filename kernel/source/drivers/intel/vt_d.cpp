@@ -160,9 +160,9 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     page_snoop = (regs->extended_capabilities >> 7) & 1;
 
     if(coherent)
-        cache_mode = paging::cacheWriteback;
+        cache_mode = msr::pat::write_back;
     else
-        cache_mode = paging::cacheDisable;
+        cache_mode = msr::pat::uncacheable;
 
     ASSERT(regs->global_status == 0);
 

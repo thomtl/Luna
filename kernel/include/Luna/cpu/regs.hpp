@@ -69,6 +69,25 @@ namespace msr {
     constexpr uint32_t vm_cr = 0xC0010114;
     constexpr uint32_t vm_hsave_pa = 0xC0010117;
 
+    namespace pat {
+        constexpr uint64_t uc = 0;
+        constexpr uint64_t wc = 1;
+        constexpr uint64_t wt = 4;
+        constexpr uint64_t wp = 5;
+        constexpr uint64_t wb = 6;
+        constexpr uint64_t uc_ = 7;
+
+        constexpr uint8_t uncacheable = uc;
+        constexpr uint8_t write_combine = wc;
+        constexpr uint8_t write_through = wt;
+        constexpr uint8_t write_protect = wp;
+        constexpr uint8_t write_back = wb;
+        constexpr uint8_t uc_minus = uc_;
+
+        constexpr uint64_t default_pat = uc | (wc << 8) | (wt << 32) | (wp << 40) | (wb << 48) | (uc_ << 56);
+    } // namespace pat
+    
+
     uint64_t read(uint32_t msr);
     void write(uint32_t msr, uint64_t v);
 } // namespace msr
