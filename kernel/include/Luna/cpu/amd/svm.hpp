@@ -216,7 +216,7 @@ namespace svm {
         npt::context guest_page;
         GprState guest_gprs;
 
-        uint8_t* io_bitmap;
-        uintptr_t io_bitmap_pa;
+        uint8_t* io_bitmap, *msr_bitmap;
+        uintptr_t io_bitmap_pa, msr_bitmap_pa;
     };
 } // namespace svm

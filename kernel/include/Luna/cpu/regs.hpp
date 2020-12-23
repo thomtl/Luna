@@ -5,7 +5,40 @@
 namespace msr {
     constexpr uint32_t apic_base = 0x1B;
     constexpr uint32_t ia32_feature_control = 0x3A;
+
+    constexpr uint32_t ia32_mtrr_cap = 0xFE;
+    
+    constexpr uint32_t ia32_mtrr_physbase0 = 0x200;
+    constexpr uint32_t ia32_mtrr_physmask0 = 0x201;
+    constexpr uint32_t ia32_mtrr_physbase1 = 0x202;
+    constexpr uint32_t ia32_mtrr_physmask1 = 0x203;
+    constexpr uint32_t ia32_mtrr_physbase2 = 0x204;
+    constexpr uint32_t ia32_mtrr_physmask2 = 0x205;
+    constexpr uint32_t ia32_mtrr_physbase3 = 0x206;
+    constexpr uint32_t ia32_mtrr_physmask3 = 0x207;
+    constexpr uint32_t ia32_mtrr_physbase4 = 0x208;
+    constexpr uint32_t ia32_mtrr_physmask4 = 0x209;
+    constexpr uint32_t ia32_mtrr_physbase5 = 0x20A;
+    constexpr uint32_t ia32_mtrr_physmask5 = 0x20B;
+    constexpr uint32_t ia32_mtrr_physbase6 = 0x20C;
+    constexpr uint32_t ia32_mtrr_physmask6 = 0x20D;
+    constexpr uint32_t ia32_mtrr_physbase7 = 0x20E;
+    constexpr uint32_t ia32_mtrr_physmask7 = 0x20F;
+
+    constexpr uint32_t ia32_mtrr_fix64K_00000 = 0x250;
+    constexpr uint32_t ia32_mtrr_fix16K_80000 = 0x258;
+    constexpr uint32_t ia32_mtrr_fix16K_A0000 = 0x259;
+    constexpr uint32_t ia32_mtrr_fix4K_C0000 = 0x268;
+    constexpr uint32_t ia32_mtrr_fix4K_C8000 = 0x269;
+    constexpr uint32_t ia32_mtrr_fix4K_D0000 = 0x26A;
+    constexpr uint32_t ia32_mtrr_fix4K_D8000 = 0x26B;
+    constexpr uint32_t ia32_mtrr_fix4K_E0000 = 0x26C;
+    constexpr uint32_t ia32_mtrr_fix4K_E8000 = 0x26D;
+    constexpr uint32_t ia32_mtrr_fix4K_F0000 = 0x26E;
+    constexpr uint32_t ia32_mtrr_fix4K_F8000 = 0x26F;
+
     constexpr uint32_t ia32_pat = 0x277;
+    constexpr uint32_t ia32_mtrr_def_type = 0x2FF;
 
     constexpr uint32_t ia32_vmx_basic = 0x480;
     constexpr uint32_t ia32_vmx_pinbased_ctls = 0x481;

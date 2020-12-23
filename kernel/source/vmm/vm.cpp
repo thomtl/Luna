@@ -292,6 +292,37 @@ bool vm::Vm::run() {
             set_regs(regs);
             break;
         }
+
+        case VmExit::Reason::MSR: {
+            get_regs(regs);
+            auto index = regs.rcx & 0xFFFF'FFFF;
+            auto value = (regs.rax & 0xFFFF'FFFF) | (regs.rdx << 32);
+
+            auto write_low32 = [&](uint64_t& reg, uint32_t val) { reg &= ~0xFFFF'FFFF; reg |= val; };
+
+            if(index == msr::ia32_mtrr_cap) {
+                ASSERT(!exit.msr.write); // TODO: Inject #GP
+
+                value = (1 << 10) | (1 << 8) | 8; // WC valid, Fixed MTRRs valid, 8 Variable MTRRs
+                // TODO: Actually implement MTRRs
+            } else {
+                if(exit.msr.write) {
+                    print("vm: Unhandled wrmsr({:#x}, {:#x})\n", index, value);
+                } else {
+                    print("vm: Unhandled rdmsr({:#x})\n", index);
+                    value = 0;
+                }
+            }
+            
+            if(!exit.msr.write) {
+                write_low32(regs.rax, value & 0xFFFF'FFFF);
+                write_low32(regs.rdx, value >> 32);
+
+                set_regs(regs);
+            }
+
+            break;
+        }
         
         default:
             print("vm: Exit due to {:s}\n", exit.reason_to_string(exit.reason));

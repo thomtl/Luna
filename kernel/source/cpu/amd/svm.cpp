@@ -106,14 +106,19 @@ svm::Vm::Vm() {
     vmcb->guest_asid = asid;
     vmcb->tlb_control = 0; // Do no TLB flushes on vmrun, all TLB flushes are done by the NPT using invlpga
 
-    vmcb->icept_msr = 1;
-
     io_bitmap_pa = pmm::alloc_n_blocks(io_bitmap_size);
     io_bitmap = (uint8_t*)(io_bitmap_pa + phys_mem_map);
 
     memset(io_bitmap, 0xFF, io_bitmap_size * pmm::block_size); // Intercept everything
     vmcb->iopm_base_pa = io_bitmap_pa;
     vmcb->icept_io = 1;
+
+    msr_bitmap_pa = pmm::alloc_n_blocks(msr_bitmap_size);
+    msr_bitmap = (uint8_t*)(msr_bitmap_pa + phys_mem_map);
+
+    memset(msr_bitmap, 0xFF, msr_bitmap_size * pmm::block_size);
+    vmcb->msrpm_base_pa = msr_bitmap_pa;
+    vmcb->icept_msr = 1;
 }
 
 svm::Vm::~Vm() {
@@ -209,6 +214,20 @@ bool svm::Vm::run(vm::VmExit& exit) {
             exit.pio.write = !info.dir;
 
             vmcb->rip = vmcb->exitinfo2;
+
+            return true;
+        }
+
+        case 0x7C: { // MSR
+            exit.reason = vm::VmExit::Reason::MSR;
+
+            exit.msr.write = vmcb->exitinfo1 & 1;
+            exit.instruction_len = 2; // Both WRMSR and RDMSR are 2 bytes long
+
+            exit.instruction[0] = 0x0F;
+            exit.instruction[1] = exit.msr.write ? 0x30 : 0x32;
+
+            next_instruction();
 
             return true;
         }
