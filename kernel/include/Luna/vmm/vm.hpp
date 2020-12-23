@@ -116,6 +116,7 @@ namespace vm {
         virtual void set_regs(const vm::RegisterState& regs) = 0;
 
         virtual void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) = 0;
+        virtual void protect(uintptr_t gpa, uint64_t flags) = 0;
         virtual uintptr_t get_phys(uintptr_t gpa) = 0;
         virtual simd::Context& get_guest_simd_context() = 0;
 
@@ -129,6 +130,7 @@ namespace vm {
         void set_regs(const vm::RegisterState& regs);
 
         void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags);
+        void protect(uintptr_t gpa, uint64_t flags);
         bool run();
 
         std::vector<vfs::File*> disks;

@@ -203,6 +203,10 @@ namespace svm {
             guest_page.map(hpa, gpa, flags | paging::mapPageUser); // NPT walks are always user walks for some reason
         }
 
+        void protect(uintptr_t gpa, uint64_t flags) {
+            guest_page.protect(gpa, flags | paging::mapPageUser);
+        }
+
         uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
         simd::Context& get_guest_simd_context() { return guest_simd; }
 

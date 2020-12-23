@@ -15,6 +15,9 @@ namespace vm::q35::dram {
     constexpr uint16_t pam_size = 7;
     constexpr uint16_t n_pam = 13;
 
+    constexpr uint8_t pam_readable = 0b01;
+    constexpr uint8_t pam_writable = 0b10;
+
     constexpr uint16_t pciexbar = 0x60;
     constexpr uint16_t pciexbar_size = 0x8;
 
@@ -45,7 +48,7 @@ namespace vm::q35::dram {
     };
 
     struct Driver : public vm::pci::AbstractPCIDriver {
-        Driver(pci::ecam::Driver* ecam): ecam{ecam} {
+        Driver(vm::Vm* vm, pci::ecam::Driver* ecam): ecam{ecam}, vm{vm} {
             space.header.vendor_id = 0x8086;
             space.header.device_id = 0x29C0;
 
@@ -136,15 +139,25 @@ namespace vm::q35::dram {
         }
 
         void pam_update() {
-            // TODO: Handle PAMs correctly, update r/w status
-            /*for(size_t i = 0; i < 13; i++) {
+            for(size_t i = 0; i < 13; i++) {
                 auto pam = (space.data8[pam0 + div_ceil(i, 2)] >> ((!(i & 1)) * 4)) & 0b11;
 
-                print("PAM{}, {:#x} -> {:#x}, {:#b}\n", i, pam_regions[i].base, pam_regions[i].limit, (uint16_t)pam) ;
-            }*/
+                if(pam != pam_cache[i]) {
+                    //print("PAM{}, {:#x} -> {:#x}, {:#b}\n", i, pam_regions[i].base, pam_regions[i].limit, (uint16_t)pam);
+
+                    for(size_t addr = pam_regions[i].base; addr < pam_regions[i].limit; addr += pmm::block_size)
+                        vm->protect(addr, paging::mapPagePresent | ((pam & pam_writable) ? paging::mapPageWrite : 0) | paging::mapPageExecute);
+
+                    pam_cache[i] = pam;
+                }
+            }
         }
 
         pci::ecam::Driver* ecam;
         pci::ConfigSpace space;
+
+        uint8_t pam_cache[n_pam];
+
+        vm::Vm* vm;
     };
 } // namespace vm::q35::dram

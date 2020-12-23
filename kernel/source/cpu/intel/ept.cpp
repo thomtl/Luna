@@ -87,6 +87,18 @@ void ept::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     invept();
 }
 
+void ept::context::protect(uintptr_t va, uint64_t flags) {
+    auto* page = walk(va, false);
+    if(!page)
+        return;
+
+    page->r = (flags & paging::mapPagePresent) ? 1 : 0;
+    page->w = (flags & paging::mapPageWrite) ? 1 : 0;
+    page->x = (flags & paging::mapPageExecute) ? 1 : 0;
+
+    invept();
+}
+
 uintptr_t ept::context::unmap(uintptr_t va) {
     auto* entry = walk(va, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)

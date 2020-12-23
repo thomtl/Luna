@@ -255,6 +255,10 @@ namespace vmx {
             guest_page.map(hpa, gpa, flags);
         }
 
+        void protect(uintptr_t gpa, uint64_t flags) {
+            guest_page.protect(gpa, flags);
+        }
+
         uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
         simd::Context& get_guest_simd_context() { return guest_simd; }
 

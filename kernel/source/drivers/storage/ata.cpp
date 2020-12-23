@@ -103,9 +103,6 @@ bool read_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* 
     if(n_sectors == 0)
         return true;
     
-    if(device.driver.atapi)
-        PANIC("TODO: Implement ATAPI reading");
-
     if(!verify_lba(device, lba))
         return false; // Invalid LBA for device
 
@@ -125,9 +122,6 @@ bool read_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* 
 bool write_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* data) {
     if(n_sectors == 0)
         return true;
-    
-    if(device.driver.atapi)
-        PANIC("TODO: Implement ATAPI writing");
 
     if(!verify_lba(device, lba))
         return false; // Invalid LBA for device

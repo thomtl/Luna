@@ -122,11 +122,11 @@ void kernel_main(const stivale2_struct* info) {
             ASSERT(block);
 
             if((bios_size - curr) <= isa_bios_size) {
-                vm.map(block, isa_bios_start + isa_curr, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+                vm.map(block, isa_bios_start + isa_curr, paging::mapPagePresent | paging::mapPageExecute);
                 isa_curr += 0x1000;
             }
 
-            vm.map(block, map + curr, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+            vm.map(block, map + curr, paging::mapPagePresent | paging::mapPageExecute);
 
             auto* va = (uint8_t*)(block + phys_mem_map);
             ASSERT(file->read(curr, 0x1000, va) == 0x1000);
@@ -164,7 +164,7 @@ void kernel_main(const stivale2_struct* info) {
     auto* pci_mmio_access = new vm::pci::ecam::Driver{0, pci_host_bridge};
     pci_mmio_access->register_mmio_driver(&vm);
 
-    auto* dram_dev = new vm::q35::dram::Driver{pci_mmio_access};
+    auto* dram_dev = new vm::q35::dram::Driver{&vm, pci_mmio_access};
     dram_dev->register_pci_driver(pci_host_bridge);
     
     ASSERT(vm.run());

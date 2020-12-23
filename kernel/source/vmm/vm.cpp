@@ -81,6 +81,7 @@ void vm::Vm::get_regs(vm::RegisterState& regs) const { vm->get_regs(regs); }
 void vm::Vm::set_regs(const vm::RegisterState& regs) { vm->set_regs(regs); }
 
 void vm::Vm::map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) { vm->map(hpa, gpa, flags); }
+void vm::Vm::protect(uintptr_t gpa, uint64_t flags) { vm->protect(gpa, flags); }
 bool vm::Vm::run() {
     while(true) {
         vm::RegisterState regs{};

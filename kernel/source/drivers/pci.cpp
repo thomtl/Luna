@@ -32,7 +32,7 @@ static acpi::Mcfg::Allocation get_mcfg_allocation(acpi::Mcfg* mcfg, uint16_t seg
 static void parse_bus(const acpi::Mcfg::Allocation& allocation, uint8_t bus);
 
 static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus, uint8_t slot, uint8_t func) {
-    static bool is_on_child_bus = false; // TODO: Make this less ugly
+    static bool is_on_child_bus = false; // TODO: Make this less ugly, should only be done for PCI-to-PCIe bridges
     static pci::RequesterID child_bus_req_id{.raw = 0};
 
     auto addr = get_mcfg_device_addr(allocation, bus, slot, func);

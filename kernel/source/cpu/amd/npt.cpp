@@ -82,10 +82,23 @@ void npt::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     auto& page = *walk(va, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
     page.present = (flags & paging::mapPagePresent) ? 1 : 0;
-    page.writeable = (flags & paging::mapPagePresent) ? 1 : 0;
-    page.user = (flags & paging::mapPagePresent) ? 1 : 0;
-    page.no_execute = (flags & paging::mapPagePresent) ? 0 : 1;
+    page.writeable = (flags & paging::mapPageWrite) ? 1 : 0;
+    page.user = (flags & paging::mapPageUser) ? 1 : 0;
+    page.no_execute = (flags & paging::mapPageExecute) ? 0 : 1;
     page.frame = (pa >> 12);
+
+    svm::invlpga(asid, va);
+}
+
+void npt::context::protect(uintptr_t va, uint64_t flags) {
+    auto* page = walk(va, false);
+    if(!page)
+        return;
+
+    page->present = (flags & paging::mapPagePresent) ? 1 : 0;
+    page->writeable = (flags & paging::mapPageWrite) ? 1 : 0;
+    page->user = (flags & paging::mapPageUser) ? 1 : 0;
+    page->no_execute = (flags & paging::mapPageExecute) ? 0 : 1;
 
     svm::invlpga(asid, va);
 }

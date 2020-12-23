@@ -39,6 +39,7 @@ namespace ept {
         ~context();
 
         void map(uintptr_t pa, uintptr_t va, uint64_t flags);
+        void protect(uintptr_t va, uint64_t flags);
         uintptr_t unmap(uintptr_t va);
         uintptr_t get_phys(uintptr_t va);
 

@@ -9,7 +9,7 @@
 #include <Luna/misc/format.hpp>
 
 
-static uintptr_t heap_loc = 0xFFFF'FFFE'0000'0000; // TODO: Move this below kernel_vbase sometime?
+static uintptr_t heap_loc = 0xFFFF'FFFE'0000'0000;
 static uintptr_t allocate_page(){
     auto pa = pmm::alloc_block();
     if(!pa)
