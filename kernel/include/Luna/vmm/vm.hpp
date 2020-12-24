@@ -21,7 +21,7 @@ namespace vm {
             struct {
                 uint16_t type : 4 = 0;
                 uint16_t s : 1 = 0;
-                uint16_t dpl : 3 = 0;
+                uint16_t dpl : 2 = 0;
                 uint16_t present : 1 = 0;
                 uint16_t avl : 1 = 0;
                 uint64_t l : 1 = 0;

@@ -252,6 +252,8 @@ vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
 }
 
 bool vmx::Vm::run(vm::VmExit& exit) {
+    vmptrld();
+
     #define SAVE_REG(reg) \
         { \
             uint16_t tmp = 0; \
@@ -384,6 +386,31 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.pio.rep = info.rep;
             exit.pio.string = info.string;
             exit.pio.write = !info.dir;
+
+            next_instruction();
+
+            return true;
+
+        } else if(basic_reason == VMExitReasons::Rdmsr) {
+            exit.reason = vm::VmExit::Reason::MSR;
+
+            exit.msr.write = false;
+            exit.instruction_len = 2;
+
+            exit.instruction[0] = 0x0F;
+            exit.instruction[1] = 0x32;
+
+            next_instruction();
+
+            return true;
+        } else if(basic_reason == VMExitReasons::Wrmsr) {
+            exit.reason = vm::VmExit::Reason::MSR;
+
+            exit.msr.write = true;
+            exit.instruction_len = 2;
+
+            exit.instruction[0] = 0x0F;
+            exit.instruction[1] = 0x30;
 
             next_instruction();
 

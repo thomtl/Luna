@@ -88,6 +88,8 @@ namespace vmx {
         Hlt = 12,
         Vmcall = 18,
         PIO = 30,
+        Rdmsr = 31,
+        Wrmsr = 32,
         InvalidGuestState = 33,
         EPTViolation = 48
     };

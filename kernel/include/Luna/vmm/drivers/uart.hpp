@@ -80,7 +80,7 @@ namespace vm::uart {
             } else if(port == (base + line_control_reg)) {
                 return (dlab << 7);
             } else if(port == (base + line_status_reg)) {
-                return (1 << 5); // Can send bits
+                return (1 << 6) | (1 << 5); // Transmitter Idle, can send bits
             }
 
             print("uart: Unhandled read from reg {} (Port: {:#x})\n", port - base, port);
