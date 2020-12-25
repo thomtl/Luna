@@ -305,7 +305,8 @@ bool vm::Vm::run() {
                 ASSERT(!exit.msr.write); // TODO: Inject #GP
 
                 value = (1 << 10) | (1 << 8) | 8; // WC valid, Fixed MTRRs valid, 8 Variable MTRRs
-                // TODO: Actually implement MTRRs
+            } else if(index >= 0x200 && index <= 0x2FF) {
+                update_mtrr(exit.msr.write, index, value);
             } else {
                 if(exit.msr.write) {
                     print("vm: Unhandled wrmsr({:#x}, {:#x})\n", index, value);
@@ -337,4 +338,108 @@ bool vm::Vm::run() {
         }
     } 
     return true;
+}
+
+void vm::Vm::update_mtrr(bool write, uint32_t index, uint64_t& value) {
+    auto update = [this](){
+        // We can mostly just ignore MTRRs and whatever guests want for paging, as we force WB
+        // However when VT-d doesn't support snooping, it's needed to mark pages as UC, when passing through devices
+        // AMD-Vi always supports snooping, and this is always forced on, so no such thing is needed
+
+        // Debug code for printing MTRRs
+        /*print("vm::mtrr: Update, Enable: {}, Fixed Enable: {}, Default Type: {}\n", mtrr.enable, mtrr.fixed_enable, (uint16_t)mtrr.default_type);
+
+        for(size_t i = 0; i < 8; i++) {
+            auto var = mtrr.var[i];
+
+            if(!(var.mask & 0x800)) // Valid
+                continue;
+
+            var.mask &= ~0x800;
+
+            auto physical_bits = 36;
+            {
+                uint32_t a, b, c, d;
+                if(cpu::cpuid(0x8000'0008, a, b, c, d))
+                    physical_bits = a & 0xFF;
+            }
+            auto size = -var.mask & ((1ull << physical_bits) - 1);
+            auto start = var.base & ~0xFFF;
+            auto type = var.base & 0xFF;
+
+            print("vm::mtrr: Var{}: {:#x} -> {:#x} => Type: {}\n", i, start, start + size - 1, type);
+        }
+
+        if(mtrr.fixed_enable) {
+            print("vm::mtrr: fix64K_00000: {:#x}\n", mtrr.fix[0]);
+
+            print("vm::mtrr: fix16K_80000: {:#x}\n", mtrr.fix[1]);
+            print("vm::mtrr: fix16K_A0000: {:#x}\n", mtrr.fix[2]);
+
+            print("vm::mtrr: fix4K_C0000: {:#x}\n", mtrr.fix[3]);
+            print("vm::mtrr: fix4K_C8000: {:#x}\n", mtrr.fix[4]);
+            print("vm::mtrr: fix4K_D0000: {:#x}\n", mtrr.fix[5]);
+            print("vm::mtrr: fix4K_D8000: {:#x}\n", mtrr.fix[6]);
+            print("vm::mtrr: fix4K_E0000: {:#x}\n", mtrr.fix[7]);
+            print("vm::mtrr: fix4K_E8000: {:#x}\n", mtrr.fix[8]);
+            print("vm::mtrr: fix4K_F0000: {:#x}\n", mtrr.fix[9]);
+            print("vm::mtrr: fix4K_F8000: {:#x}\n", mtrr.fix[10]);
+        }*/
+    };
+
+    if(index == msr::ia32_mtrr_def_type) {
+        if(write) {
+            mtrr.cmd = value;
+
+            mtrr.enable = (value >> 11) & 1;
+            mtrr.fixed_enable = (value >> 10) & 1;
+            mtrr.default_type = value & 0xFF;
+
+            update();
+        } else {
+            value = mtrr.cmd;
+        }
+    } else if(index >= msr::ia32_mtrr_physbase0 && index <= msr::ia32_mtrr_physmask7) {
+        size_t i = ((index - msr::ia32_mtrr_physbase0) & ~1) / 2;
+        size_t mask = index & 1;
+
+        if(write) {
+            if(mask)
+                mtrr.var[i].mask = value;
+            else
+                mtrr.var[i].base = value;
+
+            update();
+        } else {
+            if(mask)
+                value = mtrr.var[i].mask;
+            else
+                value = mtrr.var[i].base;
+        }
+    } else if(index == msr::ia32_mtrr_fix64K_00000) {
+        if(write) {
+            mtrr.fix[0] = value;
+            update();
+        } else {
+            value = mtrr.fix[0];
+        }
+    } else if(index == msr::ia32_mtrr_fix16K_80000 || index == msr::ia32_mtrr_fix16K_A0000) {
+        size_t i = (index - msr::ia32_mtrr_fix16K_80000) + 1;
+        if(write) {
+            mtrr.fix[i] = value;
+            update();
+        } else {
+            value = mtrr.fix[i];
+        }
+    } else if(index >= msr::ia32_mtrr_fix4K_C0000 && index <= msr::ia32_mtrr_fix4K_F8000) {
+        size_t i = (index - msr::ia32_mtrr_fix4K_C0000) + 3;
+        if(write) {
+            mtrr.fix[i] = value;
+            update();
+        } else {
+            value = mtrr.fix[i];
+        }
+    } else {
+        print("vm::mtrr: Unknown MTRR MSR {:#x}\n", index);
+    }
 }

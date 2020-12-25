@@ -135,14 +135,28 @@ namespace vm {
 
         std::vector<vfs::File*> disks;
 
-        std::vector<AbstractPIODriver*> drivers;
         std::unordered_map<uint16_t, AbstractPIODriver*> pio_map;
         std::unordered_map<uintptr_t, std::pair<AbstractMMIODriver*, size_t>> mmio_map;
 
 
         private:
-        AbstractVm* vm;
 
+
+        void update_mtrr(bool write, uint32_t index, uint64_t& val);
+
+        struct {
+            struct {
+                uintptr_t base;
+                uintptr_t mask;
+            } var[8];
+
+            uint64_t fix[11];
+            uint64_t cmd;
+
+            bool enable, fixed_enable;
+            uint8_t default_type;
+        } mtrr;
+        AbstractVm* vm;
     };
 
     void init();
