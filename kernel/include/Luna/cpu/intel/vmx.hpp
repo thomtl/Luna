@@ -264,6 +264,10 @@ namespace vmx {
         uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
         simd::Context& get_guest_simd_context() { return guest_simd; }
 
+        void inject_int([[maybe_unused]] vm::AbstractVm::InjectType type, [[maybe_unused]] uint8_t vector, [[maybe_unused]] bool error_code = false, [[maybe_unused]] uint32_t error = 0) {
+            PANIC("TODO");
+        }
+
         private:
         void vmclear();
         void vmptrld() const;

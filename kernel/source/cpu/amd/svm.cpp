@@ -131,6 +131,26 @@ svm::Vm::~Vm() {
 
 extern "C" void svm_vmrun(svm::GprState* guest_gprs, uint64_t vmcb_pa);
 
+void svm::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code, uint32_t error) {
+    uint8_t type_val = 0;
+    switch (type) {
+        case vm::AbstractVm::InjectType::ExtInt: type_val = 0; break;
+        case vm::AbstractVm::InjectType::NMI: type_val = 2; break;
+        case vm::AbstractVm::InjectType::Exception: type_val = 3; break;
+        case vm::AbstractVm::InjectType::SoftwareInt: type_val = 4; break;
+    }
+    uint64_t v = 0;
+    v |= vector; // Vector
+    v |= (type_val << 8); // Type
+    v |= (error_code << 11);
+    v |= (1 << 31); // Valid
+
+    if(error_code) 
+        v |= ((uint64_t)error << 32);
+
+    vmcb->event_inject = v; // Is cleared upon VMEXIT
+}
+
 bool svm::Vm::run(vm::VmExit& exit) {
     while(true) {
         asm("clgi");

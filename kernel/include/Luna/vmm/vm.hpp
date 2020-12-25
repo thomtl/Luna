@@ -120,6 +120,9 @@ namespace vm {
         virtual uintptr_t get_phys(uintptr_t gpa) = 0;
         virtual simd::Context& get_guest_simd_context() = 0;
 
+        enum class InjectType { ExtInt, NMI, Exception, SoftwareInt };
+        virtual void inject_int(InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0) = 0;
+
         virtual bool run(VmExit& exit) = 0;
     };
 

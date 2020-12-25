@@ -210,6 +210,8 @@ namespace svm {
         uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
         simd::Context& get_guest_simd_context() { return guest_simd; }
 
+        void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0);
+
         private:
         uintptr_t vmcb_pa;
         volatile Vmcb* vmcb;

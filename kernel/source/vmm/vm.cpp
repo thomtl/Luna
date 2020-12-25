@@ -302,7 +302,8 @@ bool vm::Vm::run() {
             auto write_low32 = [&](uint64_t& reg, uint32_t val) { reg &= ~0xFFFF'FFFF; reg |= val; };
 
             if(index == msr::ia32_mtrr_cap) {
-                ASSERT(!exit.msr.write); // TODO: Inject #GP
+                if(exit.msr.write)
+                    vm->inject_int(AbstractVm::InjectType::Exception, 13, true, 0); // Inject #GP(0)
 
                 value = (1 << 10) | (1 << 8) | 8; // WC valid, Fixed MTRRs valid, 8 Variable MTRRs
             } else if(index >= 0x200 && index <= 0x2FF) {

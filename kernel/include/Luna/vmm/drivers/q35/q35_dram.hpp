@@ -61,7 +61,7 @@ namespace vm::q35::dram {
             space.header.subclass = 0;
             space.header.prog_if = 0;
 
-            space.header.capabilities = 0xE0;
+            space.header.capabilities = cap_off;
 
             space.header.subsystem_vendor_id = 0x1AF4;
             space.header.subsystem_device_id = 0x1100;
