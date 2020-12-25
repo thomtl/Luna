@@ -446,6 +446,28 @@ bool vmx::Vm::run(vm::VmExit& exit) {
     }
 }
 
+void vmx::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code, uint32_t error) {
+    uint8_t type_val = 0;
+    switch (type) {
+        case vm::AbstractVm::InjectType::Exception: type_val = 3; break; 
+        case vm::AbstractVm::InjectType::NMI: type_val = 2; break;
+        case vm::AbstractVm::InjectType::ExtInt: type_val = 0; break;
+        default:
+            PANIC("Unsupported Injection type"); // TODO: Support software ints
+    }
+
+    uint32_t info = 0;
+    info |= vector;
+    info |= (type_val << 8);
+    info |= (error_code << 11);
+    info |= (1 << 31); // Valid
+
+    if(error_code)
+        write(vm_entry_exception_error_code, error);
+
+    write(vm_entry_interruption_info, info);
+}
+
 void vmx::Vm::get_regs(vm::RegisterState& regs) const {
     vmptrld();
 

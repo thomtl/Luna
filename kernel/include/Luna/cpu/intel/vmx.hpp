@@ -143,6 +143,9 @@ namespace vmx {
     constexpr uint64_t exception_bitmap = 0x4004;
     constexpr uint64_t vm_exit_control = 0x400C;
     constexpr uint64_t vm_entry_control = 0x4012;
+    constexpr uint64_t vm_entry_interruption_info = 0x4016;
+    constexpr uint64_t vm_entry_exception_error_code = 0x4018;
+    constexpr uint64_t vm_entry_instruction_length = 0x401A;
 
     constexpr uint64_t host_cr0 = 0x6c00;
     constexpr uint64_t host_cr3 = 0x6c02;
@@ -264,9 +267,7 @@ namespace vmx {
         uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
         simd::Context& get_guest_simd_context() { return guest_simd; }
 
-        void inject_int([[maybe_unused]] vm::AbstractVm::InjectType type, [[maybe_unused]] uint8_t vector, [[maybe_unused]] bool error_code = false, [[maybe_unused]] uint32_t error = 0) {
-            PANIC("TODO");
-        }
+        void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0);
 
         private:
         void vmclear();
