@@ -82,6 +82,7 @@ void ept::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     page.r = (flags & paging::mapPagePresent) ? 1 : 0;
     page.w = (flags & paging::mapPageWrite) ? 1 : 0;
     page.x = (flags & paging::mapPageExecute) ? 1 : 0;
+    page.mem_type = msr::pat::write_back;
     page.frame = (pa >> 12);
 
     invept();
