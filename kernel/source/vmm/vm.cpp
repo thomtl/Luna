@@ -20,7 +20,7 @@ void vm::init() {
         PANIC("Unknown virtualization vendor");
 }
 
-vm::VCPU::VCPU(vm::Vm* vm): vm{vm} {
+vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     uint64_t cr0_constraint = 0, cr4_constraint = 0, efer_constraint = 0;
     switch (get_cpu().cpu.vm.vendor) {
         case CpuVendor::Intel:
@@ -73,6 +73,12 @@ vm::VCPU::VCPU(vm::Vm* vm): vm{vm} {
     auto& simd = vcpu->get_guest_simd_context();
     simd.data()->fcw = 0x40;
     simd.data()->mxcsr = 0x1F80;
+
+
+
+    // MSR init
+    apicbase = 0xFEE0'0000 | (1 << 11) | ((id == 0) << 8); // xAPIC enable, If id == 0 set BSP bit too
+    lapic.update_apicbase(apicbase);
 }
         
 void vm::VCPU::get_regs(vm::RegisterState& regs) const { vcpu->get_regs(regs); }
@@ -99,21 +105,30 @@ bool vm::VCPU::run() {
             get_regs(regs);
 
             auto grip = regs.cs.base + regs.rip;
+
+            auto emulate_mmio = [&](AbstractMMIODriver* driver) {
+                ASSERT((grip + 15) < align_up(grip, pmm::block_size)); // TODO: Support page boundary instructions
+                    
+                auto hpa = vm->mm->get_phys(grip);
+                ASSERT(hpa); // Assert that the page is actually mapped
+                auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
+
+                uint8_t instruction[max_x86_instruction_size];
+                memcpy(instruction, host_buf, 15);
+
+                vm::emulate::emulate_instruction(instruction, regs, driver);
+                set_regs(regs);
+            };
+
+            if((exit.mmu.gpa & ~0xFFF) == (apicbase & ~0xFFF)) {
+                emulate_mmio(&lapic);
+                goto did_mmio;
+            }
             
             for(const auto [base, driver] : vm->mmio_map) {
                 if(exit.mmu.gpa >= base && exit.mmu.gpa <= (base + driver.second))  {
                     // Access is in an MMIO region
-                    ASSERT((grip + 15) < align_up(grip, pmm::block_size)); // TODO: Support page boundary instructions
-                    
-                    auto hpa = vm->mm->get_phys(grip);
-                    ASSERT(hpa); // Assert that the page is actually mapped
-                    auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
-
-                    uint8_t instruction[max_x86_instruction_size];
-                    memcpy(instruction, host_buf, 15);
-
-                    vm::emulate::emulate_instruction(instruction, regs, driver.first);
-                    set_regs(regs);
+                    emulate_mmio(driver.first);
                     goto did_mmio;
                 }
             }
@@ -259,6 +274,13 @@ bool vm::VCPU::run() {
                     vcpu->inject_int(AbstractVm::InjectType::Exception, 13, true, 0); // Inject #GP(0)
 
                 value = (1 << 10) | (1 << 8) | 8; // WC valid, Fixed MTRRs valid, 8 Variable MTRRs
+            } else if(index == msr::ia32_apic_base) {
+                if(exit.msr.write) {
+                    apicbase = value;
+                    lapic.update_apicbase(apicbase);
+                } else {
+                    value = apicbase;
+                }
             } else if(index >= 0x200 && index <= 0x2FF) {
                 update_mtrr(exit.msr.write, index, value);
             } else {
@@ -413,5 +435,5 @@ vm::Vm::Vm(uint8_t n_cpus) {
 
     ASSERT(n_cpus > 0); // Make sure there's at least 1 VCPU
     for(uint8_t i = 0; i < n_cpus; i++)
-        cpus.emplace_back(this);
+        cpus.emplace_back(this, i);
 }

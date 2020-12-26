@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Luna/common.hpp>
-#include <Luna/vmm/vm.hpp>
 
 #include <Luna/cpu/lapic.hpp>
 
@@ -9,15 +8,20 @@
 
 #include <std/unordered_map.hpp>
 
+#include <Luna/vmm/drivers.hpp>
+
 
 namespace vm::irqs::lapic {
+    // LAPIC is a bit weird and not a normal MMIO driver
     struct Driver : public vm::AbstractMMIODriver {
-        Driver(uint64_t base, uint8_t id): base{base}, id{id}, svr{0xFF} {}
+        Driver(uint8_t id): id{id}, svr{0xFF} {}
 
-        void register_mmio_driver(Vm* vm) {
-            this->vm = vm;
+        void register_mmio_driver([[maybe_unused]] Vm* vm) {}
 
-            vm->mmio_map[0xFEE0'0000] = {this, 0x1000};
+        void update_apicbase(uint64_t value) {
+            base = value & ~0xFFF;
+            ASSERT(value & (1 << 11)); // Assert xAPIC is enabled
+            ASSERT(!(value & (1 << 10))); // Assert x2APIC is disabled
         }
 
         void mmio_write(uintptr_t addr, uint64_t value, uint8_t size) {
@@ -68,6 +72,7 @@ namespace vm::irqs::lapic {
 
         private:
         uint64_t base;
+
         uint8_t id;
 
         uint32_t lint0, lint1;

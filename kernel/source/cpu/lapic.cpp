@@ -26,10 +26,10 @@ void lapic::Lapic::init() {
 
     x2apic = ((c & (1 << 21)) != 0);
 
-    auto base = msr::read(msr::apic_base);
+    auto base = msr::read(msr::ia32_apic_base);
     base |= (1 << 11); // Set Enable bit
     base |= (x2apic << 10); // Set x2APIC bit if supported
-    msr::write(msr::apic_base, base);
+    msr::write(msr::ia32_apic_base, base);
 
     auto mmio_base_pa = base & 0xFFFF'FFFF'FFFF'F000;
     mmio_base = mmio_base_pa + phys_mem_map;

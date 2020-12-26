@@ -6,6 +6,8 @@
 #include <std/vector.hpp>
 
 #include <Luna/cpu/regs.hpp>
+#include <Luna/vmm/drivers.hpp>
+#include <Luna/vmm/drivers/irqs/lapic.hpp>
 
 namespace vm {
     struct RegisterState {
@@ -88,26 +90,6 @@ namespace vm {
         };
     };
 
-    struct Vm;
-
-    struct AbstractPIODriver {
-        virtual ~AbstractPIODriver() {}
-
-        virtual void register_pio_driver(Vm* vm) = 0;
-
-        virtual void pio_write(uint16_t port, uint32_t value, uint8_t size) = 0;
-        virtual uint32_t pio_read(uint16_t port, uint8_t size) = 0;
-    };
-
-    struct AbstractMMIODriver {
-        virtual ~AbstractMMIODriver() {}
-
-        virtual void register_mmio_driver(Vm* vm) = 0;
-
-        virtual void mmio_write(uintptr_t addr, uint64_t value, uint8_t size) = 0;
-        virtual uint64_t mmio_read(uintptr_t addr, uint8_t size) = 0;
-    };
-
     struct AbstractMM {
         virtual ~AbstractMM() {}
 
@@ -138,7 +120,7 @@ namespace vm {
     struct Vm;
 
     struct VCPU {
-        VCPU(Vm* vm);
+        VCPU(Vm* vm, uint8_t id);
         
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
@@ -161,9 +143,12 @@ namespace vm {
             bool enable, fixed_enable;
             uint8_t default_type;
         } mtrr;
+        uint64_t apicbase;
 
         Vm* vm;
         AbstractVm* vcpu;
+
+        irqs::lapic::Driver lapic;
     };
 
     struct Vm {
