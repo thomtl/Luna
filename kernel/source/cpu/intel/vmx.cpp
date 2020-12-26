@@ -145,7 +145,11 @@ void vmx::init() {
     ASSERT(ept & (1 << 25)); // Assert single context invept is supported
 }
 
-vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
+ept::context* vmx::create_ept() {
+    return new ept::context{get_cpu().cpu.vmx.ept_levels};
+}
+
+vmx::Vm::Vm(vm::AbstractMM* mm): mm{mm} {
     vmcs_pa = pmm::alloc_block();
     vmcs = vmcs_pa + phys_mem_map;
 
@@ -213,8 +217,8 @@ vmx::Vm::Vm(): guest_page{get_cpu().cpu.vmx.ept_levels} {
 
     {
         uint64_t eptp = 0;
-        eptp |= guest_page.get_root_pa(); // Set EPT Physical Address
-        eptp |= ((guest_page.get_levels() - 1) << 3); // Set EPT Number of page levels
+        eptp |= mm->get_root_pa(); // Set EPT Physical Address
+        eptp |= ((mm->get_levels() - 1) << 3); // Set EPT Number of page levels
         eptp |= 6; // Writeback Caching
 
         if(get_cpu().cpu.vmx.ept_dirty_accessed)
@@ -323,7 +327,7 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             // Hardware exception
             if(info.type == 3) {
                 if(info.vector == 6) { // #UD
-                    auto* instruction = (uint8_t*)(guest_page.get_phys(grip) + phys_mem_map); // TODO: Make sure this doesn't cross page boundaries
+                    auto* instruction = (uint8_t*)(mm->get_phys(grip) + phys_mem_map); // TODO: Make sure this doesn't cross page boundaries
 
                     // Make sure we can run AMD's VMMCALL on Intel
                     if(instruction[0] == 0x0F && instruction[1] == 0x01 && instruction[2] == 0xD9) {

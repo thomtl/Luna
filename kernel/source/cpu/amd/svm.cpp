@@ -35,6 +35,10 @@ void svm::init() {
     svm.asid_manager.init(svm.n_asids);
 }
 
+npt::context* svm::create_npt() {
+    return new npt::context{4};
+}
+
 bool svm::is_supported() {
     uint32_t a, b, c, d;
     if(!cpu::cpuid(0x8000'0001, a, b, c, d))
@@ -54,7 +58,7 @@ uint64_t svm::get_efer_constraint() {
     return (1 << 12);
 }
 
-svm::Vm::Vm() {
+svm::Vm::Vm(vm::AbstractMM* mm): mm{mm} {
     vmcb_pa = pmm::alloc_block();
     ASSERT(vmcb_pa);
 
@@ -91,19 +95,12 @@ svm::Vm::Vm() {
     vmcb->icept_efer_write = 1;
     vmcb->v_intr_masking = 1;
 
-    
-
-    asid = get_cpu().cpu.svm.asid_manager->alloc();
-    ASSERT(asid != ~0u);
-
-    auto page_tables = npt::context{4, asid};
-    guest_page = std::move(page_tables);
 
     vmcb->npt_enable = 1;
-    vmcb->npt_cr3 = guest_page.get_root_pa();
+    vmcb->npt_cr3 = mm->get_root_pa();
     vmcb->pat = 0x0007040600070406; // Default PAT
 
-    vmcb->guest_asid = asid;
+    vmcb->guest_asid = mm->get_asid();
     vmcb->tlb_control = 0; // Do no TLB flushes on vmrun, all TLB flushes are done by the NPT using invlpga
 
     io_bitmap_pa = pmm::alloc_n_blocks(io_bitmap_size);
@@ -122,11 +119,12 @@ svm::Vm::Vm() {
 }
 
 svm::Vm::~Vm() {
-    get_cpu().cpu.svm.asid_manager->free(vmcb->guest_asid);
-    
     pmm::free_block(vmcb_pa);
     for(size_t i = 0; i < io_bitmap_size; i++)
         pmm::free_block(io_bitmap_pa + (i * pmm::block_size));
+
+    for(size_t i = 0; i < msr_bitmap_size; i++)
+        pmm::free_block(msr_bitmap_pa + (i * pmm::block_size));
 }
 
 extern "C" void svm_vmrun(svm::GprState* guest_gprs, uint64_t vmcb_pa);
@@ -187,7 +185,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
             auto grip = vmcb->cs.base + vmcb->rip;
 
             if(int_no == 6) { // #UD
-                auto* instruction = (uint8_t*)(guest_page.get_phys(grip) + phys_mem_map); // TODO: Make sure we don't cross a page boundary
+                auto* instruction = (uint8_t*)(mm->get_phys(grip) + phys_mem_map); // TODO: Make sure we don't cross a page boundary
 
                 // Make sure `VMCALL` from intel also works
                 if(instruction[0] == 0x0F && instruction[1] == 0x01 && instruction[2] == 0xC1) {
@@ -276,7 +274,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
             exit.mmu.access.x = info.execute;
             exit.mmu.access.user = info.user;
 
-            auto page = guest_page.get_page(addr);
+            auto page = static_cast<npt::context*>(mm)->get_page(addr); // This downcast should be safe
 
             exit.mmu.page.present = info.present;
             exit.mmu.page.r = page.present;

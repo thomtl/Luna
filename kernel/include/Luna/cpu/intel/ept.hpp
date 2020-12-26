@@ -3,6 +3,8 @@
 #include <Luna/common.hpp>
 #include <Luna/mm/pmm.hpp>
 
+#include <Luna/vmm/vm.hpp>
+
 namespace ept {
     struct [[gnu::packed]] page_entry {
         uint64_t r : 1;
@@ -33,7 +35,7 @@ namespace ept {
     };
     static_assert(sizeof(page_table) == pmm::block_size);
 
-    class context {
+    class context : public vm::AbstractMM {
         public:
         context(uint8_t levels);
         ~context();
@@ -46,6 +48,10 @@ namespace ept {
         uintptr_t get_root_pa() const;
 
         uint8_t get_levels() const { return levels; }
+
+        uint32_t get_asid() const {
+            return 0; // We don't use VPIDs yet
+        }
 
         private:
         page_entry* walk(uintptr_t va, bool create_new_tables);

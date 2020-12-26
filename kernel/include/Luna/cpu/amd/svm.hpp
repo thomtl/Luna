@@ -186,28 +186,19 @@ namespace svm {
     };
 
     void init();
+    npt::context* create_npt();
     bool is_supported();
 
     uint64_t get_cr0_constraint();
     uint64_t get_efer_constraint();
 
     struct Vm : public vm::AbstractVm {
-        Vm();
+        Vm(vm::AbstractMM* mm);
         ~Vm();
         bool run(vm::VmExit& exit);
 
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
-
-        void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) {
-            guest_page.map(hpa, gpa, flags | paging::mapPageUser); // NPT walks are always user walks for some reason
-        }
-
-        void protect(uintptr_t gpa, uint64_t flags) {
-            guest_page.protect(gpa, flags | paging::mapPageUser);
-        }
-
-        uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
         simd::Context& get_guest_simd_context() { return guest_simd; }
 
         void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0);
@@ -216,11 +207,10 @@ namespace svm {
         uintptr_t vmcb_pa;
         volatile Vmcb* vmcb;
 
-        uint32_t asid;
-
         simd::Context host_simd, guest_simd;
-        npt::context guest_page;
         GprState guest_gprs;
+
+        vm::AbstractMM* mm;
 
         uint8_t* io_bitmap, *msr_bitmap;
         uintptr_t io_bitmap_pa, msr_bitmap_pa;

@@ -20,17 +20,17 @@ void vm::init() {
         PANIC("Unknown virtualization vendor");
 }
 
-vm::Vm::Vm() {
+vm::VCPU::VCPU(vm::Vm* vm): vm{vm} {
     uint64_t cr0_constraint = 0, cr4_constraint = 0, efer_constraint = 0;
     switch (get_cpu().cpu.vm.vendor) {
         case CpuVendor::Intel:
-            vm = new vmx::Vm{};
+            vcpu = new vmx::Vm{vm->mm};
 
             cr0_constraint = vmx::get_cr0_constraint();
             cr4_constraint = vmx::get_cr4_constraint();
             break;
         case CpuVendor::AMD:
-            vm = new svm::Vm{};
+            vcpu = new svm::Vm{vm->mm};
 
             cr0_constraint = svm::get_cr0_constraint();
             efer_constraint = svm::get_efer_constraint();
@@ -40,8 +40,6 @@ vm::Vm::Vm() {
     }
 
     vm::RegisterState regs{};
-
-    
 
     regs.cs = {.selector = 0xF000, .base = 0xFFFF'0000, .limit = 0xFFFF, .attrib = {.type = 0b11, .s = 1, .present = 1}};
 
@@ -70,24 +68,22 @@ vm::Vm::Vm() {
     regs.cr3 = 0;
     regs.efer = efer_constraint;
 
-    vm->set_regs(regs);
+    vcpu->set_regs(regs);
 
-    auto& simd = vm->get_guest_simd_context();
+    auto& simd = vcpu->get_guest_simd_context();
     simd.data()->fcw = 0x40;
     simd.data()->mxcsr = 0x1F80;
 }
         
-void vm::Vm::get_regs(vm::RegisterState& regs) const { vm->get_regs(regs); }
-void vm::Vm::set_regs(const vm::RegisterState& regs) { vm->set_regs(regs); }
+void vm::VCPU::get_regs(vm::RegisterState& regs) const { vcpu->get_regs(regs); }
+void vm::VCPU::set_regs(const vm::RegisterState& regs) { vcpu->set_regs(regs); }
 
-void vm::Vm::map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) { vm->map(hpa, gpa, flags); }
-void vm::Vm::protect(uintptr_t gpa, uint64_t flags) { vm->protect(gpa, flags); }
-bool vm::Vm::run() {
+bool vm::VCPU::run() {
     while(true) {
         vm::RegisterState regs{};
         vm::VmExit exit{};
 
-        if(!vm->run(exit))
+        if(!vcpu->run(exit))
             return false;
 
         switch (exit.reason) {
@@ -95,50 +91,7 @@ bool vm::Vm::run() {
             get_regs(regs);
 
             uint32_t op = regs.rax & 0xFFFF'FFFF;
-            if(op == 0) {
-                print("vm: Guest requested exit\n", op);
-                return true;
-            } else if(op == 1) {
-                uint16_t size = regs.rcx & 0xFFFF;
-                uint16_t disk_index = (regs.rcx >> 16) & 0x7FFF;
-                bool address_size = (regs.rcx & (1 << 31)) ? true : false;
-
-                uintptr_t dest = regs.rdi & (address_size ? 0xFFFF'FFFF'FFFF'FFFF : 0xFFFF'FFFF);
-                uintptr_t off = regs.rbx & (address_size ? 0xFFFF'FFFF'FFFF'FFFF : 0xFFFF'FFFF);
-
-                print("vm: Guest requested disk read, Disk: {}, Size: {}, Dest {:#x}, Off: {}, AS: {}\n", disk_index, size, dest, off, address_size);
-                if(disk_index >= disks.size()) {
-                    regs.rflags |= 1; // Set CF
-                    set_regs(regs);
-                } else {
-                    auto& disk = disks[disk_index];
-                    if(!disk) {
-                        regs.rflags |= 1; // Set CF
-                        set_regs(regs);
-                    } else {
-                        auto* buffer = new uint8_t[size];
-                        if(disk->read(off, size, buffer) != size) {
-                            regs.rflags |= 1; // Set CF
-                            set_regs(regs);
-                        } else {
-                            // TODO: Get rid of these assertions
-                            auto page_off = dest & 0xFFF;
-                            ASSERT(size <= (0x1000 - page_off));
-
-                            auto hpa = vm->get_phys(dest);
-                            ASSERT(hpa); // Assert that the page is actually mapped
-                            auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
-
-                            memcpy(host_buf, buffer, size);
-                        }
-
-                        delete[] buffer;
-                    }
-                }
-            } else {
-                print("vm: Unknown VMMCALL opcode {:#x}\n", op);
-                return false;
-            }
+            print("vcpu: Unknown VMMCALL opcode {:#x}\n", op);
             break;
         }
 
@@ -147,12 +100,12 @@ bool vm::Vm::run() {
 
             auto grip = regs.cs.base + regs.rip;
             
-            for(const auto [base, driver] : mmio_map) {
+            for(const auto [base, driver] : vm->mmio_map) {
                 if(exit.mmu.gpa >= base && exit.mmu.gpa <= (base + driver.second))  {
                     // Access is in an MMIO region
                     ASSERT((grip + 15) < align_up(grip, pmm::block_size)); // TODO: Support page boundary instructions
                     
-                    auto hpa = vm->get_phys(grip);
+                    auto hpa = vm->mm->get_phys(grip);
                     ASSERT(hpa); // Assert that the page is actually mapped
                     auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
 
@@ -196,8 +149,8 @@ bool vm::Vm::run() {
                 }
             };
 
-            if(!pio_map.contains(exit.pio.port)) {
-                print("vm: Unhandled PIO Access to port {:#x}\n", exit.pio.port);
+            if(!vm->pio_map.contains(exit.pio.port)) {
+                print("vcpu: Unhandled PIO Access to port {:#x}\n", exit.pio.port);
 
                 if(!exit.pio.write) {
                     switch(exit.pio.size) {
@@ -211,7 +164,7 @@ bool vm::Vm::run() {
                 break;
             }
 
-            auto* driver = pio_map[exit.pio.port];
+            auto* driver = vm->pio_map[exit.pio.port];
 
             if(exit.pio.write) {
                 auto value = regs.rax;
@@ -287,7 +240,7 @@ bool vm::Vm::run() {
                 passthrough(); // TODO: Do we want this to be passthrough?
                 write_low32(regs.rcx, 0); // Clear out core info
             } else {
-                print("vm: Unhandled CPUID: {:#x}:{}\n", leaf, subleaf);
+                print("vcpu: Unhandled CPUID: {:#x}:{}\n", leaf, subleaf);
             }
 
             set_regs(regs);
@@ -303,16 +256,16 @@ bool vm::Vm::run() {
 
             if(index == msr::ia32_mtrr_cap) {
                 if(exit.msr.write)
-                    vm->inject_int(AbstractVm::InjectType::Exception, 13, true, 0); // Inject #GP(0)
+                    vcpu->inject_int(AbstractVm::InjectType::Exception, 13, true, 0); // Inject #GP(0)
 
                 value = (1 << 10) | (1 << 8) | 8; // WC valid, Fixed MTRRs valid, 8 Variable MTRRs
             } else if(index >= 0x200 && index <= 0x2FF) {
                 update_mtrr(exit.msr.write, index, value);
             } else {
                 if(exit.msr.write) {
-                    print("vm: Unhandled wrmsr({:#x}, {:#x})\n", index, value);
+                    print("vcpu: Unhandled wrmsr({:#x}, {:#x})\n", index, value);
                 } else {
-                    print("vm: Unhandled rdmsr({:#x})\n", index);
+                    print("vcpu: Unhandled rdmsr({:#x})\n", index);
                     value = 0;
                 }
             }
@@ -328,7 +281,7 @@ bool vm::Vm::run() {
         }
         
         default:
-            print("vm: Exit due to {:s}\n", exit.reason_to_string(exit.reason));
+            print("vcpu: Exit due to {:s}\n", exit.reason_to_string(exit.reason));
             if(exit.instruction_len != 0) {
                 print("         Opcode: ");
                 for(size_t i = 0; i < exit.instruction_len; i++)
@@ -341,7 +294,7 @@ bool vm::Vm::run() {
     return true;
 }
 
-void vm::Vm::update_mtrr(bool write, uint32_t index, uint64_t& value) {
+void vm::VCPU::update_mtrr(bool write, uint32_t index, uint64_t& value) {
     auto update = [this](){
         // We can mostly just ignore MTRRs and whatever guests want for paging, as we force WB
         // However when VT-d doesn't support snooping, it's needed to mark pages as UC, when passing through devices
@@ -443,4 +396,22 @@ void vm::Vm::update_mtrr(bool write, uint32_t index, uint64_t& value) {
     } else {
         print("vm::mtrr: Unknown MTRR MSR {:#x}\n", index);
     }
+}
+
+vm::Vm::Vm(uint8_t n_cpus) {
+    switch (get_cpu().cpu.vm.vendor) {
+        case CpuVendor::Intel:
+            mm = vmx::create_ept();
+            break;
+        case CpuVendor::AMD:
+            mm = svm::create_npt();
+            break;
+        default:
+            PANIC("Unknown virtualization vendor");
+    }
+
+
+    ASSERT(n_cpus > 0); // Make sure there's at least 1 VCPU
+    for(uint8_t i = 0; i < n_cpus; i++)
+        cpus.emplace_back(this);
 }

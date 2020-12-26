@@ -146,7 +146,7 @@ namespace vm::q35::dram {
                     //print("PAM{}, {:#x} -> {:#x}, {:#b}\n", i, pam_regions[i].base, pam_regions[i].limit, (uint16_t)pam);
 
                     for(size_t addr = pam_regions[i].base; addr < pam_regions[i].limit; addr += pmm::block_size)
-                        vm->protect(addr, paging::mapPagePresent | ((pam & pam_writable) ? paging::mapPageWrite : 0) | paging::mapPageExecute);
+                        vm->mm->protect(addr, paging::mapPagePresent | ((pam & pam_writable) ? paging::mapPageWrite : 0) | paging::mapPageExecute);
 
                     pam_cache[i] = pam;
                 }

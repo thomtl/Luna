@@ -237,6 +237,7 @@ namespace vmx {
     constexpr uint64_t vm_exit_qualification = 0x6400;
 
     void init();
+    ept::context* create_ept();
     bool is_supported();
 
     uint64_t get_cr0_constraint();
@@ -250,21 +251,11 @@ namespace vmx {
     };
 
     struct Vm : public vm::AbstractVm {
-        Vm();
+        Vm(vm::AbstractMM* mm);
         bool run(vm::VmExit& exit);
 
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
-
-        void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) {
-            guest_page.map(hpa, gpa, flags);
-        }
-
-        void protect(uintptr_t gpa, uint64_t flags) {
-            guest_page.protect(gpa, flags);
-        }
-
-        uintptr_t get_phys(uintptr_t gpa) { return guest_page.get_phys(gpa); }
         simd::Context& get_guest_simd_context() { return guest_simd; }
 
         void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0);
@@ -275,12 +266,12 @@ namespace vmx {
         void write(uint64_t field, uint64_t value);
         uint64_t read(uint64_t field) const;
 
-
         uintptr_t vmcs_pa;
         uintptr_t vmcs;
 
+        vm::AbstractMM* mm;
+
         simd::Context host_simd, guest_simd;
-        ept::context guest_page;
         GprState guest_gprs;
     };
 } // namespace vmx

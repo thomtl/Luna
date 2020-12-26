@@ -151,7 +151,8 @@ namespace vm::irqs::pic {
 
         private:
         void inject_irq(int device, uint8_t irq) {
-            vm->vm->inject_int(vm::AbstractVm::InjectType::ExtInt, pics[device].vector + irq);
+            // PIC always sends IRQs to CPU 0
+            vm->cpus[0].vcpu->inject_int(vm::AbstractVm::InjectType::ExtInt, pics[device].vector + irq);
         }
 
         uint8_t get_priority(int dev, uint8_t mask) {

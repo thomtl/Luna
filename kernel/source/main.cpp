@@ -106,7 +106,7 @@ void kernel_main(const stivale2_struct* info) {
 
     vm::init();
 
-    vm::Vm vm{};
+    vm::Vm vm{1};
     {
         auto* file = vfs::get_vfs().open("A:/luna/bios.bin");
         ASSERT(file);
@@ -125,11 +125,11 @@ void kernel_main(const stivale2_struct* info) {
             ASSERT(block);
 
             if((bios_size - curr) <= isa_bios_size) {
-                vm.map(block, isa_bios_start + isa_curr, paging::mapPagePresent | paging::mapPageExecute);
+                vm.mm->map(block, isa_bios_start + isa_curr, paging::mapPagePresent | paging::mapPageExecute);
                 isa_curr += 0x1000;
             }
 
-            vm.map(block, map + curr, paging::mapPagePresent | paging::mapPageExecute);
+            vm.mm->map(block, map + curr, paging::mapPagePresent | paging::mapPageExecute);
 
             auto* va = (uint8_t*)(block + phys_mem_map);
             ASSERT(file->read(curr, 0x1000, va) == 0x1000);
@@ -143,7 +143,7 @@ void kernel_main(const stivale2_struct* info) {
             auto* va = (uint8_t*)(block + phys_mem_map);
             memset(va, 0, pmm::block_size);
 
-            vm.map(block, i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+            vm.mm->map(block, i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
         }
     }
 
@@ -176,7 +176,7 @@ void kernel_main(const stivale2_struct* info) {
     auto* pic_dev = new vm::irqs::pic::Driver{};
     pic_dev->register_pio_driver(&vm);
     
-    ASSERT(vm.run());
+    ASSERT(vm.cpus[0].run());
 
     print("luna: Done with kernel_main\n");
     while(true)

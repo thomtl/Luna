@@ -108,16 +108,25 @@ namespace vm {
         virtual uint64_t mmio_read(uintptr_t addr, uint8_t size) = 0;
     };
 
+    struct AbstractMM {
+        virtual ~AbstractMM() {}
+
+        virtual void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) = 0;
+        virtual void protect(uintptr_t gpa, uint64_t flags) = 0;
+        virtual uintptr_t get_phys(uintptr_t gpa) = 0;
+
+        virtual uintptr_t get_root_pa() const = 0;
+        virtual uint32_t get_asid() const = 0;
+        virtual uint8_t get_levels() const = 0;
+    };
+
 
     struct AbstractVm {
         virtual ~AbstractVm() {}
 
         virtual void get_regs(vm::RegisterState& regs) const = 0;
         virtual void set_regs(const vm::RegisterState& regs) = 0;
-
-        virtual void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) = 0;
-        virtual void protect(uintptr_t gpa, uint64_t flags) = 0;
-        virtual uintptr_t get_phys(uintptr_t gpa) = 0;
+        
         virtual simd::Context& get_guest_simd_context() = 0;
 
         enum class InjectType { ExtInt, NMI, Exception, SoftwareInt };
@@ -126,8 +135,10 @@ namespace vm {
         virtual bool run(VmExit& exit) = 0;
     };
 
-    struct Vm {
-        Vm();
+    struct Vm;
+
+    struct VCPU {
+        VCPU(Vm* vm);
         
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
@@ -135,13 +146,6 @@ namespace vm {
         void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags);
         void protect(uintptr_t gpa, uint64_t flags);
         bool run();
-
-        std::vector<vfs::File*> disks;
-
-        std::unordered_map<uint16_t, AbstractPIODriver*> pio_map;
-        std::unordered_map<uintptr_t, std::pair<AbstractMMIODriver*, size_t>> mmio_map;
-
-
 
         void update_mtrr(bool write, uint32_t index, uint64_t& val);
 
@@ -157,7 +161,18 @@ namespace vm {
             bool enable, fixed_enable;
             uint8_t default_type;
         } mtrr;
-        AbstractVm* vm;
+
+        Vm* vm;
+        AbstractVm* vcpu;
+    };
+
+    struct Vm {
+        Vm(uint8_t n_cpus);
+        std::unordered_map<uint16_t, AbstractPIODriver*> pio_map;
+        std::unordered_map<uintptr_t, std::pair<AbstractMMIODriver*, size_t>> mmio_map;
+
+        std::vector<VCPU> cpus;
+        AbstractMM* mm;
     };
 
     void init();

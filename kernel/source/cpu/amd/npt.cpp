@@ -1,6 +1,7 @@
 #include <Luna/cpu/amd/npt.hpp>
 #include <Luna/cpu/amd/asid.hpp>
 #include <Luna/cpu/paging.hpp>
+#include <Luna/cpu/cpu.hpp>
 
 #include <std/utility.hpp>
 #include <std/string.hpp>
@@ -35,16 +36,21 @@ static void clean_table(uintptr_t pa, uint8_t level) {
     delete_table(pa);
 }
 
-npt::context::context(uint8_t levels, uint32_t asid): levels{levels}, asid{asid} {
+npt::context::context(uint8_t levels): levels{levels} {
     ASSERT(levels == 4 || levels == 5);
 
     const auto [pa, _] = create_table();
     root_pa = pa;
+
+    asid = get_cpu().cpu.svm.asid_manager->alloc();
+    ASSERT(asid != ~0u);
 }
 
 npt::context::~context(){
     if(root_pa)
         clean_table(root_pa, levels);
+
+    get_cpu().cpu.svm.asid_manager->free(asid);
 }
 
 npt::page_entry* npt::context::walk(uintptr_t va, bool create_new_tables) {
@@ -83,7 +89,7 @@ void npt::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
 
     page.present = (flags & paging::mapPagePresent) ? 1 : 0;
     page.writeable = (flags & paging::mapPageWrite) ? 1 : 0;
-    page.user = (flags & paging::mapPageUser) ? 1 : 0;
+    page.user = 1; // NPT accesses are always user, so always set that
     page.no_execute = (flags & paging::mapPageExecute) ? 0 : 1;
     page.frame = (pa >> 12);
 
@@ -97,7 +103,6 @@ void npt::context::protect(uintptr_t va, uint64_t flags) {
 
     page->present = (flags & paging::mapPagePresent) ? 1 : 0;
     page->writeable = (flags & paging::mapPageWrite) ? 1 : 0;
-    page->user = (flags & paging::mapPageUser) ? 1 : 0;
     page->no_execute = (flags & paging::mapPageExecute) ? 0 : 1;
 
     svm::invlpga(asid, va);

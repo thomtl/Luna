@@ -3,6 +3,8 @@
 #include <Luna/common.hpp>
 #include <Luna/mm/pmm.hpp>
 
+#include <Luna/vmm/vm.hpp>
+
 namespace npt {
     struct [[gnu::packed]] page_entry {
         uint64_t present : 1;
@@ -31,10 +33,10 @@ namespace npt {
     };
     static_assert(sizeof(page_table) == pmm::block_size);
 
-    class context {
+    class context : public vm::AbstractMM {
         public:
         context() = default;
-        context(uint8_t levels, uint32_t asid);
+        context(uint8_t levels);
         ~context();
 
         context& operator=(context&& other)  {
@@ -56,6 +58,12 @@ namespace npt {
         page_entry get_page(uintptr_t va);
 
         uintptr_t get_root_pa() const;
+
+        uint32_t get_asid() const {
+            return asid;
+        }
+
+        uint8_t get_levels() const { return levels; }
 
         private:
         page_entry* walk(uintptr_t va, bool create_new_tables);
