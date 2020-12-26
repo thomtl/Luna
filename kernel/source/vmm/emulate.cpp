@@ -76,6 +76,18 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
 
     uint8_t i = 0;
     bool done = false;
+
+    auto read16 = [&]() -> uint16_t { auto low = instruction[++i]; auto high = instruction[++i]; return (low | (high << 8)); };
+    auto read32 = [&]() -> uint32_t { auto low = read16(); auto high = read16(); return (low | (high << 16)); };
+    auto readN = [&](uint8_t size) -> uintptr_t { 
+        if(size == 2)
+            return read16();
+        else if(size == 4)
+            return read32();
+        else
+            PANIC("Unknown read size");
+    };
+
     while(!done) {
         auto op = instruction[i];
 
@@ -119,7 +131,7 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
                     PANIC("TODO");
                 } else {
                     auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
-                    auto v = driver->mmio_read(segment->base + src, 1); // TODO: Don't assume ds
+                    auto v = driver->mmio_read(segment->base + src, 1);
                     write_r64(regs, (vm::emulate::r64)mod.reg, v, 1);
                 }
             } else {
@@ -139,8 +151,51 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
                     PANIC("TODO");
                 } else {
                     auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
-                    auto v = driver->mmio_read(segment->base + src, operand_size); // TODO: Don't assume ds
+                    auto v = driver->mmio_read(segment->base + src, operand_size);
                     write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
+                }
+            } else {
+                print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
+                PANIC("Unknown");
+            }
+
+            done = true;
+            break;
+        }
+
+        case 0xA1: { // MOV {AX, EAX}, moffs{16, 32}
+            auto src = readN(address_size);
+            auto v = driver->mmio_read(src, operand_size);
+            write_r64(regs, vm::emulate::r64::Rax, v, operand_size);
+            done = true;
+            break;
+        }
+
+        case 0xA3: { // MOV moffs{16, 32}, {AX, EAX}
+            auto dst = readN(address_size);
+            auto v = read_r64(regs, vm::emulate::r64::Rax, operand_size);
+            driver->mmio_write(dst, v, operand_size);
+            done = true;
+            break;
+        }
+
+        case 0xC7: { // MOV r/m{16, 32}, imm{16, 32}
+            auto mod = parse_modrm(instruction[++i]);
+
+            if(mod.mod == 0) {
+                if(mod.rm == 0b100) {
+                    PANIC("TODO");
+                } else if(mod.rm == 0b101) {
+                    auto src = read32();
+
+                    auto v = readN(operand_size);
+
+                    driver->mmio_write(segment->base + src, v, operand_size);
+                } else {
+                    auto v = readN(operand_size);
+                    auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+
+                    driver->mmio_write(segment->base + src, v, operand_size);
                 }
             } else {
                 print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);

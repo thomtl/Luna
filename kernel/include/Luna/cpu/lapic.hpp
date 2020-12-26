@@ -17,7 +17,13 @@ namespace lapic
         constexpr uint64_t dfr = 0xE0;
         constexpr uint64_t spurious = 0xF0;
 
+        constexpr uint64_t error_status = 0x280;
+
+        constexpr uint64_t icr_low = 0x300;
+        constexpr uint64_t icr_high = 0x310;
         constexpr uint64_t lvt_timer = 0x320;
+        constexpr uint64_t lvt_lint0 = 0x350;
+        constexpr uint64_t lvt_lint1 = 0x360;
 
         constexpr uint64_t timer_initial_count = 0x380;
         constexpr uint64_t timer_current_count = 0x390;

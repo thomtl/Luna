@@ -6,19 +6,17 @@
 #include <Luna/misc/format.hpp>
 
 namespace vm::fast_a20 {
-    constexpr uint16_t reg_a = 0x92;
-    constexpr uint16_t reg_b = 0x61;
+    constexpr uint16_t gate = 0x92;
 
     struct Driver : public vm::AbstractPIODriver {
         void register_pio_driver(Vm* vm) {
-            vm->pio_map[reg_a] = this;
-            vm->pio_map[reg_b] = this;
+            vm->pio_map[gate] = this;
         }
 
         void pio_write(uint16_t port, uint32_t value, uint8_t size) {
             ASSERT(size == 1);
 
-            if(port == reg_a) {
+            if(port == gate) {
                 auto a20 = (value >> 1) & 1;
                 if(!a20)
                     PANIC("Guest attempted to clear A20 line");
@@ -32,7 +30,7 @@ namespace vm::fast_a20 {
 
         uint32_t pio_read(uint16_t port, uint8_t size) {
             ASSERT(size == 1);
-            if(port == reg_a)
+            if(port == gate)
                 return (1 << 1); // Port A20 is always enabled
             else {
                 print("fast_a20: Unhandled read from port {:#x}\n", port);
