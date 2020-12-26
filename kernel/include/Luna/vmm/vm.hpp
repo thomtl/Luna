@@ -142,8 +142,6 @@ namespace vm {
         std::unordered_map<uintptr_t, std::pair<AbstractMMIODriver*, size_t>> mmio_map;
 
 
-        private:
-
 
         void update_mtrr(bool write, uint32_t index, uint64_t& val);
 

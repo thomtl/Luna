@@ -35,6 +35,7 @@
 #include <Luna/vmm/drivers/q35/q35_dram.hpp>
 
 #include <Luna/vmm/drivers/irqs/lapic.hpp>
+#include <Luna/vmm/drivers/irqs/8259.hpp>
 
 #include <std/mutex.hpp>
 
@@ -169,9 +170,11 @@ void kernel_main(const stivale2_struct* info) {
     auto* dram_dev = new vm::q35::dram::Driver{&vm, pci_mmio_access};
     dram_dev->register_pci_driver(pci_host_bridge);
 
-
     auto* lapic = new vm::irqs::lapic::Driver{0xFEE0'0000, 0};
     lapic->register_mmio_driver(&vm);
+
+    auto* pic_dev = new vm::irqs::pic::Driver{};
+    pic_dev->register_pio_driver(&vm);
     
     ASSERT(vm.run());
 
