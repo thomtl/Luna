@@ -144,6 +144,7 @@ namespace vm {
             uint8_t default_type;
         } mtrr;
         uint64_t apicbase;
+        uint64_t tsc;
 
         Vm* vm;
         AbstractVm* vcpu;

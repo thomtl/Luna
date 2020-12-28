@@ -193,7 +193,7 @@ namespace svm {
     uint64_t get_efer_constraint();
 
     struct Vm : public vm::AbstractVm {
-        Vm(vm::AbstractMM* mm);
+        Vm(vm::AbstractMM* mm, vm::VCPU* vcpu);
         ~Vm();
         bool run(vm::VmExit& exit);
 
@@ -211,6 +211,7 @@ namespace svm {
         GprState guest_gprs;
 
         vm::AbstractMM* mm;
+        vm::VCPU* vcpu;
 
         uint8_t* io_bitmap, *msr_bitmap;
         uintptr_t io_bitmap_pa, msr_bitmap_pa;

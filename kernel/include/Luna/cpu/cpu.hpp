@@ -17,6 +17,8 @@ namespace cpu {
     bool cpuid(uint32_t leaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
     bool cpuid(uint32_t leaf, uint32_t subleaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
 
+    uint64_t rdtsc();
+
     void early_init(); // Cannot access per_cpu struct
     void init(); // Can access per_cpu struct
 

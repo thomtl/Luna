@@ -58,7 +58,7 @@ uint64_t svm::get_efer_constraint() {
     return (1 << 12);
 }
 
-svm::Vm::Vm(vm::AbstractMM* mm): mm{mm} {
+svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     vmcb_pa = pmm::alloc_block();
     ASSERT(vmcb_pa);
 
@@ -82,7 +82,6 @@ svm::Vm::Vm(vm::AbstractMM* mm): mm{mm} {
     vmcb->icept_hlt = 1;
     vmcb->icept_cpuid = 1;
     vmcb->icept_rdpmc = 1;
-    vmcb->icept_rdtsc = 1;
     vmcb->icept_invd = 1;
     vmcb->icept_stgi = 1;
     vmcb->icept_clgi = 1;
@@ -91,6 +90,8 @@ svm::Vm::Vm(vm::AbstractMM* mm): mm{mm} {
     vmcb->icept_wbinvd = 1;
     vmcb->icept_rdpru = 1;
     vmcb->icept_rsm = 1;
+
+    vmcb->icept_rdtsc = 0; // TSC is handled by using tsc_offset, so we don't have to intercept it
 
     vmcb->icept_efer_write = 1;
     vmcb->v_intr_masking = 1;
@@ -158,6 +159,8 @@ bool svm::Vm::run(vm::VmExit& exit) {
         auto kgs_base = msr::read(msr::kernel_gs_base);
         auto pat = msr::read(msr::ia32_pat);
 
+        vmcb->tsc_offset = -cpu::rdtsc() + vcpu->tsc;
+
         host_simd.store();
         guest_simd.load();
 
@@ -170,6 +173,8 @@ bool svm::Vm::run(vm::VmExit& exit) {
 
         guest_simd.store();
         host_simd.load();
+
+        vcpu->tsc = cpu::rdtsc() + vmcb->tsc_offset;
 
         auto& cpu_data = get_cpu();
         cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table, cpu_data.tss_sel));

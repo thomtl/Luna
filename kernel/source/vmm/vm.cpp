@@ -24,13 +24,13 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     uint64_t cr0_constraint = 0, cr4_constraint = 0, efer_constraint = 0;
     switch (get_cpu().cpu.vm.vendor) {
         case CpuVendor::Intel:
-            vcpu = new vmx::Vm{vm->mm};
+            vcpu = new vmx::Vm{vm->mm, this};
 
             cr0_constraint = vmx::get_cr0_constraint();
             cr4_constraint = vmx::get_cr4_constraint();
             break;
         case CpuVendor::AMD:
-            vcpu = new svm::Vm{vm->mm};
+            vcpu = new svm::Vm{vm->mm, this};
 
             cr0_constraint = svm::get_cr0_constraint();
             efer_constraint = svm::get_efer_constraint();
@@ -269,7 +269,12 @@ bool vm::VCPU::run() {
 
             auto write_low32 = [&](uint64_t& reg, uint32_t val) { reg &= ~0xFFFF'FFFF; reg |= val; };
 
-            if(index == msr::ia32_mtrr_cap) {
+            if(index == msr::ia32_tsc) {
+                if(exit.msr.write)
+                    tsc = value;
+                else
+                    value = tsc;
+            } else if(index == msr::ia32_mtrr_cap) {
                 if(exit.msr.write)
                     vcpu->inject_int(AbstractVm::InjectType::Exception, 13, true, 0); // Inject #GP(0)
 

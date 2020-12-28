@@ -149,7 +149,7 @@ ept::context* vmx::create_ept() {
     return new ept::context{get_cpu().cpu.vmx.ept_levels};
 }
 
-vmx::Vm::Vm(vm::AbstractMM* mm): mm{mm} {
+vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     vmcs_pa = pmm::alloc_block();
     vmcs = vmcs_pa + phys_mem_map;
 
@@ -187,7 +187,7 @@ vmx::Vm::Vm(vm::AbstractMM* mm): mm{mm} {
                      | (uint32_t)ProcBasedControls::SecondaryControlsEnable \
                      | (uint32_t)ProcBasedControls::VMExitOnCr8Store \
                      | (uint32_t)ProcBasedControls::VMExitOnRdpmc \
-                     | (uint32_t)ProcBasedControls::VMExitOnRdtsc;
+                     | (uint32_t)ProcBasedControls::TSCOffsetting;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls));
     }
@@ -288,6 +288,8 @@ bool vmx::Vm::run(vm::VmExit& exit) {
         vmclear();
         vmptrld();
 
+        write(tsc_offset, -cpu::rdtsc() + vcpu->tsc);
+
         host_simd.store();
         guest_simd.load();
 
@@ -301,6 +303,8 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
         guest_simd.store();
         host_simd.load();
+
+        vcpu->tsc = cpu::rdtsc() + tsc_offset;
 
         // VM Exits restore the GDT and IDT Limit to 0xFFFF for some reason, so fix them
         get_cpu().gdt_table.set();

@@ -225,6 +225,7 @@ namespace vmx {
 
     constexpr uint64_t guest_efer_full = 0x2806;
     
+    constexpr uint64_t tsc_offset = 0x2010;
 
     constexpr uint64_t ept_control = 0x201A;
     constexpr uint64_t ept_violation_addr = 0x2400;
@@ -251,7 +252,7 @@ namespace vmx {
     };
 
     struct Vm : public vm::AbstractVm {
-        Vm(vm::AbstractMM* mm);
+        Vm(vm::AbstractMM* mm, vm::VCPU* vcpu);
         bool run(vm::VmExit& exit);
 
         void get_regs(vm::RegisterState& regs) const;
@@ -270,6 +271,7 @@ namespace vmx {
         uintptr_t vmcs;
 
         vm::AbstractMM* mm;
+        vm::VCPU* vcpu;
 
         simd::Context host_simd, guest_simd;
         GprState guest_gprs;
