@@ -137,6 +137,17 @@ namespace acpi {
     };
     static_assert(Table<Mcfg>);
 
+    struct [[gnu::packed]] Hpet {
+        static constexpr const char* signature = "HPET";
+        SDTHeader header;
+        uint32_t block_id;
+        GenericAddressStructure base;
+        uint8_t uid;
+        uint16_t minimum_tick;
+        uint8_t protection;
+    };
+    static_assert(Table<Hpet>);
+
     struct [[gnu::packed]] Madt {
         static constexpr const char* signature = "APIC";
         SDTHeader header;

@@ -122,7 +122,7 @@ extern "C" void isr_handler(idt::regs* regs) {
     }
 
     if(handlers[int_number].f)
-        handlers[int_number].f(regs, handlers[int_number].userptr);
+        handlers[int_number].f(int_number, regs, handlers[int_number].userptr);
 
     if(handlers[int_number].is_irq)
         get_cpu().lapic.eoi();

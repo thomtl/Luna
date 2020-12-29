@@ -63,6 +63,22 @@ namespace std {
         const_iterator begin() const { return const_iterator{head}; }
         const_iterator end() const { return const_iterator{nullptr}; }
 
+        const T& operator[](size_t index) const { 
+            auto it = begin();
+            for(size_t i = 0; i < index; i++)
+                ++it;
+            return *it;
+        }
+
+        T& operator[](size_t index) { 
+            auto it = begin();
+            for(size_t i = 0; i < index; i++)
+                ++it;
+            return *it;
+        }
+
+        size_t size() const { return length; }
+
         private:
         item* head, *tail;
         size_t length;

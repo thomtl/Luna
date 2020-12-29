@@ -233,7 +233,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
         regs->fault_event_upper_address = msi_upper_addr.raw;
     }
 
-    idt::set_handler(vector, idt::handler{.f = []([[maybe_unused]] idt::regs* regs, void* userptr) {
+    idt::set_handler(vector, idt::handler{.f = []([[maybe_unused]] uint8_t, [[maybe_unused]] idt::regs* regs, void* userptr) {
         auto& self = *(vt_d::RemappingEngine*)userptr;
         self.handle_irq(); 
     }, .is_irq = true, .should_iret = false, .userptr = this});

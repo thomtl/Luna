@@ -48,7 +48,7 @@ namespace idt
     constexpr size_t n_table_entries = 256;
 
     struct handler {
-        void (*f)(regs*, void*);
+        void (*f)(uint8_t, regs*, void*);
         bool is_reserved = false;
         bool is_irq = false;
         bool should_iret = false;

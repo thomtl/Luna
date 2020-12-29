@@ -5,6 +5,8 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/pci.hpp>
 
+#include <Luna/drivers/hpet.hpp>
+
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
@@ -67,7 +69,7 @@ extern "C" {
     uint16_t laihost_pci_readw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint16_t>(seg, bus, slot, func, offset); }
     uint32_t laihost_pci_readd(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint32_t>(seg, bus, slot, func, offset); }
     
-    void laihost_sleep(uint64_t) {
-        // TODO
+    void laihost_sleep(uint64_t ms) {
+        hpet::poll_sleep(ms);
     }
 }

@@ -126,7 +126,7 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
 
         auto vector = idt::allocate_vector();
 
-        idt::set_handler(vector, {.f = [](idt::regs*, void* userptr){
+        idt::set_handler(vector, {.f = [](uint8_t, idt::regs*, void* userptr){
             auto& self = *(IOMMUEngine*)userptr;
             auto status = self.regs->iommu_status;
             while(status & (1 << 1)) {

@@ -35,6 +35,7 @@ main_sources = files(
     'source/drivers/laihost.cpp',
     'source/drivers/pci.cpp',
     'source/drivers/vga.cpp',
+    'source/drivers/hpet.cpp',
 
     'source/fs/echfs.cpp',
     'source/fs/fs.cpp',

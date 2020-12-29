@@ -20,6 +20,7 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/ioapic.hpp>
 #include <Luna/drivers/pci.hpp>
+#include <Luna/drivers/hpet.hpp>
 
 #include <Luna/fs/vfs.hpp>
 
@@ -92,6 +93,7 @@ void kernel_main(const stivale2_struct* info) {
     cpu_data.lapic.init();
 
     acpi::init(boot_info);
+    hpet::init();
     ioapic::init();
     acpi::init_sci();
 

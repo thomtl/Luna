@@ -124,7 +124,7 @@ void acpi::init(const stivale2::Parser& parser) {
     init_ec();
 }
 
-static void handle_sci([[maybe_unused]] idt::regs*, [[maybe_unused]] void*) {
+static void handle_sci([[maybe_unused]] uint8_t, [[maybe_unused]] idt::regs*, [[maybe_unused]] void*) {
     print("acpi: Unhandled SCI, Event: {:#x}\n", lai_get_sci_event());
 }
 
