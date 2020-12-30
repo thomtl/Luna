@@ -28,6 +28,9 @@ namespace hpet {
         bool start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr);
 
         private:
+        void stop_timer() { regs->cmd &= ~1; }
+        void start_timer() { regs->cmd |= 1; }
+
         acpi::Hpet* table;
 
         volatile Regs* regs;

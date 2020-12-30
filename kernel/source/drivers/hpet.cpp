@@ -13,7 +13,8 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
     ASSERT(table->base.id == 0); // Assert it is in MMIO space
     regs = (volatile Regs*)(table->base.address + phys_mem_map);
     
-    regs->cmd &= ~0b11; // Disable LegacyReplacementMode and main counter
+    stop_timer();
+    regs->cmd &= ~0b10; // Disable LegacyReplacementMode
 
     period = regs->cap >> 32;
     ASSERT(period <= 0x05F5E100);
@@ -132,10 +133,12 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
         }
     }
 
-    regs->cmd |= 0b1; // Restart counter
+    start_timer();
 }
 
 bool hpet::Device::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) {
+    stop_timer();
+
     uint8_t timer_i = 0xFF;
     for(size_t i = 0; i < n_comparators; i++) {
         if(!timers[i].f) {
@@ -146,8 +149,10 @@ bool hpet::Device::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void
         }
     }
 
-    if(timer_i == 0xFF)
+    if(timer_i == 0xFF) {
+        start_timer();
         return false;
+    }
 
     auto& timer = timers[timer_i];
 
@@ -158,16 +163,18 @@ bool hpet::Device::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void
     auto& reg = regs->comparators[timer_i];
     reg.cmd &= ~((1 << 6) | (1 << 3) | (1 << 2));
 
-    if(periodic) {
-        auto tmp = ms * (femto_per_milli / period);
+    auto delta = ms * (femto_per_milli / period);
 
+    if(periodic) {
         reg.cmd |= (1 << 6) | (1 << 3) | (1 << 2);
-        reg.value = regs->main_counter + tmp;
-        reg.value = tmp;
+        reg.value = regs->main_counter + delta;
+        reg.value = delta;
     } else {
-        reg.value = regs->main_counter + (ms * (femto_per_milli / period));
         reg.cmd |= (1 << 2); // Enable IRQ in One-shot mode
+        reg.value = regs->main_counter + delta;
     }
+
+    start_timer();
 
     return true;
 }
