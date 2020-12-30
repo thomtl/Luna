@@ -100,7 +100,7 @@ void ioapic::init() {
 ioapic::Ioapic& get_ioapic_for_gsi(uint32_t gsi) {
     for(auto& ioapic : ioapics) {
         const auto [start, end] = ioapic.gsi_range();
-        if(start <= gsi && end > gsi)
+        if(start <= gsi && end >= gsi)
             return ioapic;
     }
     

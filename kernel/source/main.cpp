@@ -93,8 +93,8 @@ void kernel_main(const stivale2_struct* info) {
     cpu_data.lapic.init();
 
     acpi::init(boot_info);
-    hpet::init();
     ioapic::init();
+    hpet::init();
     acpi::init_sci();
 
     smp::start_cpus(boot_info, kernel_main_ap);

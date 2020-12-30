@@ -1,6 +1,6 @@
 #include <Luna/drivers/hpet.hpp>
 #include <Luna/drivers/pci.hpp>
-
+#include <Luna/drivers/ioapic.hpp>
 
 #include <Luna/cpu/idt.hpp>
 
@@ -25,18 +25,31 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
     n_comparators = ((regs->cap >> 8) & 0x1F) + 1;
 
     regs->main_counter = 0; // Reset main counter
-    regs->irq_status = ~0; // Clear all IRQs
+    regs->irq_status = regs->irq_status; // Clear all IRQs
 
     print("hpet: Timer Block {} v{}: VendorID: {:#x}, {} Timers\n", (uint16_t)table->uid, rev, vid, (uint16_t)n_comparators);
 
+    uint32_t gsi_mask = ~0;
     for(size_t i = 0; i < n_comparators; i++) {
         auto& timer = timers[i];
         timer.fsb = (regs->comparators[i].cmd >> 15) & 1;
         timer.is_periodic = (regs->comparators[i].cmd >> 4) & 1;
         timer.ioapic_route = (regs->comparators[i].cmd >> 32) & 0xFFFF'FFFF;
 
-        print("      Comparator {}: FSB: {}, Periodic: {}, Route Cap: {:#b}, ", i, timer.fsb, timer.is_periodic, timer.ioapic_route);
+        print("      Comparator {}: FSB: {}, Periodic: {}, Route Cap: {:#b}\n", i, timer.fsb, timer.is_periodic, timer.ioapic_route);
 
+        gsi_mask &= timer.ioapic_route;
+    }
+
+    print("      Common GSI mask: {:#b}\n", gsi_mask);
+    uint32_t gsi = ~0;
+    uint8_t gsi_vector;
+
+    // Setup IRQs
+    for(size_t i = 0; i < n_comparators; i++) {
+        auto& timer = timers[i];
+
+        regs->comparators[i].cmd &= ~((1 << 14) | (0x1F << 9) | (1 << 8) | (1 << 6) | (1 << 3) | (1 << 2) | (1 << 1)); // Clear Periodic, IRQ enable, Level enable
 
         if(timer.fsb) {
             auto vector = idt::allocate_vector();
@@ -73,12 +86,49 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
             data.vector = vector;
 
             regs->comparators[i].fsb = ((uint64_t)addr.raw << 32) | data.raw;
-            regs->comparators[i].cmd &= ~((1 << 6) | (1 << 3) | (1 << 2) | (1 << 1)); // Clear Periodic, IRQ enable, Level enable
             regs->comparators[i].cmd |= (1 << 14); // Enable FSB Mode
-
-            print("Activated FSB IRQs on vector {}\n", (uint16_t)vector);
         } else {
-            PANIC("TODO: Implement IOAPIC routing");
+            if(gsi == ~0u) {
+                for(int i = 31; i >= 0; i--) {
+                    if(gsi_mask & (1 << i)) {
+                        gsi = i; 
+                        break;
+                    }
+                }
+                ASSERT(gsi != ~0u);
+
+                gsi_vector = gsi + 0x20;
+                idt::set_handler(gsi_vector, idt::handler{.f = [](uint8_t, idt::regs*, void* userptr){
+                    auto& self = *(hpet::Device*)userptr;
+                    auto irq = self.regs->irq_status;
+
+                    for(size_t i = 0; i < self.n_comparators; i++) {
+                        if(irq & (1 << i)) {
+                            if(!self.timers[i].f)
+                                return;
+
+                            self.timers[i].f(self.timers[i].userptr);
+                        
+                            if(!self.timers[i].periodic) { // If One-shot make sure the IRQ doesn't happen again
+                                self.regs->comparators[i].cmd &= ~(1 << 2);
+
+                                self.timers[i].userptr = nullptr;
+                                self.timers[i].f = nullptr;
+                            }
+                            self.regs->irq_status = (1 << i); // Clear IRQ status
+                        }
+                    }
+                }, .is_irq = true, .should_iret = true, .userptr = this});
+
+                ioapic::set(gsi, gsi_vector, ioapic::regs::DeliveryMode::Fixed, ioapic::regs::DestinationMode::Physical, 0x8, get_cpu().lapic_id);
+                ioapic::unmask(gsi);
+            }
+
+            timer.vector = gsi_vector;
+
+            regs->comparators[i].cmd |= ((gsi & 0x1F) << 9) | (1 << 1); // Set GSI and Level triggered
+
+            ASSERT(((regs->comparators[i].cmd >> 9) & 0x1F) == gsi); // If GSI was successfully set the read value should equal the written value
         }
     }
 

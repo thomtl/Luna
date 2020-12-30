@@ -136,7 +136,7 @@ void acpi::init_sci() {
 
     uint16_t sci_int = fadt->sci_int;
     if(!madt.has_legacy_pic()) // If no PIC sci_int is a GSI so we need to map it, it is Level, Active Low
-        ioapic::set(sci_int, sci_int + 0x20, ioapic::regs::DeliveryMode::Fixed, ioapic::regs::DestinationMode::Physical, (1 << 13) | (1 << 15), get_cpu().lapic_id);
+        ioapic::set(sci_int, sci_int + 0x20, ioapic::regs::DeliveryMode::Fixed, ioapic::regs::DestinationMode::Physical, 0x8 | 0x2, get_cpu().lapic_id);
 
     idt::set_handler(sci_int + 0x20, idt::handler{.f = handle_sci, .is_irq = true, .should_iret = true, .userptr = nullptr});
     ioapic::unmask(sci_int);
