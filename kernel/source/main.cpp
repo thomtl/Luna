@@ -15,6 +15,7 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
+#include <Luna/drivers/sound/hda.hpp>
 #include <Luna/drivers/storage/ahci.hpp>
 #include <Luna/drivers/iommu.hpp>
 #include <Luna/drivers/acpi.hpp>
@@ -105,6 +106,8 @@ void kernel_main(const stivale2_struct* info) {
     iommu::init();
 
     ahci::init();
+    hda::init();
+
 
     vm::init();
 

@@ -25,6 +25,8 @@ main_sources = files(
     'source/drivers/intel/sl_paging.cpp',
     'source/drivers/intel/vt_d.cpp',
 
+    'source/drivers/sound/hda.cpp',
+
     'source/drivers/storage/ahci.cpp',
     'source/drivers/storage/ata.cpp',
     'source/drivers/storage/scsi.cpp',

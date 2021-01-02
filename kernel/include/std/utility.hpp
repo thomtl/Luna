@@ -24,6 +24,13 @@ namespace std
         return static_cast<T&&>(t);
     }
 
+    template<typename T>
+    constexpr void swap(T& a, T& b) {
+        T tmp{move(a)};
+        a = move(b);
+        b = move(tmp);
+    }
+
     template<typename T1, typename T2>
     struct pair {
         using first_type = T1;

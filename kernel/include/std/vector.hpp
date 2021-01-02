@@ -20,19 +20,34 @@ namespace std
         using iterator = pointer;
         using const_iterator = const_pointer;
 
-        constexpr vector(): _elements{nullptr}, _size{0}, _capacity{0} {}
-        vector(const std::vector<T>& src) {
-            ensure_capacity(src.size());
-            for(const auto& e : src)
-                push_back(e);
+        friend void swap(vector& a, vector& b) {
+            using std::swap;
+            swap(a._elements, b._elements);
+            swap(a._size, b._size);
+            swap(a._capacity, b._capacity);
         }
 
-        vector(vector&&) = delete;
-        vector& operator=(vector other) = delete;
+        constexpr vector(): _elements{nullptr}, _size{0}, _capacity{0} {}
+        vector(const std::vector<T>& src): vector{} {
+            ensure_capacity(src.size());
+            for(size_t i = 0; i < src.size(); i++)
+                new (&_elements[i]) T(src[i]);
+            _size = src.size();
+        }
+
+        vector(vector&& other): vector{} {
+            swap(*this, other);
+        }
+
+        vector& operator=(vector other) {
+            swap(*this, other);
+            return *this;
+        }
 
         ~vector() {
             for(size_t i = 0; i < _size; i++)
                 _elements[i].~T();
+
             hmm::free((uintptr_t)_elements);
         }
 

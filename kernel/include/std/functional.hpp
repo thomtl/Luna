@@ -8,6 +8,13 @@ namespace std
     struct hash;
 
     template<>
+    struct hash<uint8_t> {
+        size_t operator()(const uint8_t v) const {
+            return v;
+        }
+    };
+
+    template<>
     struct hash<uint16_t> {
         size_t operator()(const uint16_t v) const {
             return v;
