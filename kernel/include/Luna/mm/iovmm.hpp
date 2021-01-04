@@ -44,8 +44,11 @@ namespace iovmm {
                     auto base = region.base;
                     region.base += aligned_len;
 
+                    auto& kvmm = vmm::kernel_vmm::get_instance();
                     uintptr_t host_region = hmm::alloc(len, pmm::block_size); // Will do its own alignment internally
                     ASSERT(((uintptr_t)host_region & (pmm::block_size - 1)) == 0);
+                    for(size_t i = 0; i < aligned_len; i += pmm::block_size)
+                        kvmm.set_caching(host_region + i, msr::pat::uc);
 
                     memset((void*)host_region, 0, len);
 
@@ -53,7 +56,6 @@ namespace iovmm {
                     flags |= (direction & HostToDevice) ? paging::mapPagePresent : 0; // Present actually means read here, maybe use different flags for IOMMU paging?
                     flags |= (direction & DeviceToHost) ? paging::mapPageWrite : 0;
 
-                    auto& kvmm = vmm::kernel_vmm::get_instance();
                     for(size_t i = 0; i < aligned_len; i += pmm::block_size)
                         iommu::map(*_device, kvmm.get_phys(host_region + i), base + i, flags);
 

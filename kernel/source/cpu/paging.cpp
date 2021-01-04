@@ -91,6 +91,18 @@ void paging::context::map(uintptr_t pa, uintptr_t va, uint64_t flags, uint8_t ca
     asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }
 
+void paging::context::set_caching(uintptr_t va, uint8_t cache) {
+    auto* page = walk(va, false);
+    if(!page)
+        return;
+
+    page->pat = (cache >> 2) & 1;
+    page->cache_disable = (cache >> 1) & 1;
+    page->writethrough = cache & 1;
+
+    asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+}
+
 uintptr_t paging::context::unmap(uintptr_t va) {
     auto* entry = walk(va, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)

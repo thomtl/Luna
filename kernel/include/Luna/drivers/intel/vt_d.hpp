@@ -400,6 +400,7 @@ namespace vt_d {
         uintptr_t unmap(vt_d::SourceID device, uintptr_t iova);
 
         private:
+        void flush_cache(void* va, size_t sz);
         void enable_translation();
 
         void wbflush();
@@ -436,8 +437,6 @@ namespace vt_d {
 
         bool all_devices_on_segment, eim, wbflush_needed, read_draining, write_draining, page_selective_invalidation, caching_mode;
         bool zero_length_read, page_snoop, coherent, plmr, phmr, qi;
-
-        uint64_t cache_mode;
 
         size_t segment;
         std::vector<std::pair<SourceID, SourceID>> source_id_ranges;

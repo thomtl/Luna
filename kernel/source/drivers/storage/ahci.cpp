@@ -14,7 +14,6 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
 
     device->set_privileges(pci::privileges::Dma | pci::privileges::Mmio);
 
-    iommu::map(*device, bar.base, bar.base, paging::mapPagePresent | paging::mapPageWrite); // Allow aHCI to access its own MMIO region
     vmm::kernel_vmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
     regs = (volatile Hba*)(bar.base + phys_mem_map);
 
@@ -73,23 +72,15 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
         }
 
         port.wait_idle();
+        auto region = iommu_vmm.alloc(sizeof(Port::PhysRegion), iovmm::Iovmm::Bidirectional);
+        port.region = (Port::PhysRegion*)region.host_base;
 
-        // TODO: This does not work for some reason, it makes qemu shit its pants
-        // qemu-system-x86_64: /build/qemu-2AfuBA/qemu-4.2/exec.c:3572: address_space_unmap: Assertion `mr != NULL' failed.
-        /*auto region = iommu_vmm.alloc(sizeof(Port::PhysRegion));
-        port.region = (Port::PhysRegion*)region.host_base;*/
-
-        auto region_pa = pmm::alloc_block();
-        iommu::map(*device, region_pa, region_pa, paging::mapPagePresent | paging::mapPageWrite);
-
-        port.region = (Port::PhysRegion*)(region_pa + phys_mem_map);
-
-        auto cmd_header_addr = region_pa + offsetof(Port::PhysRegion, command_headers);
+        auto cmd_header_addr = region.guest_base + offsetof(Port::PhysRegion, command_headers);
         port.regs->clb = cmd_header_addr & 0xFFFFFFFF;
         if(a64)
             port.regs->clbu = (cmd_header_addr >> 32) & 0xFFFFFFFF;
 
-        auto fis_addr = region_pa + offsetof(Port::PhysRegion, receive_fis);
+        auto fis_addr = region.guest_base + offsetof(Port::PhysRegion, receive_fis);
         port.regs->fb = fis_addr & 0xFFFFFFFF;
         if(a64)
             port.regs->fbu = (fis_addr >> 32) & 0xFFFFFFFF;

@@ -46,6 +46,7 @@ namespace paging
         ~context();
 
         void map(uintptr_t pa, uintptr_t va, uint64_t flags, uint8_t caching = msr::pat::write_back);
+        void set_caching(uintptr_t va, uint8_t caching);
         uintptr_t unmap(uintptr_t va);
         uintptr_t get_phys(uintptr_t va);
         page_entry get_page(uintptr_t va);

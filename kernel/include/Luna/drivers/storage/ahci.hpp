@@ -158,7 +158,7 @@ namespace ahci
                 uint8_t padding[0x1000];
             };
 
-            PhysRegion* region;
+            volatile PhysRegion* region;
 
             void wait_idle();
             void wait_ready();

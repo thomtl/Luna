@@ -143,7 +143,6 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     print("      Domain IDs: {:d}\n", n_domain_ids);
 
     domain_ids = std::bitmap{n_domain_ids};
-    domain_ids.set(0);
 
     wbflush_needed = (regs->capabilities >> 4) & 1;
     plmr = (regs->capabilities >> 5) & 1;
@@ -154,15 +153,13 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     write_draining = (regs->capabilities >> 54) & 1;
     read_draining = (regs->capabilities >> 55) & 1;
 
-    coherent = (regs->extended_capabilities >> 0) & 1;
+    coherent = regs->extended_capabilities & 1;
     qi = (regs->extended_capabilities >> 1) & 1;
     eim = (regs->extended_capabilities >> 4) & 1;
     page_snoop = (regs->extended_capabilities >> 7) & 1;
 
-    if(coherent)
-        cache_mode = msr::pat::write_back;
-    else
-        cache_mode = msr::pat::uncacheable;
+    if(caching_mode)
+        domain_ids.set(0);
 
     ASSERT(regs->global_status == 0);
 
@@ -251,10 +248,12 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     ASSERT(root_block);
 
     auto root_table_va = root_block + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, cache_mode);
+    vmm::kernel_vmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
 
     root_table = (RootTable*)root_table_va;
     memset((void*)root_table, 0, pmm::block_size);
+
+    flush_cache((void*)root_table, pmm::block_size);
 
     RemappingEngineRegs::RootTableAddress root_addr{};
     root_addr.address = (root_block >> 12);
@@ -268,7 +267,6 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     while(!(regs->global_status & GlobalCommand::SetRootTablePointer))
         asm("pause");
 
-    wbflush();
     invalidate_global_context();
     invalidate_global_iotlb();
 
@@ -281,6 +279,11 @@ void vt_d::RemappingEngine::enable_translation() {
         asm("pause");
 
     disable_protect_mem_regions();
+}
+
+void vt_d::RemappingEngine::flush_cache(void* va, size_t sz) {
+    if(!coherent)
+        cpu::cache_flush(va, sz);
 }
 
 void vt_d::RemappingEngine::wbflush() {
@@ -435,12 +438,14 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
         if(!pa)
             PANIC("Couldn't allocate IOMMU context table");
         auto va = pa + phys_mem_map;
-        vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, cache_mode);
-
+        vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
         memset((void*)va, 0, pmm::block_size);
+        flush_cache((void*)va, pmm::block_size);
 
         root_entry->context_table = (pa >> 12);
         root_entry->present = 1;
+
+        flush_cache((void*)root_entry, sizeof(RootEntry));
     }
 
     auto& context_table = *(ContextTable*)((root_entry->context_table << 12) + phys_mem_map);
@@ -453,7 +458,7 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
             PANIC("No Domain IDs left");
         domain_ids.set(domain_id);
 
-        auto* context = new sl_paging::context{secondary_page_levels, page_snoop, cache_mode};
+        auto* context = new sl_paging::context{secondary_page_levels, page_snoop, coherent};
 
         domain_id_map[device.raw] = domain_id;
         page_map[device.raw] = context;
@@ -464,13 +469,14 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
         context_table_entry->translation_type = 0; // Legacy Translation
         context_table_entry->fault_processing_disable = 0;
         context_table_entry->present = 1;
+        flush_cache(context_table_entry, sizeof(ContextEntry));
         
-        if(caching_mode) {
+        //if(caching_mode) {
             invalidate_device_context(0, device);
             invalidate_domain_iotlb(domain_id);
-        } else {
-            wbflush();
-        }
+        //} else {
+            //wbflush();
+        //}
     }
 
     return *page_map[device.raw];
@@ -529,11 +535,19 @@ void vt_d::RemappingEngine::handle_primary_fault() {
 
             auto reason = fault.reason;
             switch (reason) {
-                case 1: print("      Reason: The Present field in the root-entry used to process a request is 0.\n"); break;
-                case 5: print("      Reason: A Write or AtomicOp request encountered lack of write permission.\n"); break;
+                case 1: print("      Reason: Non-present Root Entry\n"); break;
+                case 5: print("      Reason: A Write or AtomicOp request encountered lack of write permission\n"); break;
                 case 6: print("      Reason: A Read or AtomicOp request encountered lack of read permission.\n"); break;
-                case 0xA: print("      Reason: Non-zero reserved field in a root-entry with the Present field set\n"); break;
+                case 0xA: print("      Reason: Non-zero reserved field in root-entry with the Present field set\n"); break;
                 default: print("      Reason: Unknown ({:#x})\n", reason);
+            }
+
+            volatile auto* root = (uint64_t*)(&root_table->entries[sid.bus]);
+            print("      Root Entry: Lo: {:#x} Hi: {:#x}\n", root[0], root[1]);
+
+            if(page_map.contains(fault.source_id)) {
+                auto ent = page_map[fault.source_id]->get_entry(fault.fault_info << 12);
+                print("      Page Entry: {}{}{}, PA: {:#x}\n", ent.r ? "R" : "", ent.w ? "W" : "", ent.x ? "X" : "", ent.frame << 12);
             }
 
             reg[1] = (1 << 31); // Clear fault
@@ -545,7 +559,7 @@ void vt_d::RemappingEngine::handle_primary_fault() {
 
 void vt_d::RemappingEngine::handle_irq() {
     auto fault_status = regs->fault_status;
-    print("vt-d: Handling IRQ, FSTS: {:#b},n", fault_status);
+    print("vt-d: Handling IRQ, FSTS: {:#b}\n", fault_status);
     if(fault_status & (1 << 0)) {
         print("      Primary Fault Overflow\n");
         regs->fault_status = (1 << 0); 

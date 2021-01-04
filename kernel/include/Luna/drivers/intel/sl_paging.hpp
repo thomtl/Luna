@@ -38,11 +38,13 @@ namespace sl_paging
 
     class context {
         public:
-        context(uint8_t levels, bool snoop, uint64_t cache_mode);
+        context(uint8_t levels, bool snoop, bool coherent);
         ~context();
 
         void map(uintptr_t pa, uintptr_t iova, uint64_t flags);
         uintptr_t unmap(uintptr_t iova);
+
+        page_entry get_entry(uintptr_t iova);
 
         uintptr_t get_root_pa() const;
 
@@ -51,8 +53,7 @@ namespace sl_paging
         uintptr_t create_table();
 
         uint8_t levels;
-        bool snoop;
-        uint64_t cache_mode;
+        bool snoop, coherent;
         uintptr_t root_pa;
     };
 } // namespace sl_paging
