@@ -130,7 +130,7 @@ void storage_dev::register_device(const DriverDevice& driver) {
     uint8_t magic[8] = {0};
     device->read(driver.sector_size, 8, magic); // LBA1
     if(strncmp((char*)magic, "EFI PART", 8) == 0)
-        PANIC("TODO Implement GPT");
+        print("disk: TODO: Implement GPT\n");
     else
         mbr::parse_mbr(*device);
 }

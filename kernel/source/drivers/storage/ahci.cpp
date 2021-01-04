@@ -53,7 +53,10 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
                 continue; // No Device and no comms
             else if(det == 1)
                 PANIC("Device but no comms, TODO implement COMRESET");
-            else {
+            else if(det == 4) {
+                print("ahci: Port {}: Phy Offline\n", i);
+                continue;
+            } else {
                 print("ahci: Unknown PxSSTS.det value {} at port {}\n", (uint32_t)det, i);
                 continue;
             }
