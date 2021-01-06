@@ -53,6 +53,24 @@ namespace amd_vi {
         uint32_t iommu_features;
         uint8_t ivhd_devices[];
     };
+    static_assert(sizeof(Type10IVHD) == 24);
+
+    struct [[gnu::packed]] Type11IVHD {
+        static constexpr uint8_t sig = 0x11;
+        uint8_t type;
+        uint8_t flags;
+        uint16_t length;
+        uint16_t device_id;
+        uint16_t capability_offset;
+        uint64_t iommu_base;
+        uint16_t pci_segment;
+        uint16_t iommu_info;
+        uint32_t iommu_attributes;
+        uint64_t efr_reg;
+        uint64_t reserved;
+        uint8_t ivhd_devices[];
+    };
+    static_assert(sizeof(Type11IVHD) == 40);
 
     struct [[gnu::packed]] IVHDEntry {
         uint8_t type;
@@ -92,6 +110,17 @@ namespace amd_vi {
         }
     };
     static_assert(sizeof(DeviceID) == 2);
+
+    struct IVHDInfo {
+        uint8_t flags;
+        uint64_t base;
+        uint16_t segment;
+        uint16_t device_id;
+        uint16_t capability_offset;
+
+        size_t devices_length;
+        uint8_t* devices;
+    };
 
     struct [[gnu::packed]] IOMMUEngineRegs {
         uint64_t device_table_base;
@@ -386,7 +415,7 @@ namespace amd_vi {
     struct IOMMU;
 
     struct IOMMUEngine {
-        IOMMUEngine(Type10IVHD* ivhd);
+        IOMMUEngine(const IVHDInfo& ivhd);
 
         void map(const DeviceID& device, uintptr_t pa, uintptr_t iova, uint64_t flags);
         uintptr_t unmap(const DeviceID& device, uintptr_t iova);
@@ -398,6 +427,11 @@ namespace amd_vi {
         void disable();
         void init_flags();
         void erratum_746_workaround();
+        void ats_write_check_workaround();
+
+        // L2 is a piece of the config of the IOMMUs for at least Family 15h and 16h CPUs, used to apply a few workarounds for errata
+        uint32_t read_l2(uint8_t addr);
+        void write_l2(uint8_t addr, uint32_t v);
 
         uint16_t get_highest_device_id();
 
@@ -443,7 +477,7 @@ namespace amd_vi {
         uintptr_t cmd_sem_pa;
         uint64_t cmd_sem_val;
 
-        Type10IVHD* ivhd;
+        IVHDInfo ivhd;
         pci::Device* pci_dev;
 
         TicketLock lock;

@@ -9,20 +9,20 @@
 
 #include <std/mutex.hpp>
 
-amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_segment}, domain_ids{n_domains}, ivhd{ivhd} {
-    auto regs_pa = ivhd->iommu_base;
+amd_vi::IOMMUEngine::IOMMUEngine(const amd_vi::IVHDInfo& ivhd): segment{ivhd.segment}, domain_ids{n_domains}, ivhd{ivhd} {
+    auto regs_pa = ivhd.base;
     auto regs_va = regs_pa + phys_mem_map;
     vmm::kernel_vmm::get_instance().map(regs_pa, regs_va, paging::mapPagePresent | paging::mapPageWrite);
     regs = (volatile IOMMUEngineRegs*)regs_va;
 
     {
-        DeviceID id{.raw = ivhd->device_id};
-        pci_dev = pci::device_by_location(ivhd->pci_segment, id.bus, id.slot, id.func);
+        DeviceID id{.raw = ivhd.device_id};
+        pci_dev = pci::device_by_location(ivhd.segment, id.bus, id.slot, id.func);
         ASSERT(pci_dev);
 
         pci_dev->set_privileges(pci::privileges::Pio | pci::privileges::Mmio | pci::privileges::Dma);
 
-        auto header = pci_dev->read<uint32_t>(ivhd->capability_offset + 0x0);
+        auto header = pci_dev->read<uint32_t>(ivhd.capability_offset + 0x0);
         auto revision = (header >> 19) & 0x1F;
         print("     - Remapping Engine v{}\n", revision);
 
@@ -38,6 +38,7 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
     print("       Page Levels: {}\n", (uint16_t)page_levels);
 
     erratum_746_workaround();
+    ats_write_check_workaround();
 
     // According to the spec we should program the SMI Filter first, but linux doesn't seem to do it
     // TODO: Program SMI Filter, How do you figure out the BMC DeviceID??
@@ -242,20 +243,12 @@ amd_vi::IOMMUEngine::IOMMUEngine(amd_vi::Type10IVHD* ivhd): segment{ivhd->pci_se
             entry.store(&device_table[devid]);
         };
 
-        size_t header_size = 0;
-        switch (ivhd->type) {
-            case 0x10: header_size = 24; break;
-            case 0x11: [[fallthrough]];
-            case 0x40: header_size = 40; break;
-            default: PANIC("Unknown IVHD Header type");
-        }
-
-        auto* entries = (uint8_t*)ivhd + header_size;
+        auto* entries = ivhd.devices;
         uint16_t devid_start = 0, devid_to = 0;
         uint8_t flags = 0;
         uint32_t ext_flags = 0;
         bool alias = false;
-        for(size_t i = 0; i < (ivhd->length - header_size);) {
+        for(size_t i = 0; i < ivhd.devices_length;) {
             const auto& entry = *(IVHDEntry*)(entries + i);
             auto type = (IVHDEntryTypes)entry.type;
 
@@ -335,7 +328,7 @@ void amd_vi::IOMMUEngine::disable() {
 
 void amd_vi::IOMMUEngine::init_flags() {
     auto ivhd_feature = [this](uint64_t bit, EngineControl control) {
-        if(ivhd->flags & (1 << bit))
+        if(ivhd.flags & (1 << bit))
             regs->control |= (uint64_t)control;
         else
             regs->control &= ~(uint64_t)control;
@@ -358,6 +351,16 @@ void amd_vi::IOMMUEngine::init_flags() {
     }
 }
 
+uint32_t amd_vi::IOMMUEngine::read_l2(uint8_t addr) {
+    pci_dev->write<uint32_t>(0xF0, addr);
+    return pci_dev->read<uint32_t>(0xF4);
+}
+
+void amd_vi::IOMMUEngine::write_l2(uint8_t addr, uint32_t v) {
+    pci_dev->write<uint32_t>(0xF0, addr | (1 << 8));
+    pci_dev->write<uint32_t>(0xF4, v);
+}
+
 void amd_vi::IOMMUEngine::erratum_746_workaround() {
     // https://elixir.bootlin.com/linux/v5.9.10/source/drivers/iommu/amd/init.c#L1403
 
@@ -365,34 +368,36 @@ void amd_vi::IOMMUEngine::erratum_746_workaround() {
     if(cpu.family != 0x15 || cpu.model < 0x10 || cpu.model > 0x1F)
         return;
     
-    pci_dev->write<uint32_t>(0xF0, 0x90);
-    auto v = pci_dev->read<uint32_t>(0xF4);
-
-    // Already applied by firmware
-    if(v & (1 << 2))
+    auto v = read_l2(0x90);
+    if(v & (1 << 2)) // Erratum already applied by firmware
         return;
 
-    pci_dev->write<uint32_t>(0xF0, 0x90 | (1 << 8)); // Enable Writing
-    pci_dev->write<uint32_t>(0xF4, v | (1 << 2));
-    pci_dev->write<uint32_t>(0xF0, 0x90); // Clear Writing
+    write_l2(0xF4, v | (1 << 2));
     print("       Applied Erratum 746 Workaround\n");
+}
+
+void amd_vi::IOMMUEngine::ats_write_check_workaround() {
+    // https://elixir.bootlin.com/linux/v5.9.10/source/drivers/iommu/amd/init.c#L1434
+
+    auto& cpu = get_cpu().cpu;
+    if(cpu.family != 0x15 || cpu.model < 0x30 || cpu.model > 0x3F)
+        return;
+
+    auto v = read_l2(0x47);
+    if(v & 1) // Workaround already applied by firmware
+        return;
+    
+    write_l2(0x47, v | 1);
+    print("       Applied ATS Write Check Workaround\n");
 }
 
 uint16_t amd_vi::IOMMUEngine::get_highest_device_id() {
     uint16_t highest_id = 0;
     auto update = [&highest_id](uint16_t id) { if(id > highest_id) highest_id = id; };
 
-    size_t header_size = 0;
-    switch (ivhd->type) {
-        case 0x10: header_size = 24; break;
-        case 0x11: [[fallthrough]];
-        case 0x40: header_size = 40; break;
-        default: PANIC("Unknown IVHD Header type");
-    }
-
-    auto* entries = (uint8_t*)ivhd + header_size;
+    auto* entries = ivhd.devices;
     uint16_t devid_start = 0;
-    for(size_t i = 0; i < (ivhd->length - header_size);) {
+    for(size_t i = 0; i < ivhd.devices_length;) {
         const auto& entry = *(IVHDEntry*)(entries + i);
         auto type = (IVHDEntryTypes)entry.type;
 
@@ -589,15 +594,39 @@ amd_vi::IOMMU::IOMMU() {
     size_t size = ivrs->header.length - sizeof(Ivrs);
     for(size_t i = 0; i < size;) {
         uint8_t* header = &ivrs->ivdb[i];
-        if(header[0] == 0x10) {
+        if(header[0] == Type10IVHD::sig) {
             auto* ivhd = (Type10IVHD*)header;
 
-            engines.emplace_back(ivhd);
+            IVHDInfo info{};
+            info.base = ivhd->iommu_base;
+            info.capability_offset = ivhd->capability_offset;
+            info.device_id = ivhd->device_id;
+            info.flags = ivhd->flags;
+            info.segment = ivhd->pci_segment;
+
+            info.devices_length = ivhd->length - 24; // Type 10 header is 24 bytes long
+            info.devices = ivhd->ivhd_devices;
+
+            engines.emplace_back(info);
+        } else if(header[0] == Type11IVHD::sig) {
+            auto* ivhd = (Type11IVHD*)header;
+
+            IVHDInfo info{};
+            info.base = ivhd->iommu_base;
+            info.capability_offset = ivhd->capability_offset;
+            info.device_id = ivhd->device_id;
+            info.flags = ivhd->flags;
+            info.segment = ivhd->pci_segment;
+
+            info.devices_length = ivhd->length - 40; // Type 11 header is 40 bytes long
+            info.devices = ivhd->ivhd_devices;
+
+            engines.emplace_back(info);
         } else {
             print("       Unknown IVRS Entry Type {:#x}\n", (uint16_t)header[0]);
         }
 
-        i += header[1];
+        i += ((uint16_t*)header)[1];
     }
 }
 
