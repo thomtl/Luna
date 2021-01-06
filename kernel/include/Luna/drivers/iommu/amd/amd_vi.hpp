@@ -7,7 +7,7 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/pci.hpp>
 
-#include <Luna/drivers/amd/io_paging.hpp>
+#include <Luna/drivers/iommu/amd/io_paging.hpp>
 
 #include <std/vector.hpp>
 #include <std/linked_list.hpp>

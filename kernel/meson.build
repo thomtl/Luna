@@ -19,11 +19,13 @@ main_sources = files(
     'source/cpu/regs.cpp',
     'source/cpu/smp.cpp',
 
-    'source/drivers/amd/amd_vi.cpp',
-    'source/drivers/amd/io_paging.cpp',
+    'source/drivers/iommu/amd/amd_vi.cpp',
+    'source/drivers/iommu/amd/io_paging.cpp',
 
-    'source/drivers/intel/sl_paging.cpp',
-    'source/drivers/intel/vt_d.cpp',
+    'source/drivers/iommu/intel/sl_paging.cpp',
+    'source/drivers/iommu/intel/vt_d.cpp',
+
+    'source/drivers/iommu/iommu.cpp',
 
     'source/drivers/sound/hda.cpp',
 
@@ -33,7 +35,6 @@ main_sources = files(
 
     'source/drivers/acpi.cpp',
     'source/drivers/ioapic.cpp',
-    'source/drivers/iommu.cpp',
     'source/drivers/laihost.cpp',
     'source/drivers/pci.cpp',
     'source/drivers/vga.cpp',

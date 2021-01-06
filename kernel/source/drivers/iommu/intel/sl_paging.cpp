@@ -1,4 +1,4 @@
-#include <Luna/drivers/intel/sl_paging.hpp>
+#include <Luna/drivers/iommu/intel/sl_paging.hpp>
 #include <std/utility.hpp>
 #include <std/string.hpp>
 

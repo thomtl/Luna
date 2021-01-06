@@ -7,7 +7,7 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/pci.hpp>
 
-#include <Luna/drivers/intel/sl_paging.hpp>
+#include <Luna/drivers/iommu/intel/sl_paging.hpp>
 
 #include <std/bitmap.hpp>
 #include <std/unordered_map.hpp>

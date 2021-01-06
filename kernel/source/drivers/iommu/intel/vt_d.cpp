@@ -1,4 +1,4 @@
-#include <Luna/drivers/intel/vt_d.hpp>
+#include <Luna/drivers/iommu/intel/vt_d.hpp>
 #include <Luna/misc/format.hpp>
 
 #include <Luna/mm/pmm.hpp>

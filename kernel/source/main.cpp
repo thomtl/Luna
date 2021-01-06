@@ -17,7 +17,7 @@
 
 #include <Luna/drivers/sound/hda.hpp>
 #include <Luna/drivers/storage/ahci.hpp>
-#include <Luna/drivers/iommu.hpp>
+#include <Luna/drivers/iommu/iommu.hpp>
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/ioapic.hpp>
 #include <Luna/drivers/pci.hpp>

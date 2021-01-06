@@ -1,8 +1,8 @@
-#include <Luna/drivers/iommu.hpp>
+#include <Luna/drivers/iommu/iommu.hpp>
 #include <std/utility.hpp>
 
-#include <Luna/drivers/intel/vt_d.hpp>
-#include <Luna/drivers/amd/amd_vi.hpp>
+#include <Luna/drivers/iommu/intel/vt_d.hpp>
+#include <Luna/drivers/iommu/amd/amd_vi.hpp>
 
 CpuVendor vendor;
 

@@ -1,4 +1,4 @@
-#include <Luna/drivers/amd/io_paging.hpp>
+#include <Luna/drivers/iommu/amd/io_paging.hpp>
 #include <std/utility.hpp>
 #include <std/string.hpp>
 

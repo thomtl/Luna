@@ -1,4 +1,4 @@
-#include <Luna/drivers/amd/amd_vi.hpp>
+#include <Luna/drivers/iommu/amd/amd_vi.hpp>
 
 #include <Luna/cpu/idt.hpp>
 

@@ -5,7 +5,7 @@
 #include <std/string.hpp>
 
 #include <Luna/mm/vmm.hpp>
-#include <Luna/drivers/iommu.hpp>
+#include <Luna/drivers/iommu/iommu.hpp>
 
 #include <Luna/misc/format.hpp>
 
