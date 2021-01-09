@@ -2,7 +2,7 @@
 
 #include <Luna/fs/mbr.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <std/linked_list.hpp>
 #include <std/string.hpp>

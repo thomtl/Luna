@@ -10,7 +10,7 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <lai/core.h>
 #include <lai/host.h>

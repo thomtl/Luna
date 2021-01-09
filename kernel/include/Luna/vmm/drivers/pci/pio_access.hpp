@@ -5,7 +5,7 @@
 
 #include <Luna/vmm/drivers/pci/pci.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <std/unordered_map.hpp>
 

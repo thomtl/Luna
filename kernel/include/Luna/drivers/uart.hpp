@@ -3,11 +3,13 @@
 #include <Luna/common.hpp>
 #include <Luna/cpu/pio.hpp>
 
+#include <Luna/misc/log.hpp>
+
 namespace uart {
     constexpr uint16_t com1_base = 0x3F8;
     constexpr uint16_t com2_base = 0x2F8;
 
-    struct Writer {
+    struct Writer : public log::Logger {
         Writer(uint16_t base): base{base} {
             pio::outb(base + 3, 3); // Configure Line Control
             pio::outb(base + 1, 0); // Disable IRQs

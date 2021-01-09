@@ -3,7 +3,7 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <Luna/vmm/drivers/pci/pci.hpp>
 #include <Luna/vmm/drivers/pci/ecam.hpp>

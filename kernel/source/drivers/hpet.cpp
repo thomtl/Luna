@@ -4,7 +4,7 @@
 
 #include <Luna/cpu/idt.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 #include <std/linked_list.hpp>
 
 constexpr uint64_t femto_per_milli = 1'000'000'000'000;

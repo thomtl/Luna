@@ -3,7 +3,8 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
+#include <Luna/drivers/vga.hpp>
 
 namespace vm::uart {
     constexpr uint32_t clock = 115200;

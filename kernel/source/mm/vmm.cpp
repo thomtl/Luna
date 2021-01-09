@@ -1,7 +1,7 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/cpu/regs.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <std/utility.hpp>
 

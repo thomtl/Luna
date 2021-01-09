@@ -6,7 +6,7 @@
 #include <std/string.hpp>
 #include <std/mutex.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 
 static uintptr_t heap_loc = 0xFFFF'FFFE'0000'0000;

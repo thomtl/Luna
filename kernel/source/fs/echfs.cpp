@@ -1,6 +1,6 @@
 #include <Luna/fs/echfs.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <std/string.hpp>
 

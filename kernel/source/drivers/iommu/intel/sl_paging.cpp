@@ -87,7 +87,7 @@ sl_paging::page_entry* sl_paging::context::walk(uintptr_t iova, bool create_new_
     return &pml1[get_index(1)];
 }
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 void sl_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
     auto* page = walk(iova, true); // We want to create new tables, so this is guaranteed to return a valid pointer

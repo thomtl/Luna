@@ -1,5 +1,5 @@
 #include <Luna/mm/pmm.hpp>
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <Luna/cpu/cpu.hpp>
 #include <std/mutex.hpp>

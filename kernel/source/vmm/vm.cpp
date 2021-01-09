@@ -1,6 +1,6 @@
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <Luna/cpu/intel/vmx.hpp>
 #include <Luna/cpu/amd/svm.hpp>

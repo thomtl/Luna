@@ -1,7 +1,7 @@
 #include <Luna/cpu/smp.hpp>
 #include <Luna/cpu/cpu.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 void smp::start_cpus(stivale2::Parser& boot_info, void (*f)(stivale2_smp_info*)) {
     auto* smp = (stivale2_struct_tag_smp*)boot_info.get_tag(STIVALE2_STRUCT_TAG_SMP_ID);

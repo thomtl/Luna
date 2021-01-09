@@ -1,6 +1,6 @@
 #include <Luna/vmm/emulate.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 constexpr uint64_t get_mask(uint8_t s) {
     switch (s) {

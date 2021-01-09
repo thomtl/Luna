@@ -3,7 +3,7 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 namespace vm::fast_a20 {
     constexpr uint16_t gate = 0x92;

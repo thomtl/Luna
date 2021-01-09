@@ -7,7 +7,7 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <std/vector.hpp>
 

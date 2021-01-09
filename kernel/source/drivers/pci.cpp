@@ -2,7 +2,7 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/mm/vmm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <lai/core.h>
 #include <acpispec/hw.h>

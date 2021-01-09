@@ -1,5 +1,5 @@
 #include <Luna/drivers/iommu/intel/vt_d.hpp>
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <Luna/mm/pmm.hpp>
 #include <Luna/mm/vmm.hpp>

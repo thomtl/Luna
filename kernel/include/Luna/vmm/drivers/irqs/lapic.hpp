@@ -4,7 +4,7 @@
 
 #include <Luna/cpu/lapic.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <std/unordered_map.hpp>
 

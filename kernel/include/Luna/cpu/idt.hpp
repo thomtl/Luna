@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Luna/common.hpp>
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 namespace idt
 {

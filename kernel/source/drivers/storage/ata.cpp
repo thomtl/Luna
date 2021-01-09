@@ -1,7 +1,7 @@
 #include <Luna/drivers/storage/ata.hpp>
 #include <std/linked_list.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 #include <Luna/drivers/storage/scsi.hpp>
 
 #include <Luna/fs/storage_dev.hpp>

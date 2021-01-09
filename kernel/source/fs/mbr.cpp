@@ -2,7 +2,7 @@
 
 #include <Luna/fs/fs.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 void mbr::parse_mbr(storage_dev::Device& dev) {
     PartitionTable table{};

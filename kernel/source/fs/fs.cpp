@@ -1,5 +1,5 @@
 #include <Luna/fs/fs.hpp>
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <Luna/fs/echfs.hpp>
 

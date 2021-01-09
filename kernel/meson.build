@@ -53,6 +53,7 @@ main_sources = files(
     'source/vmm/emulate.cpp',
     'source/vmm/vm.cpp',
 
+    'source/misc/log.cpp',
     'source/misc/misc.cpp',
     'source/misc/stivale2.cpp',
 

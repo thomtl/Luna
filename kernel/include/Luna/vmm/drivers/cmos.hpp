@@ -3,7 +3,7 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 namespace vm::cmos {
     constexpr uint16_t base = 0x70;

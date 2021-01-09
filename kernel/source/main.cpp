@@ -1,7 +1,7 @@
 #include <Luna/common.hpp>
 
 #include <Luna/misc/stivale2.hpp>
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <std/minimal_vector.hpp>
 
@@ -53,6 +53,7 @@ static CpuData& allocate_cpu_data() {
 void kernel_main_ap(stivale2_smp_info* info);
 
 void kernel_main(const stivale2_struct* info) {
+    log::select_logger(log::LoggerType::Early);
     print("Booting Luna, Copyright Thomas Woertman 2020\nBootloader: {:s} {:s}\n", info->bootloader_brand, info->bootloader_version);
 
     cpu::early_init();
@@ -104,6 +105,8 @@ void kernel_main(const stivale2_struct* info) {
     asm("sti");
 
     iommu::init();
+
+    log::select_logger(log::LoggerType::Late);
 
     ahci::init();
     hda::init();

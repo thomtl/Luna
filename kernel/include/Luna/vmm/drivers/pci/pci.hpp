@@ -3,7 +3,7 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 #include <std/unordered_map.hpp>
 

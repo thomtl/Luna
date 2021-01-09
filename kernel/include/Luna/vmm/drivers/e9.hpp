@@ -3,7 +3,8 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
+#include <Luna/drivers/vga.hpp>
 
 namespace vm::e9 {
     struct Driver : public vm::AbstractPIODriver {

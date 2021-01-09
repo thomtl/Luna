@@ -3,7 +3,7 @@
 
 #include <std/string.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 void svm::init() {
     ASSERT(svm::is_supported());

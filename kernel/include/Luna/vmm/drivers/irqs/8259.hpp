@@ -3,7 +3,7 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/misc/format.hpp>
+#include <Luna/misc/log.hpp>
 
 namespace vm::irqs::pic {
     constexpr uint16_t master_base = 0x20;
