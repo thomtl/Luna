@@ -4,7 +4,7 @@
 #include <Luna/vmm/vm.hpp>
 
 #include <Luna/misc/log.hpp>
-#include <Luna/drivers/vga.hpp>
+#include <Luna/drivers/uart.hpp>
 
 namespace vm::uart {
     constexpr uint32_t clock = 115200;
@@ -36,7 +36,7 @@ namespace vm::uart {
         void pio_write(uint16_t port, uint32_t value, [[maybe_unused]] uint8_t size) {
             if(port == (base + data_reg)) {
                 if(!dlab) {
-                    vga::Writer{}.putc(value);
+                    ::uart::Writer{::uart::com1_base}.putc(value);
                 } else {
                     baud &= ~0xFF;
                     baud |= value;

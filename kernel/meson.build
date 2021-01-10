@@ -19,6 +19,8 @@ main_sources = files(
     'source/cpu/regs.cpp',
     'source/cpu/smp.cpp',
 
+    'source/drivers/gpu/gpu.cpp',
+
     'source/drivers/iommu/amd/amd_vi.cpp',
     'source/drivers/iommu/amd/io_paging.cpp',
 

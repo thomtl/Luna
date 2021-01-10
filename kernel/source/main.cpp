@@ -60,6 +60,7 @@ void kernel_main(const stivale2_struct* info) {
     vmm::init_bsp(); // This doesn't actually allocate any memory or anything, it just detects 5 level paging and sets phys_mem_map
 
     stivale2::Parser boot_info{(stivale2_struct*)((uintptr_t)info + phys_mem_map)};
+
     pmm::init(boot_info);
 
     auto& cpu_data = allocate_cpu_data();

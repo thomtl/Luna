@@ -9,6 +9,7 @@ namespace log
 		virtual ~Logger() {}
 
 		virtual void putc(const char c) const = 0;
+		virtual void flush() {}
 	};
 
 	extern Logger* global_logger;
@@ -23,5 +24,6 @@ void print(const char* fmt, Args&&... args){
 	static TicketLock printer_lock{};
 	std::lock_guard guard{printer_lock};
 
-	return format::format_to(*log::global_logger, fmt, std::forward<Args>(args)...);
+	format::format_to(*log::global_logger, fmt, std::forward<Args>(args)...);
+	log::global_logger->flush();
 }

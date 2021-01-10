@@ -18,7 +18,7 @@ namespace vga {
         private:
         void scroll() const;
 
-        static uint8_t x, y;
+        mutable uint8_t x, y;
         uint16_t* fb;
     };
 } // namespace vga

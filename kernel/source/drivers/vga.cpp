@@ -1,8 +1,5 @@
 #include <Luna/drivers/vga.hpp>
 
-uint8_t vga::Writer::x;
-uint8_t vga::Writer::y;
-
 void vga::Writer::putc(const char c) const {
     if(c == '\n') {
         x = 0;
