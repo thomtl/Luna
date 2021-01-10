@@ -1,5 +1,7 @@
 #include <Luna/misc/log.hpp>
 
+#include <Luna/drivers/gpu/tty.hpp>
+
 #include <Luna/drivers/e9.hpp>
 #include <Luna/drivers/uart.hpp>
 #include <Luna/drivers/vga.hpp>
@@ -7,7 +9,7 @@
 log::Logger* log::global_logger;
 
 std::lazy_initializer<uart::Writer> early_logger;
-std::lazy_initializer<vga::Writer> late_logger;
+std::lazy_initializer<tty::Writer> late_logger;
 
 void log::select_logger(log::LoggerType type) {
     switch (type) {

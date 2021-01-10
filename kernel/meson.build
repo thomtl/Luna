@@ -22,6 +22,7 @@ main_sources = files(
     'source/drivers/gpu/lfb/lfb.cpp',
 
     'source/drivers/gpu/gpu.cpp',
+    'source/drivers/gpu/tty.cpp',
 
     'source/drivers/iommu/amd/amd_vi.cpp',
     'source/drivers/iommu/amd/io_paging.cpp',
@@ -58,6 +59,7 @@ main_sources = files(
     'source/vmm/vm.cpp',
 
     'source/misc/log.cpp',
+    'source/misc/font.cpp',
     'source/misc/misc.cpp',
     'source/misc/stivale2.cpp',
 
