@@ -43,7 +43,6 @@ void tty::Writer::putc(const char c) const {
 
     auto scroll = [&]() {
         auto* fb = (uint32_t*)gpu.get_fb();
-        auto fb_size = (mode.height * screen_pitch);
 
         for(size_t i = 1; i < screen_height; i++) {
             auto* dst = fb + ((i - 1) * screen_pitch * font_height);
@@ -51,12 +50,10 @@ void tty::Writer::putc(const char c) const {
             memcpy(dst, src, mode.pitch * font_height);
         }
 
-        memset(fb + fb_size - (screen_pitch * font_height), 0, mode.pitch * font_height);
+        memset(fb + ((screen_height - 1) * screen_pitch * font_height), 0, mode.pitch * font_height);
 
         x = 0;
         y = screen_height;
-
-        //gpu.flush(); // Flush the entire backbuffer
     };
 
     if(c == '\n') {
