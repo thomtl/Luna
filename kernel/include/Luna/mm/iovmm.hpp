@@ -24,6 +24,9 @@ namespace iovmm {
         }
 
         struct Allocation {
+            operator bool() {
+                return (host_base != 0) && (len != 0);
+            }
             uintptr_t guest_base;
             uint8_t* host_base;
             size_t len;
@@ -35,7 +38,7 @@ namespace iovmm {
             Bidirectional = DeviceToHost | HostToDevice
         };
         
-        Allocation alloc(size_t len, uint8_t direction) {
+        Allocation alloc(size_t len, uint8_t direction, uint8_t cache = msr::pat::uc) {
             size_t aligned_len = align_up(len, pmm::block_size);
             for(auto& region : _regions) {
                 if(region.len >= aligned_len) {
@@ -48,7 +51,7 @@ namespace iovmm {
                     uintptr_t host_region = hmm::alloc(len, pmm::block_size); // Will do its own alignment internally
                     ASSERT(((uintptr_t)host_region & (pmm::block_size - 1)) == 0);
                     for(size_t i = 0; i < aligned_len; i += pmm::block_size)
-                        kvmm.set_caching(host_region + i, msr::pat::uc);
+                        kvmm.set_caching(host_region + i, cache);
 
                     memset((void*)host_region, 0, len);
 

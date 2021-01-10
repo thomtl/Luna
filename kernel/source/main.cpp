@@ -15,6 +15,7 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
+#include <Luna/drivers/gpu/intel/gpu.hpp>
 #include <Luna/drivers/gpu/lfb/lfb.hpp>
 
 #include <Luna/drivers/sound/hda.hpp>
@@ -112,7 +113,8 @@ void kernel_main(const stivale2_struct* info) {
 
     iommu::init();
 
-    log::select_logger(log::LoggerType::Late);
+    intel_gpu::init();
+
 
     ahci::init();
     hda::init();

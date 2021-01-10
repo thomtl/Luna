@@ -19,6 +19,9 @@ main_sources = files(
     'source/cpu/regs.cpp',
     'source/cpu/smp.cpp',
 
+    'source/drivers/gpu/intel/gpu.cpp',
+    'source/drivers/gpu/intel/lil_imports.cpp',
+
     'source/drivers/gpu/lfb/lfb.cpp',
 
     'source/drivers/gpu/gpu.cpp',
@@ -107,6 +110,9 @@ add_global_link_arguments(ld_flags, language: 'cpp')
 lai = subproject('lai')
 lai_dep = lai.get_variable('dependency')
 
-deps = [lai_dep]
+lil = subproject('lil')
+lil_dep = lil.get_variable('dependency')
+
+deps = [lai_dep, lil_dep]
 
 executable('luna.bin', main_sources, nasm_objects, dependencies: deps, include_directories: cpp_includes, link_depends: ld_script)

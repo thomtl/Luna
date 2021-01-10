@@ -1,3 +1,6 @@
 [submodule "kernel/subprojects/lai"]
 	path = kernel/subprojects/lai
 	url = https://github.com/qword-os/lai
+[submodule "kernel/subprojects/lil"]
+	path = kernel/subprojects/lil
+	url = https://github.com/Matt8898/lil/
