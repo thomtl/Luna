@@ -15,6 +15,8 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
+#include <Luna/drivers/gpu/lfb/lfb.hpp>
+
 #include <Luna/drivers/sound/hda.hpp>
 #include <Luna/drivers/storage/ahci.hpp>
 #include <Luna/drivers/iommu/iommu.hpp>
@@ -92,6 +94,9 @@ void kernel_main(const stivale2_struct* info) {
 
     hmm::init();
     print("hmm: Initialized SLAB allocator\n");
+
+    lfb::init(boot_info);
+    log::select_logger(log::LoggerType::Late);
 
     cpu_data.lapic.init();
 
@@ -219,8 +224,15 @@ void kernel_main_ap(stivale2_smp_info* info){
 constexpr size_t bsp_stack_size = 0x1000;
 uint8_t bsp_stack[bsp_stack_size];
 
+stivale2_header_tag_framebuffer fb_tab {
+    .tag = {.identifier = STIVALE2_HEADER_TAG_FRAMEBUFFER_ID, .next = 0},
+    .framebuffer_width = 0,
+    .framebuffer_height = 0,
+    .framebuffer_bpp = 32
+};
+
 stivale2_header_tag_smp smp_tag = {
-    .tag = {.identifier = STIVALE2_HEADER_TAG_SMP_ID, .next = 0},
+    .tag = {.identifier = STIVALE2_HEADER_TAG_SMP_ID, .next = (uint64_t)&fb_tab},
     .flags = 1, // Use x2APIC
 };
 
