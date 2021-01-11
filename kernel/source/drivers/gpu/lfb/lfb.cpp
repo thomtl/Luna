@@ -10,9 +10,10 @@ lfb::Gpu::Gpu(stivale2::Parser& boot) {
     mode.bpp = tag->framebuffer_bpp;
     mode.pitch = tag->framebuffer_pitch;
 
-    auto va = tag->framebuffer_addr + phys_mem_map;
+    auto pa = tag->framebuffer_addr;
+    auto& kvmm = vmm::kernel_vmm::get_instance();
     for(size_t i = 0; i < (mode.height * mode.pitch); i += pmm::block_size)
-        vmm::kernel_vmm::get_instance().set_caching(va + i, msr::pat::wc);
+        kvmm.map(pa + i, pa + i + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wc);
 }
 
 const std::span<gpu::Mode> lfb::Gpu::get_modes() {
