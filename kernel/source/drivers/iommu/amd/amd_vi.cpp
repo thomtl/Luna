@@ -177,6 +177,13 @@ amd_vi::IOMMUEngine::IOMMUEngine(const amd_vi::IVHDInfo& ivhd): segment{ivhd.seg
                                 print("{}", pf.reserved_bit_set ? "       Reserved bit was set\n" : "");
                             }
                         }
+                    } else if(type == 0b101) {
+                        print("amdvi: Illegal Command Error\n");
+                        auto* cmd = (uint32_t*)(self.cmd_ring.ring + self.regs->cmd_evt_ptrs.cmd_buf_head);
+
+                        auto op = cmd[1] >> 28;
+                        print("       cw0: {:#x}, cw1: {:#x}, cw2: {:#x}, cw3: {:#x}\n", cmd[0], cmd[1], cmd[2], cmd[3]);
+                        print("       Opcode: {:#b}\n", op);
                     } else {
                         print("amdvi: Unknown event ring type: {:#b}\n", (uint16_t)type);
                     }
