@@ -24,7 +24,7 @@ struct {
 intel_gpu::Gpu::Gpu(pci::Device* dev): dev{dev}, mm{dev} {
     dev->set_privileges(pci::privileges::Pio | pci::privileges::Mmio | pci::privileges::Dma);
 
-    mm.push_region({.base = 0x1000, .len = 0xFFFF'FFFF - 0x1000});
+    mm.push_region({.base = 0x1000, .len = 0xFF'FFFF'FFFF - 0x1000});
 
     lil_init_gpu(&ctx, dev);
 
@@ -67,7 +67,7 @@ bool intel_gpu::Gpu::set_mode(const gpu::Mode& mode) {
     plane.enabled = true;
 
     crtc.shutdown(&ctx, &crtc);
-    lil_vmem_clear(&ctx);
+    ctx.vmem_clear(&ctx);
 
     if(gtt_dummy)
         mm.free(gtt_dummy);
@@ -80,7 +80,7 @@ bool intel_gpu::Gpu::set_mode(const gpu::Mode& mode) {
         gtt_dummy = mm.alloc(0x1000, iovmm::Iovmm::Bidirectional, msr::pat::wc);
         
         for(size_t i = 0; i < (ctx.gtt_size / 1024); i++)
-            lil_vmem_map(&ctx, gtt_dummy.guest_base, i * pmm::block_size, 0b110);
+            ctx.vmem_map(&ctx, gtt_dummy.guest_base, i * pmm::block_size);
     }
 
     constexpr size_t gtt_lfb_offset = 0;
@@ -89,7 +89,7 @@ bool intel_gpu::Gpu::set_mode(const gpu::Mode& mode) {
         lfb = mm.alloc(mode.pitch * mode.height, iovmm::Iovmm::Bidirectional, msr::pat::wc);
 
         for(size_t i = 0; i < lfb.len; i += 0x1000)
-            lil_vmem_map(&ctx, lfb.guest_base + i, gtt_lfb_offset + i, 0b110);
+            ctx.vmem_map(&ctx, lfb.guest_base + i, gtt_lfb_offset + i);
     }
 
     crtc.commit_modeset(&ctx, &crtc);

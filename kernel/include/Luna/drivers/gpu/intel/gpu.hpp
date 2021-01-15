@@ -8,7 +8,6 @@
 
 extern "C" {
     #include "../../../../../subprojects/lil/src/intel.h"
-    #include "../../../../../subprojects/lil/src/gtt.h"
 }
 
 namespace intel_gpu {
