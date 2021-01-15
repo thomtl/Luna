@@ -80,7 +80,7 @@ nasm_gen = generator(nasm, output: '@BASENAME@.o', arguments: ['-f', 'elf64', '-
 nasm_objects = nasm_gen.process(nasm_sources)
 
 extra_warning_flags = ['-Wreorder', '-Wdeprecated-copy-dtor', '-Wno-unknown-pragmas', '-Wduplicated-cond', '-Wduplicated-branches',
-                       '-Wlogical-op', '-Wno-non-virtual-dtor', '-Werror', '-Wno-address', '-Wno-volatile']
+                       '-Wlogical-op', '-Wno-non-virtual-dtor', '-Werror', '-Wno-address', '-Wno-volatile', '-Wno-address-of-packed-member']
 
 flags_c_common = ['-m64', '-march=x86-64', '-fno-PIC', '-Wall', '-Wextra', '-ffreestanding', '-mno-red-zone', '-fstrict-volatile-bitfields',
                   '-nostdlib', '-mcmodel=kernel', '-fno-omit-frame-pointer', '-g', '-O2',

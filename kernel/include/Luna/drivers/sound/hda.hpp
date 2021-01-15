@@ -46,7 +46,7 @@ namespace hda {
         uint32_t insts;
         uint64_t reserved_1;
         uint32_t walclk;
-        uint32_t reserved_2;
+        uint32_t old_ssync;
         uint32_t ssync;
         uint32_t reserved_3;
         uint32_t corblbase;
@@ -143,7 +143,7 @@ namespace hda {
     };
 
     struct HDAController {
-        HDAController(pci::Device& device);
+        HDAController(pci::Device& device, uint16_t vid, uint32_t quirks);
         ~HDAController();
 
         HDAController(const HDAController& src) = delete;
@@ -176,6 +176,9 @@ namespace hda {
         void verb_set_eapd_control(uint8_t codec, uint8_t node, uint8_t v);
         void verb_set_dac_amplifier_gain(uint8_t codec, uint8_t node, uint16_t v);
 
+        void update_ssync(bool set, uint32_t mask);
+
+        uint32_t quirks;
 
         iovmm::Iovmm mm;
         volatile Regs* regs;
@@ -212,6 +215,14 @@ namespace hda {
             volatile bool have_response; // Is modified from IRQ context
             uint32_t curr_response; // TODO: This should probably be a FIFO
         } codecs[15];
+    };
+
+    enum {
+        quirkSnoopSCH = (1 << 0),
+        quirkSnoopATI = (1 << 1),
+        quirkNoSnoop = (1 << 2),
+        quirkNoTCSEL = (1 << 3),
+        quirkOldSsync = (1 << 4),
     };
 
     void init();

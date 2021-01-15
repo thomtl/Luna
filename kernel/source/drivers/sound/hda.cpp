@@ -67,7 +67,7 @@ struct {
 };
 
 
-hda::HDAController::HDAController(pci::Device& device): mm{&device} {
+hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t quirks): quirks{quirks}, mm{&device} {
     device.set_privileges(pci::privileges::Mmio | pci::privileges::Dma);
 
     auto bar = device.read_bar(0);
@@ -86,6 +86,40 @@ hda::HDAController::HDAController(pci::Device& device): mm{&device} {
 
     uint16_t major = regs->vmaj, minor = regs->vmin;
     print("hda: Controller {}.{}\n", major, minor);
+
+    (void)vendor;
+    if(!(quirks & quirkNoTCSEL)) {
+        constexpr uint16_t tcsel = 0x44;
+        auto v = device.read<uint8_t>(tcsel);
+        v &= ~0b111;
+        device.write<uint8_t>(tcsel, v);
+    }
+
+    if(quirks & hda::quirkSnoopATI) {
+        constexpr uint16_t cntr2_addr = 0x42;
+        constexpr uint32_t enable_snoop = 0x2;
+
+        auto v = device.read<uint16_t>(cntr2_addr);
+        v &= ~0b111;
+        v |= (quirks & hda::quirkNoSnoop) ? 0 : enable_snoop;
+        device.write<uint16_t>(cntr2_addr, v);
+        print("     ATI Snoop: {}\n", (quirks & hda::quirkNoSnoop) ? "Disabled" : "Enabled");
+    }
+
+    if(quirks & hda::quirkSnoopSCH) { // Enable PCH/SCH snoop if needed
+        constexpr uint16_t sch_devc = 0x78;
+        constexpr uint32_t devc_nosnoop = (1 << 11);
+
+        auto snoop = device.read<uint16_t>(sch_devc);
+        if(((quirks & hda::quirkNoSnoop) && !(snoop & devc_nosnoop)) || (!(quirks & hda::quirkNoSnoop) && (snoop & devc_nosnoop))) {
+            snoop &= ~devc_nosnoop;
+            if(quirks & hda::quirkNoSnoop)
+                snoop |= devc_nosnoop;
+            device.write<uint16_t>(sch_devc, snoop);
+            snoop = device.read<uint16_t>(sch_devc);
+        }
+        print("     SCH Snoop: {}\n", (snoop & devc_nosnoop) ? "Disabled" : "Enabled");
+    }
 
     if((regs->gctl & 1) == 0) {
         // Bring controller out of reset
@@ -118,9 +152,11 @@ hda::HDAController::HDAController(pci::Device& device): mm{&device} {
     out_descriptors = (volatile StreamDescriptor*)(bar.base + phys_mem_map + sizeof(Regs) + (iss * sizeof(StreamDescriptor)));
     bi_descriptors = (volatile StreamDescriptor*)(bar.base + phys_mem_map + sizeof(Regs) + (iss * sizeof(StreamDescriptor)) + (oss * sizeof(StreamDescriptor)));
 
-    regs->intctl = (1 << 31) | (1 << 30); // Global IRQ enable + Controller IRQ enable
-    regs->wakeen = 0x7FFF; // Allow all Codecs to generate Wake events
-    regs->ssync = 0x3FFF'FFFF; // Don't start any stream
+    regs->wakeen = 0; // Allow no Codecs to generate Wake events
+
+    update_ssync(true, 0x3FFF'FFFF); // Make sure all streams are halted
+
+    regs->rirbsts = (1 << 0) | (1 << 4);
 
     auto calculate_ringbuffer_size = [&](uint8_t size) -> std::pair<uint8_t, size_t> {
         auto mask = (size >> 4) & 0xF;
@@ -193,6 +229,10 @@ hda::HDAController::HDAController(pci::Device& device): mm{&device} {
     regs->rirbctl |= (1 << 1) | (1 << 0); // Start RIRB engine
 
     print("Started\n");
+
+    regs->gctl |= (1 << 8); // Accept unsolicited responses
+
+    regs->intctl = (1 << 31) | (1 << 30); // Global IRQ enable + Controller IRQ enable
 
 
     auto detected_codecs = regs->statests;
@@ -328,19 +368,39 @@ void hda::HDAController::enumerate_codec(uint8_t index) {
             if(connectivity == 0b00) path.loc = Path::Location::External;
             else if(connectivity == 0b10) path.loc = Path::Location::Internal;
             else if(connectivity == 0b11) path.loc = Path::Location::Both;
-            else if(connectivity == 0b01) continue; // Nothing attached
+            //else if(connectivity == 0b01) continue; // Nothing attached(/)
 
             path.type = (widget.config_default >> 20) & 0xF;
 
             // TODO: Do this recursively, to resolve nested pin chains
-            for(auto connection : widget.connection_list) {
-                auto& conn_widget = codec.widgets[connection];
+            constexpr size_t max_depth = 10; // TODO: Is this a good pick?
+            size_t depth = 0;
+            auto solve = [&](uint8_t nid) {
+                auto solve_impl = [&](auto& self, uint8_t nid) -> void {
+                    if(depth++ > max_depth)
+                        return;
+                    
+                    auto& curr = codec.widgets[nid];
+                    if(curr.type == 0) // DAC
+                        path.dac = nid;
+                    else if(curr.type == 2) // Mixer
+                        ;
+                    else if(curr.type == 4) // Pin complex
+                        path.pin = nid;
+                    else {
+                        print("hda: Unknown {} in list\n", widget_type_strs[curr.type]);
+                        PANIC("Unknown entry");
+                    }
 
-                if(conn_widget.type == 0) {
-                    path.dac = conn_widget.nid;
-                    break;
-                }
-            }
+                    for(auto connection : curr.connection_list)
+                        self(self, connection);
+                };
+
+                solve_impl(solve_impl, nid);
+            };
+
+            solve(path.pin);
+            
 
             if(path.dac == 0)
                 continue; // Couldn't find a DAC
@@ -358,7 +418,7 @@ void hda::HDAController::enumerate_widget(uint8_t codec, uint8_t node, uint8_t f
     auto res = verb_get_parameter(codec, node, WidgetParameter::AudioWidgetCap);
 
     auto type = (res >> 20) & 0xF;
-    print("       - Node {}: {}\n", (uint16_t)node, widget_type_strs[type]);
+    print("       - Node {}: {} ", (uint16_t)node, widget_type_strs[type]);
 
     Widget widget{};
     widget.nid = node;
@@ -403,18 +463,20 @@ void hda::HDAController::enumerate_widget(uint8_t codec, uint8_t node, uint8_t f
             }
         }
         
-        print("         Connection List: ");
+        print("Connection List: ");
         for(auto entry : widget.connection_list) 
             print("{} ", entry);
-        print("\n");
     }
+    print("\n");
 
     codecs[codec].widgets[node] = widget;
 }
 
 void hda::HDAController::handle_irq() {
-    if(regs->rirbsts & 1) {
-        regs->rirbsts = 1; // Clear RIRB Overrun status if needed
+    
+    constexpr uint8_t mask = (1 << 0) | (1 << 2);
+    if(regs->rirbsts & mask) {
+        regs->rirbsts = mask; // Clear RIRB Overrun status if needed
 
         auto wp = regs->rirbwp;
         while(rirb.head != wp) {
@@ -549,8 +611,6 @@ bool hda::HDAController::stream_create(const hda::StreamParameters& params, size
     stream.bdl = (volatile BufferDescriptorList*)stream.bdl_alloc.host_base;
     stream.desc->lvi = entries - 1;
     stream.desc->cbl = 0;
-    
-    regs->ssync |= (1 << stream.index); // Make sure stream doesn't start
 
     verb_set_converter_format(device.codec, device.dac, stream.fmt);
     verb_set_converter_control(device.codec, device.dac, stream.index, 1);
@@ -586,14 +646,26 @@ bool hda::HDAController::streams_start(size_t n_streams, hda::Stream** streams) 
     uint16_t stream_mask = 0;
     for(size_t i = 0; i < n_streams; i++) {
         streams[i]->desc->cbl = streams[i]->total_size;
-        streams[i]->desc->ctl |= (1 << 1); // Start stream DMA Engine
 
         stream_mask |= (1 << streams[i]->index);
     }
 
-    regs->ssync &= ~stream_mask; // GO
+    update_ssync(true, stream_mask);
+
+    for(size_t i = 0; i < n_streams; i++)
+        streams[i]->desc->ctl |= (1 << 1); // Start stream DMA Engine
+
+    update_ssync(false, stream_mask);
 
     return true;
+}
+
+void hda::HDAController::update_ssync(bool set, uint32_t mask) {
+    volatile auto* ssync = (quirks & quirkOldSsync) ? &regs->old_ssync : &regs->ssync;
+    if(set)
+        *ssync |= mask;
+    else
+        *ssync &= ~mask;
 }
 
 hda::Path* hda::HDAController::get_device(uint8_t codec, uint8_t path) {
@@ -603,24 +675,27 @@ hda::Path* hda::HDAController::get_device(uint8_t codec, uint8_t path) {
     return &codecs[codec].paths[path];
 }
 
-
-
-
 struct {
     uint16_t vid, did;
+    uint32_t quirks;
 } known_hda_devices[] = {
-    {0x8086, 0x2668}, // Intel ICH6
-    {0x8086, 0x293E}, // Intel ICH9
+    {0x8086, 0x2668, hda::quirkOldSsync}, // Intel ICH6 HDA
+    {0x8086, 0x293E, hda::quirkOldSsync}, // Intel ICH9 HDA
+    {0x8086, 0x1E20, hda::quirkSnoopSCH}, // Intel 7 Series HDA (Ivy Bridge Mobile)
+
+
+
+    {0x1022, 0x15E3, hda::quirkNoTCSEL | hda::quirkSnoopATI} // AMD Family 17h (Models 10h-1fh) HDA Controller
 };
 
 static std::linked_list<hda::HDAController> controllers;
 
 void hda::init() {
-    for(const auto [vid, did] : known_hda_devices) {
+    for(const auto [vid, did, quirks] : known_hda_devices) {
         pci::Device* dev = nullptr;
         size_t i = 0;
         while((dev = pci::device_by_id(vid, did, i++))) {
-            controllers.emplace_back(*dev);
+            controllers.emplace_back(*dev, vid, quirks);
         }
     }
 
