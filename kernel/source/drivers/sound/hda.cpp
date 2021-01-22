@@ -74,7 +74,7 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
     ASSERT(bar.type == pci::Bar::Type::Mmio);
 
     auto vector = idt::allocate_vector();
-    device.enable_irq(vector);
+    device.enable_irq(0, vector);
     idt::set_handler(vector, idt::handler{.f = [](uint8_t, idt::regs*, void* userptr){
         auto& self = *(HDAController*)userptr;
         self.handle_irq();

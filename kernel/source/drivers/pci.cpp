@@ -60,10 +60,23 @@ static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus
                     dev.msi.supported = true;
                     dev.msi.offset = next;
                     break;
-                case pci::msix::id:
+                case pci::msix::id: {
                     dev.msix.supported = true;
                     dev.msix.offset = next;
+
+                    pci::msix::Control control{.raw = dev.read<uint16_t>(next + pci::msix::control)};
+                    pci::msix::Addr table{.raw = dev.read<uint32_t>(next + pci::msix::table)};
+                    pci::msix::Addr pending{.raw = dev.read<uint32_t>(next + pci::msix::pending)};
+
+                    dev.msix.n_messages = control.n_irqs + 1;
+
+                    dev.msix.table.bar = table.bir;
+                    dev.msix.table.offset = table.offset << 3;
+
+                    dev.msix.pending.bar = pending.bir;
+                    dev.msix.pending.offset = pending.offset << 3;
                     break;
+                }
             }
 
             next = dev.read<uint8_t>(next + 1);
@@ -234,9 +247,39 @@ void pci::write_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_
     else PANIC("Invalid width");
 }
 
-static void install_msi(pci::Device& device, uint8_t vector) {
-    ASSERT(device.msi.supported);
-    ASSERT(device.msi.offset != 0);
+static void install_msix(pci::Device& device, uint16_t index, uint8_t vector) {
+    ASSERT(index < device.msix.n_messages);
+
+    auto table_bar = device.read_bar(device.msix.table.bar);
+    ASSERT(table_bar.base && table_bar.type == pci::Bar::Type::Mmio);
+
+    vmm::kernel_vmm::get_instance().map(table_bar.base, table_bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc); // TODO: How should this interact with device drivers?
+    volatile auto* table = (pci::msix::Entry*)(table_bar.base + phys_mem_map);
+
+    pci::msi::Data data{};
+    data.vector = vector;
+    data.delivery_mode = 0;
+
+    pci::msi::Address address{};
+    address.base_address = 0xFEE;
+    address.destination_id = get_cpu().lapic_id;
+
+    pci::msix::VectorControl vector_control{};
+    vector_control.mask = 0;
+
+    table[index].addr_low = address.raw;
+    table[index].addr_high = 0; // TODO: High address
+    table[index].data = data.raw;
+    table[index].control = vector_control.raw;
+
+    pci::msix::Control control{.raw = device.read<uint16_t>(device.msix.offset + pci::msix::control)};
+    control.mask = 0;
+    control.enable = 1;
+    device.write<uint16_t>(device.msix.offset + pci::msix::control, control.raw);
+}
+
+static void install_msi(pci::Device& device, uint16_t index, uint8_t vector) {
+    ASSERT(index == 0); // TODO: Support Multiple Message MSI
 
     pci::msi::Control control{};
     pci::msi::Data data{};
@@ -263,11 +306,11 @@ static void install_msi(pci::Device& device, uint8_t vector) {
     device.write<uint16_t>(device.msi.offset + pci::msi::control, control.raw);
 }
 
-void pci::Device::enable_irq(uint8_t vector) {
+void pci::Device::enable_irq(uint16_t index, uint8_t vector) {
     if(msix.supported)
-        PANIC("TODO: Support MSI-X");
+        install_msix(*this, index, vector);
     else if(msi.supported)
-        install_msi(*this, vector);
+        install_msi(*this, index, vector);
     else
         PANIC("No IRQ routing support");
 }

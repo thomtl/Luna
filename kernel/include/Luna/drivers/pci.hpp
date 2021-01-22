@@ -57,6 +57,44 @@ namespace pci {
 
     namespace msix {
         constexpr uint8_t id = 0x11;
+
+        constexpr uint16_t control = 0x2;
+        constexpr uint16_t table = 0x4;
+        constexpr uint16_t pending = 0x8;
+
+        union [[gnu::packed]] Control {
+            struct {
+                uint16_t n_irqs : 11;
+                uint16_t reserved : 3;
+                uint16_t mask : 1;
+                uint16_t enable : 1;
+            };
+            uint16_t raw;
+        };
+
+        union [[gnu::packed]] Addr {
+            struct {
+                uint32_t bir : 3;
+                uint32_t offset : 29;
+            };
+            uint32_t raw;
+        };
+
+
+        union [[gnu::packed]] VectorControl {
+            struct {
+                uint32_t mask : 1;
+                uint32_t reserved : 31;
+            };
+            uint32_t raw;
+        };
+
+        struct [[gnu::packed]] Entry {
+            uint32_t addr_low;
+            uint32_t addr_high;
+            uint32_t data;
+            uint32_t control;
+        };
     } // namespace msix
 
     template<typename T>
@@ -102,9 +140,15 @@ namespace pci {
         struct {
             bool supported = false;
             uint8_t offset = 0;
+
+            uint16_t n_messages;
+            struct {
+                uint8_t bar;
+                uint32_t offset;
+            } table, pending;
         } msix{};
 
-        void enable_irq(uint8_t vector);
+        void enable_irq(uint16_t i, uint8_t vector);
         Bar read_bar(size_t i) const;
         void set_privileges(uint8_t privilege);
 

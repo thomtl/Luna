@@ -200,7 +200,7 @@ amd_vi::IOMMUEngine::IOMMUEngine(const amd_vi::IVHDInfo& ivhd): segment{ivhd.seg
             }
         }, .is_irq = true, .should_iret = false, .userptr = this});
 
-        pci_dev->enable_irq(vector);
+        pci_dev->enable_irq(0, vector);
 
         regs->control |= (uint64_t)EngineControl::EventIRQEnable;
         regs->control |= (uint64_t)EngineControl::EventLogEnable;
