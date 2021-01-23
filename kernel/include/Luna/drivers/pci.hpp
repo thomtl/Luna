@@ -97,6 +97,40 @@ namespace pci {
         };
     } // namespace msix
 
+    namespace power {
+        constexpr uint8_t id = 1;
+
+        constexpr uint16_t cap = 0x2;
+        constexpr uint16_t control = 0x4;
+
+        union [[gnu::packed]] Cap {
+            struct {
+                uint16_t version : 3;
+                uint16_t pme_clock : 1;
+                uint16_t reserved : 1;
+                uint16_t device_specific_init : 1;
+                uint16_t aux_current : 3;
+                uint16_t d1_support : 1;
+                uint16_t d2_support : 1;
+                uint16_t pme_support : 5;
+            };
+            uint16_t raw;
+        };
+
+        union [[gnu::packed]] Control {
+            struct {
+                uint16_t power_state : 2;
+                uint16_t reserved : 6;
+                uint16_t pme_enable : 1;
+                uint16_t data_select : 4;
+                uint16_t data_scale : 2;
+                uint16_t pme_status : 1;
+            };
+            uint16_t raw;
+        };
+    } // namespace power
+    
+
     template<typename T>
     concept PciConfigValue = std::same_as<T, uint8_t> || std::same_as<T, uint16_t> || std::same_as<T, uint32_t>;
 
@@ -135,6 +169,14 @@ namespace pci {
         struct {
             bool supported = false;
             uint8_t offset = 0;
+
+            uint8_t supported_states = 0;
+            uint8_t state = 0;
+        } power{};
+
+        struct {
+            bool supported = false;
+            uint8_t offset = 0;
         } msi{};
 
         struct {
@@ -149,6 +191,8 @@ namespace pci {
         } msix{};
 
         void enable_irq(uint16_t i, uint8_t vector);
+        bool set_power(uint8_t state);
+
         Bar read_bar(size_t i) const;
         void set_privileges(uint8_t privilege);
 

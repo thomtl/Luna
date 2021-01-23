@@ -2,6 +2,8 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/mm/vmm.hpp>
 
+#include <Luna/drivers/hpet.hpp>
+
 #include <Luna/misc/log.hpp>
 
 #include <lai/core.h>
@@ -56,6 +58,17 @@ static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus
             auto id = dev.read<uint8_t>(next);
 
             switch (id) {
+                case pci::power::id: {
+                    dev.power.supported = true;
+                    dev.power.offset = next;
+
+                    pci::power::Cap cap{.raw = dev.read<uint16_t>(next + pci::power::cap)};
+                    pci::power::Control control{.raw = dev.read<uint16_t>(next + pci::power::control)};
+
+                    dev.power.supported_states = (1 << 0) | (1 << 3) | (cap.d1_support << 1) | (cap.d2_support << 2);
+                    dev.power.state = control.power_state;
+                    break;
+                }
                 case pci::msi::id:
                     dev.msi.supported = true;
                     dev.msi.offset = next;
@@ -168,15 +181,25 @@ void pci::init() {
         parse_bus(allocation, bbn);
     }
 
+    // Set all devices to D0
+    for(auto& device : devices) {
+        bool success = device.set_power(0);
+        if(!success)
+            print("pci: Failed to set {}:{}:{}.{} to D0\n", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func);
+    }
+
     print("pci: Enumerated devices:\n");
     for(auto& device : devices) {
         auto req_id = device.requester_id.raw;
         print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}, ReqID: {:#x}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(11), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(9), req_id);
 
+        if(device.power.supported)
+            print(" Power{{{}{}{}{}}}", (device.power.supported_states & (1 << 0)) ? "D0, " : "", (device.power.supported_states & (1 << 1)) ? "D1, " : "", (device.power.supported_states & (1 << 2)) ? "D2, " : "", (device.power.supported_states & (1 << 3)) ? "D3" : "");
         if(device.msi.supported)
             print(" MSI");
         if(device.msix.supported)
             print(" MSI-X");
+        
         
         print("\n");
     }
@@ -313,6 +336,47 @@ void pci::Device::enable_irq(uint16_t index, uint8_t vector) {
         install_msi(*this, index, vector);
     else
         PANIC("No IRQ routing support");
+}
+
+bool pci::Device::set_power(uint8_t state) {
+    if(state > 3)
+        return false;
+    
+    if(!power.supported)
+        return (state == 0); // If no PM Cap, only return true if state 0
+
+    if(power.state == state)
+        return true;
+
+    if((power.supported_states & (1 << state)) == 0)
+        return false;
+
+    // PCI Bus Power Management Interface Specification 1.1 Paragraph 5.6.1
+    uint64_t delay = 0;
+    if((power.state == 0 || power.state == 1) && state == 2)
+        delay = 1; // 200 μs
+    else if(state == 3)
+        delay = 10;
+    else if(power.state == 2 && state == 0)
+        delay = 1; // 200 μs
+    else if(power.state == 3 && state == 0)
+        delay = 10;
+
+    pci::power::Control control{.raw = read<uint16_t>(power.offset + pci::power::control)};
+    control.power_state = state;
+    write<uint16_t>(power.offset + pci::power::control, control.raw);
+
+    hpet::poll_sleep(delay);
+
+    control.raw = read<uint16_t>(power.offset + pci::power::control);
+
+    // Device successfully set state
+    if(control.power_state == state) {
+        power.state = state;
+        return true;
+    } else {
+        return false;
+    }
 }
 
 pci::Bar pci::Device::read_bar(size_t i) const {
