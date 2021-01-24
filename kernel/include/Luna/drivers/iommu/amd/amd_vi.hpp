@@ -94,9 +94,9 @@ namespace amd_vi {
 
         static constexpr DeviceID from_device(const pci::Device& device) {
             DeviceID id{};
-            id.bus = device.bus; // AMD doesn't seem to use the RequesterIDs here? So child busses don't "take ownership" of the transaction?
-            id.slot = device.slot;
-            id.func = device.func;
+            id.bus = device.requester_id.bus;
+            id.slot = device.requester_id.slot;
+            id.func = device.requester_id.func;
 
             return id;
         }
