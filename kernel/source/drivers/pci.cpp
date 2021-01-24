@@ -111,6 +111,7 @@ static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus
                         dev.bridge_type = pci::BridgeType::PCI_to_PCIe;
                         break;
 
+                    case 0b1001: [[fallthrough]]; // PCIe Root Complex Integrated Endpoint
                     case 0: [[fallthrough]]; // PCIe Endpoint
                     case 1: // Legacy PCIe Endpoint
                         break;
@@ -131,6 +132,7 @@ static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus
         auto prev_status = is_on_legacy_bridge;
         auto prev_req_id = legacy_bridge_req_id;
 
+        ASSERT(dev.bridge_type != pci::BridgeType::None);
         if(dev.bridge_type == pci::BridgeType::PCI_to_PCIe) {
             is_on_legacy_bridge = true;
             legacy_bridge_req_id = req_id;
