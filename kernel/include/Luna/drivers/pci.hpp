@@ -130,6 +130,10 @@ namespace pci {
         };
     } // namespace power
     
+    namespace pcie {
+        constexpr uint8_t id = 0x10;
+    } // namespace pcie
+    
 
     template<typename T>
     concept PciConfigValue = std::same_as<T, uint8_t> || std::same_as<T, uint16_t> || std::same_as<T, uint32_t>;
@@ -149,6 +153,10 @@ namespace pci {
         };    
     } // namespace privileges
 
+    enum class BridgeType {
+        None, PCI_to_PCIe, PCIe_to_PCIe
+    };
+
     union [[gnu::packed]] RequesterID {
         struct {
             uint16_t func : 3;
@@ -164,6 +172,7 @@ namespace pci {
         uint8_t bus, slot, func;
         uintptr_t mmio_base;
 
+        BridgeType bridge_type = BridgeType::None;
         RequesterID requester_id;
 
         struct {
@@ -189,6 +198,11 @@ namespace pci {
                 uint32_t offset;
             } table, pending;
         } msix{};
+
+        struct {
+            bool found = false;
+            uint8_t offset = 0;
+        } pcie{};
 
         void enable_irq(uint16_t i, uint8_t vector);
         bool set_power(uint8_t state);

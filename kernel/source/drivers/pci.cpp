@@ -34,21 +34,27 @@ static acpi::Mcfg::Allocation get_mcfg_allocation(acpi::Mcfg* mcfg, uint16_t seg
 static void parse_bus(const acpi::Mcfg::Allocation& allocation, uint8_t bus);
 
 static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus, uint8_t slot, uint8_t func) {
-    static bool is_on_child_bus = false; // TODO: Make this less ugly, should only be done for PCI-to-PCIe bridges
-    static pci::RequesterID child_bus_req_id{.raw = 0};
-
+    static bool is_on_legacy_bridge = false;
+    static pci::RequesterID legacy_bridge_req_id{.raw = 0};
+    
     auto addr = get_mcfg_device_addr(allocation, bus, slot, func);
 
     pci::RequesterID req_id{.raw = 0};
     req_id.bus = bus;
     req_id.slot = slot;
     req_id.func = func;
-    if(is_on_child_bus)
-        req_id = child_bus_req_id;
+    if(is_on_legacy_bridge)
+        req_id = legacy_bridge_req_id;
 
     pci::Device dev{.seg = allocation.segment, .bus = bus, .slot = slot, .func = func, .mmio_base = addr, .requester_id = req_id};
     if(dev.read<uint16_t>(0) == 0xFFFF)
         return;
+
+    auto class_code = dev.read<uint8_t>(11);
+    auto subclass_code = dev.read<uint8_t>(10);
+
+    if(class_code == 6 && subclass_code == 4)
+        dev.bridge_type = pci::BridgeType::PCI_to_PCIe; // Assume PCI-to-PCIe if no PCIe cap
 
     auto status = dev.read<uint16_t>(6);
     if(status & (1 << 4)) { // Capability list
@@ -90,6 +96,30 @@ static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus
                     dev.msix.pending.offset = pending.offset << 3;
                     break;
                 }
+                
+                case pci::pcie::id:
+                    dev.pcie.found = true;
+                    dev.pcie.offset = next;
+
+                    auto type = (dev.read<uint16_t>(next + 2) >> 4) & 0xF;
+
+                    switch(type) {
+                    case 0b100: // PCIe Root Complex Root Port
+                        dev.bridge_type = pci::BridgeType::PCIe_to_PCIe;
+                        break;
+                    case 0b1000: // PCI/PCI-X to PCIe Bridge
+                        dev.bridge_type = pci::BridgeType::PCI_to_PCIe;
+                        break;
+
+                    case 0: [[fallthrough]]; // PCIe Endpoint
+                    case 1: // Legacy PCIe Endpoint
+                        break;
+                    
+                    default:
+                        print("pci: Unknown PCIe cap type {:#b}\n", type);
+                        break;
+                    }
+                    break;
             }
 
             next = dev.read<uint8_t>(next + 1);
@@ -97,17 +127,19 @@ static void parse_function(const acpi::Mcfg::Allocation& allocation, uint8_t bus
     }
 
     // PCI-to-PCI bridge
-    if(dev.read<uint8_t>(11) == 6 && dev.read<uint8_t>(10) == 4) {
-        auto prev_status = is_on_child_bus;
-        auto prev_req_id = child_bus_req_id;
+    if(class_code == 6 && subclass_code == 4) {
+        auto prev_status = is_on_legacy_bridge;
+        auto prev_req_id = legacy_bridge_req_id;
 
-        is_on_child_bus = true;
-        child_bus_req_id = req_id;
+        if(dev.bridge_type == pci::BridgeType::PCI_to_PCIe) {
+            is_on_legacy_bridge = true;
+            legacy_bridge_req_id = req_id;
+        }
 
         parse_bus(allocation, dev.read<uint8_t>(0x19));
 
-        is_on_child_bus = prev_status;
-        child_bus_req_id = prev_req_id;
+        is_on_legacy_bridge = prev_status;
+        legacy_bridge_req_id = prev_req_id;
     }
 
     devices.emplace_back(std::move(dev));
@@ -199,6 +231,8 @@ void pci::init() {
             print(" MSI");
         if(device.msix.supported)
             print(" MSI-X");
+        if(device.pcie.found)
+            print(" PCIe");
         
         
         print("\n");
