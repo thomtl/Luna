@@ -20,8 +20,8 @@ std::pair<uint32_t, uint32_t> scsi_read_capacity(scsi::Device& device) {
     std::span<uint8_t> xfer{(uint8_t*)&res, sizeof(res)};
     device.driver.scsi_cmd(device.driver.userptr, cmd, xfer);
 
-    uint32_t block_size = bswap32(res.block_size);
-    uint32_t lba = bswap32(res.lba) + 1; // Returned is the last lba, so add 1 for total
+    uint32_t block_size = bswap<uint32_t>(res.block_size);
+    uint32_t lba = bswap<uint32_t>(res.lba) + 1; // Returned is the last lba, so add 1 for total
 
     return {lba, block_size};
 }
@@ -32,7 +32,7 @@ void scsi_inquiry(scsi::Device& dev) {
 
     packet.command = scsi::commands::inquiry::command;
     packet.flags.evpd = 0;
-    packet.allocation_length = bswap16(128);
+    packet.allocation_length = bswap<uint16_t>(128);
 
     uint8_t inquiry[128] = {};
     std::span<uint8_t> xfer{inquiry, 128};
@@ -84,8 +84,8 @@ void scsi_read12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* d
     auto& packet = *(scsi::commands::read12::Packet*)cmd.packet;
 
     packet.command = scsi::commands::read12::command;
-    packet.lba = bswap32(lba);
-    packet.length = bswap32(n_sectors);
+    packet.lba = bswap<uint32_t>(lba);
+    packet.length = bswap<uint32_t>(n_sectors);
 
     std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
     dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
@@ -99,8 +99,8 @@ void scsi_read10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* d
     auto& packet = *(scsi::commands::read10::Packet*)cmd.packet;
 
     packet.command = scsi::commands::read10::command;
-    packet.lba = bswap32(lba);
-    packet.length = bswap16(n_sectors);
+    packet.lba = bswap<uint32_t>(lba);
+    packet.length = bswap<uint16_t>(n_sectors);
 
     std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
     dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
@@ -116,8 +116,8 @@ void scsi_write12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* 
     auto& packet = *(scsi::commands::write12::Packet*)cmd.packet;
 
     packet.command = scsi::commands::write12::command;
-    packet.lba = bswap32(lba);
-    packet.length = bswap32(n_sectors);
+    packet.lba = bswap<uint32_t>(lba);
+    packet.length = bswap<uint32_t>(n_sectors);
 
     std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
     dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
@@ -133,8 +133,8 @@ void scsi_write10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* 
     auto& packet = *(scsi::commands::write10::Packet*)cmd.packet;
 
     packet.command = scsi::commands::write10::command;
-    packet.lba = bswap32(lba);
-    packet.length = bswap16(n_sectors);
+    packet.lba = bswap<uint32_t>(lba);
+    packet.length = bswap<uint16_t>(n_sectors);
 
     std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
     dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
