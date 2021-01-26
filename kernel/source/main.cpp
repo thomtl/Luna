@@ -17,7 +17,7 @@
 
 #include <Luna/drivers/gpu/intel/gpu.hpp>
 #include <Luna/drivers/gpu/lfb/lfb.hpp>
-
+#include <Luna/drivers/net/realtek/rtl81x9.hpp>
 #include <Luna/drivers/sound/hda.hpp>
 #include <Luna/drivers/storage/ahci.hpp>
 #include <Luna/drivers/iommu/iommu.hpp>
@@ -112,6 +112,9 @@ void kernel_main(const stivale2_struct* info) {
     asm("sti");
 
     iommu::init();
+
+
+    rtl81x9::init();
 
     intel_gpu::init();
 

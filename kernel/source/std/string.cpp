@@ -1,5 +1,12 @@
 #include <std/string.hpp>
 
+extern "C" size_t strlen(const char* str) {
+    size_t s = 0;
+    while(*str++)
+        s++;
+    return s;
+}
+
 extern "C" int strncmp(const char* s1, const char* s2, size_t n) {
     while (n && *s1 && (*s1 == *s2)){
         ++s1;

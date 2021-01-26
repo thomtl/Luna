@@ -35,6 +35,7 @@ main_sources = files(
 
     'source/drivers/iommu/iommu.cpp',
 
+    'source/drivers/net/realtek/rtl81x9.cpp',
     'source/drivers/sound/hda.cpp',
 
     'source/drivers/storage/ahci.cpp',
@@ -57,6 +58,10 @@ main_sources = files(
     'source/mm/pmm.cpp',
     'source/mm/vmm.cpp',
     'source/mm/hmm.cpp',
+
+    'source/net/if.cpp',
+    'source/net/ipv4.cpp',
+    'source/net/udp.cpp',
 
     'source/vmm/emulate.cpp',
     'source/vmm/vm.cpp',
