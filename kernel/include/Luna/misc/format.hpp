@@ -24,6 +24,10 @@ namespace format
 			it.putc(c);
 		}
 
+		void flush() const {
+			it.flush();
+		}
+
 		private:
 		const OutputIt& it;
 	};
@@ -271,5 +275,6 @@ namespace format
 	template<typename OutputIt, typename... Args>
 	void format_to(const OutputIt& out, const char* fmt, Args&&... args){
 		internal::format_int(format_output_it{out}, fmt, std::forward<Args>(args)...);
+		out.flush();
 	}
 } // namespace format

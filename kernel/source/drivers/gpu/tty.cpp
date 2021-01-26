@@ -81,6 +81,6 @@ void tty::Writer::putc(const char c) const {
     }
 }
 
-void tty::Writer::flush() {
+void tty::Writer::flush() const {
     gpu::get_gpu().flush();
 }

@@ -9,7 +9,7 @@ namespace tty {
     struct Writer : public log::Logger {
         Writer();
         void putc(const char c) const;
-        void flush() override;
+        void flush() const override;
 
         private:
         mutable size_t x, y;
