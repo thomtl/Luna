@@ -17,6 +17,7 @@
 
 #include <Luna/drivers/gpu/intel/gpu.hpp>
 #include <Luna/drivers/gpu/lfb/lfb.hpp>
+#include <Luna/drivers/gpu/lfb/vbe.hpp>
 #include <Luna/drivers/net/realtek/rtl81x9.hpp>
 #include <Luna/drivers/sound/hda.hpp>
 #include <Luna/drivers/storage/ahci.hpp>
@@ -124,6 +125,12 @@ void kernel_main(const stivale2_struct* info) {
 
 
     vm::init();
+
+    vbe::init();
+
+
+
+    
 
     vm::Vm vm{1};
     {

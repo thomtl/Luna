@@ -22,6 +22,7 @@ main_sources = files(
     'source/drivers/gpu/intel/gpu.cpp',
     'source/drivers/gpu/intel/lil_imports.cpp',
 
+    'source/drivers/gpu/lfb/vbe.cpp',
     'source/drivers/gpu/lfb/lfb.cpp',
 
     'source/drivers/gpu/gpu.cpp',
