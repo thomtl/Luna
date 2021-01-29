@@ -139,7 +139,7 @@ void vmx::init() {
     else
         PANIC("Unknown amount of EPT levels");
 
-    cpu.vmx.ept_dirty_accessed = ((ept >> 21) & 1) ? true : false;
+    cpu.vmx.ept_dirty_accessed = (ept >> 21) & 1;
 
     ASSERT(ept & (1 << 20)); // Assert invept is supported
     ASSERT(ept & (1 << 25)); // Assert single context invept is supported
@@ -152,6 +152,7 @@ ept::context* vmx::create_ept() {
 vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     vmcs_pa = pmm::alloc_block();
     vmcs = vmcs_pa + phys_mem_map;
+    memset((void*)vmcs, 0, pmm::block_size);
 
     volatile auto* vmcs_revision = (uint32_t*)vmcs;
     *vmcs_revision = msr::read(msr::ia32_vmx_basic) & 0x7FFF'FFFF;
@@ -176,8 +177,7 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     };
 
     {
-        uint32_t min = (uint32_t)PinBasedControls::ExtInt \
-                     | (uint32_t)PinBasedControls::NMI;
+        uint32_t min = (uint32_t)PinBasedControls::NMI;// | (uint32_t)PinBasedControls::ExtInt
         uint32_t opt = 0;
         write(pin_based_vm_exec_controls, adjust_controls(min, opt, msr::ia32_vmx_pinbased_ctls));
     }
@@ -198,7 +198,6 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
                      | (uint32_t)ProcBasedControls2::VMExitOnWbinvd;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls2, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls2));
-
     }
     
     write(exception_bitmap, (1 << 1) | (1 << 6) | (1 << 14) | (1 << 17) | (1 << 18));
@@ -249,10 +248,20 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
         write(host_idtr_base, idtr.table);
     }
 
-    write(host_cr0, cr0::read() | msr::read(msr::ia32_vmx_cr0_fixed0));
-    write(host_cr4, cr4::read() | msr::read(msr::ia32_vmx_cr4_fixed0));
-    //write(host_pat_full, msr::read(msr::ia32_pat));
+    write(host_cr0, cr0::read());
+    write(host_cr4, cr4::read());
+    write(host_pat_full, msr::read(msr::ia32_pat));
     write(host_efer_full, msr::read(msr::ia32_efer));
+}
+
+void vmx::Vm::set(vm::VmCap cap, bool value) {
+    vmptrld();
+    if(cap == vm::VmCap::FullPIOAccess) {
+        if(value)
+            write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) & ~(uint32_t)ProcBasedControls::VMExitOnPIO);
+        else
+            write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) | (uint32_t)ProcBasedControls::VMExitOnPIO);
+    }
 }
 
 bool vmx::Vm::run(vm::VmExit& exit) {

@@ -146,6 +146,7 @@ namespace vmx {
     constexpr uint64_t vm_entry_interruption_info = 0x4016;
     constexpr uint64_t vm_entry_exception_error_code = 0x4018;
     constexpr uint64_t vm_entry_instruction_length = 0x401A;
+    constexpr uint64_t cr3_target_count = 0x400A;
 
     constexpr uint64_t host_cr0 = 0x6c00;
     constexpr uint64_t host_cr3 = 0x6c02;
@@ -226,6 +227,8 @@ namespace vmx {
     constexpr uint64_t guest_efer_full = 0x2806;
     
     constexpr uint64_t tsc_offset = 0x2010;
+    constexpr uint64_t io_bitmap_a = 0x2001;
+    constexpr uint64_t io_bitmap_b = 0x2003;
 
     constexpr uint64_t ept_control = 0x201A;
     constexpr uint64_t ept_violation_addr = 0x2400;
@@ -255,6 +258,7 @@ namespace vmx {
         Vm(vm::AbstractMM* mm, vm::VCPU* vcpu);
         bool run(vm::VmExit& exit);
 
+        void set(vm::VmCap cap, bool value);
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
         simd::Context& get_guest_simd_context() { return guest_simd; }

@@ -197,6 +197,7 @@ namespace svm {
         ~Vm();
         bool run(vm::VmExit& exit);
 
+        void set(vm::VmCap cap, bool value);
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
         simd::Context& get_guest_simd_context() { return guest_simd; }

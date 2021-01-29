@@ -150,6 +150,11 @@ void svm::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool e
     vmcb->event_inject = v; // Is cleared upon VMEXIT
 }
 
+void svm::Vm::set(vm::VmCap cap, bool value) {
+    if(cap == vm::VmCap::FullPIOAccess)
+        vmcb->icept_io = (value ? 0 : 1);
+}
+
 bool svm::Vm::run(vm::VmExit& exit) {
     while(true) {
         asm("clgi");

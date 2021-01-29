@@ -94,6 +94,7 @@ namespace vm {
         virtual ~AbstractMM() {}
 
         virtual void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) = 0;
+        virtual uintptr_t unmap(uintptr_t gpa);
         virtual void protect(uintptr_t gpa, uint64_t flags) = 0;
         virtual uintptr_t get_phys(uintptr_t gpa) = 0;
 
@@ -102,10 +103,12 @@ namespace vm {
         virtual uint8_t get_levels() const = 0;
     };
 
+    enum class VmCap { FullPIOAccess };
 
     struct AbstractVm {
         virtual ~AbstractVm() {}
 
+        virtual void set(VmCap cap, bool v) = 0;
         virtual void get_regs(vm::RegisterState& regs) const = 0;
         virtual void set_regs(const vm::RegisterState& regs) = 0;
         
@@ -121,6 +124,9 @@ namespace vm {
 
     struct VCPU {
         VCPU(Vm* vm, uint8_t id);
+
+        
+        void set(VmCap cap, bool value);
         
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);

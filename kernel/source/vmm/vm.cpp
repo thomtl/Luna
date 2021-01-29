@@ -74,8 +74,6 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     simd.data()->fcw = 0x40;
     simd.data()->mxcsr = 0x1F80;
 
-
-
     // MSR init
     apicbase = 0xFEE0'0000 | (1 << 11) | ((id == 0) << 8); // xAPIC enable, If id == 0 set BSP bit too
     lapic.update_apicbase(apicbase);
@@ -83,6 +81,7 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
         
 void vm::VCPU::get_regs(vm::RegisterState& regs) const { vcpu->get_regs(regs); }
 void vm::VCPU::set_regs(const vm::RegisterState& regs) { vcpu->set_regs(regs); }
+void vm::VCPU::set(VmCap cap, bool value) { vcpu->set(cap, value); }
 
 bool vm::VCPU::run() {
     while(true) {
@@ -93,12 +92,8 @@ bool vm::VCPU::run() {
             return false;
 
         switch (exit.reason) {
-        case VmExit::Reason::Vmcall: {
-            get_regs(regs);
-
-            uint32_t op = regs.rax & 0xFFFF'FFFF;
-            print("vcpu: Unknown VMMCALL opcode {:#x}\n", op);
-            break;
+        case VmExit::Reason::Vmcall: { // For now a VMMCALL is just an exit
+            return true;
         }
 
         case VmExit::Reason::MMUViolation: {

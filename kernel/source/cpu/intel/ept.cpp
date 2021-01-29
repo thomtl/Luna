@@ -108,7 +108,7 @@ uintptr_t ept::context::unmap(uintptr_t va) {
     uintptr_t ret = (entry->frame << 12);
     entry->r = 0;
     entry->w = 0;
-    entry->x = 1;
+    entry->x = 0;
     entry->frame = 0;
 
     invept();
