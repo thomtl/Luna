@@ -12,6 +12,10 @@ SECTIONS {
 
     .rodata : ALIGN(4K) {
         *(.rodata*)
+
+        _usb_drivers_start = .;
+        KEEP(*(.usb_drivers*))
+        _usb_drivers_end = .;
     }
 
     .data : ALIGN(4K) {
@@ -25,5 +29,6 @@ SECTIONS {
         *(.bss*)
         *(COMMON)
     }
+
     _kernel_end = .;
 }

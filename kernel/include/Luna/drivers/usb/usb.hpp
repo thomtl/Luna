@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Luna/common.hpp>
+#include <std/vector.hpp>
 
 namespace usb {
     struct [[gnu::packed]] DeviceRequestPacket {
@@ -43,6 +44,8 @@ namespace usb {
         constexpr uint8_t string = 3;
         constexpr uint8_t interface = 4;
         constexpr uint8_t endpoint = 5;
+
+        constexpr uint8_t ep_companion = 0x30;
     } // namespace descriptor_types
     
 
@@ -69,9 +72,53 @@ namespace usb {
         uint16_t total_length;
         uint8_t n_interfaces;
         uint8_t config_val;
-        uint8_t config_string;
+        uint8_t config_str;
         uint8_t attributes;
         uint8_t max_power;
+    };
+
+    struct [[gnu::packed]] InterfaceDescriptor {
+        uint8_t length;
+        uint8_t type;
+        uint8_t num;
+        uint8_t alternate_setting;
+        uint8_t n_endpoints;
+        uint8_t class_code;
+        uint8_t subclass_code;
+        uint8_t protocol;
+        uint8_t interface_str;
+    };
+
+    namespace ep_type
+    {
+        constexpr uint8_t control = 0b00;
+        constexpr uint8_t isoch = 0b01;
+        constexpr uint8_t bulk = 0b10;
+        constexpr uint8_t irq = 0b11;
+    } // namespace ep_type
+    
+
+    struct [[gnu::packed]] EndpointDescriptor {
+        uint8_t length;
+        uint8_t type;
+        
+        uint8_t ep_num : 4;
+        uint8_t reserved : 3;
+        uint8_t dir : 1;
+
+        uint8_t ep_type : 2;
+        uint8_t reserved_0 : 6;
+
+        uint16_t max_packet_size;
+        uint8_t interval;
+    };
+
+    struct [[gnu::packed]] EndpointCompanion {
+        uint8_t length;
+        uint8_t type;
+        uint8_t max_burst;
+        uint8_t attributes;
+        uint32_t bytes_per_interval;
     };
 
     struct [[gnu::packed]] StringLanguageDescriptor {
@@ -100,13 +147,52 @@ namespace usb {
         bool (*ep0_control_xfer)(void* userptr, const ControlXfer& xfer);
     };
 
-    struct Device {
-        DeviceDriver driver;
-
-        uint16_t langid;
+    struct Interface {
+        InterfaceDescriptor desc;
+        std::vector<EndpointDescriptor> eps;
     };
 
+    struct Configuration {
+        ConfigDescriptor desc;
+        std::vector<Interface> interfaces;
+    };
+
+
+    struct Device;
+    
+    struct Driver {
+        const char* name;
+
+        void (*init)(Device& device);
+
+        struct {
+            bool bind = false;
+            uint16_t version = 0;
+        } version = {};
+
+        struct {
+            bool bind = false;
+            uint8_t class_code = 0, subclass_code = 0, prog_if = 0;
+        } proto = {};
+    };
+
+    #define DECLARE_USB_DRIVER(driver) [[maybe_unused, gnu::used, gnu::section(".usb_drivers")]] static usb::Driver* usb_driver_##driver = &driver
+
+    struct Device {
+        DeviceDriver hci;
+        Driver* driver;
+
+        DeviceDescriptor device_descriptor;
+        uint16_t langid;
+
+        std::vector<Configuration> configs;
+
+        uint8_t curr_config, curr_interface;
+
+        uint8_t find_ep(bool in, uint8_t type);
+    };
+
+
     void register_device(DeviceDriver& driver);
-    
-    
+    void init();
 } // namespace usb

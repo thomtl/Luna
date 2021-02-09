@@ -157,6 +157,8 @@ namespace format
 			} \
 		};
 
+	INT_IMPL(unsigned char)
+
 	INT_IMPL(short int)
 	INT_IMPL(unsigned short int)
 
