@@ -43,6 +43,11 @@ main_sources = files(
     'source/drivers/storage/ata.cpp',
     'source/drivers/storage/scsi.cpp',
 
+    'source/drivers/usb/xhci/xhci.cpp',
+
+
+    'source/drivers/usb/usb.cpp',
+
     'source/drivers/acpi.cpp',
     'source/drivers/ioapic.cpp',
     'source/drivers/laihost.cpp',

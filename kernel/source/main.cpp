@@ -21,6 +21,7 @@
 #include <Luna/drivers/net/realtek/rtl81x9.hpp>
 #include <Luna/drivers/sound/hda.hpp>
 #include <Luna/drivers/storage/ahci.hpp>
+#include <Luna/drivers/usb/xhci/xhci.hpp>
 #include <Luna/drivers/iommu/iommu.hpp>
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/ioapic.hpp>
@@ -123,6 +124,7 @@ void kernel_main(const stivale2_struct* info) {
     ahci::init();
     hda::init();
 
+    xhci::init();
 
     vm::init();
 

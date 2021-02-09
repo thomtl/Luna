@@ -307,13 +307,19 @@ void pci::write_raw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_
 }
 
 static void install_msix(pci::Device& device, uint16_t index, uint8_t vector) {
+    pci::msix::Control control{.raw = device.read<uint16_t>(device.msix.offset + pci::msix::control)};
+    control.mask = 1;
+    control.enable = 1;
+    device.write<uint16_t>(device.msix.offset + pci::msix::control, control.raw);
+
     ASSERT(index < device.msix.n_messages);
 
     auto table_bar = device.read_bar(device.msix.table.bar);
-    ASSERT(table_bar.base && table_bar.type == pci::Bar::Type::Mmio);
+    auto base = table_bar.base + device.msix.table.offset;
+    ASSERT(base && table_bar.type == pci::Bar::Type::Mmio);
 
-    vmm::kernel_vmm::get_instance().map(table_bar.base, table_bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc); // TODO: How should this interact with device drivers?
-    volatile auto* table = (pci::msix::Entry*)(table_bar.base + phys_mem_map);
+    vmm::kernel_vmm::get_instance().map(base, base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc); // TODO: How should this interact with device drivers?
+    volatile auto* table = (pci::msix::Entry*)(base + phys_mem_map);
 
     pci::msi::Data data{};
     data.vector = vector;
@@ -331,9 +337,8 @@ static void install_msix(pci::Device& device, uint16_t index, uint8_t vector) {
     table[index].data = data.raw;
     table[index].control = vector_control.raw;
 
-    pci::msix::Control control{.raw = device.read<uint16_t>(device.msix.offset + pci::msix::control)};
+    control.raw = device.read<uint16_t>(device.msix.offset + pci::msix::control);
     control.mask = 0;
-    control.enable = 1;
     device.write<uint16_t>(device.msix.offset + pci::msix::control, control.raw);
 }
 
@@ -347,8 +352,8 @@ static void install_msi(pci::Device& device, uint16_t index, uint8_t vector) {
     control.raw = device.read<uint16_t>(device.msi.offset + pci::msi::control);
     ASSERT((1 << control.mmc) < 32); // Assert count is sane
 
-    address.raw = device.read<uint32_t>(device.msi.offset + pci::msi::addr);
-    data.raw = device.read<uint32_t>(device.msi.offset + (control.c64 ? pci::msi::data_64 : pci::msi::data_32));
+    //address.raw = device.read<uint32_t>(device.msi.offset + pci::msi::addr);
+    //data.raw = device.read<uint32_t>(device.msi.offset + (control.c64 ? pci::msi::data_64 : pci::msi::data_32));
 
     data.vector = vector;
     data.delivery_mode = 0;
