@@ -60,12 +60,15 @@ static void get_configuration(usb::Device& dev, uint8_t i) {
         for(size_t j = 0; j < interface.n_endpoints; j++) {
             auto& ep = *(usb::EndpointDescriptor*)(buf + off);
             ASSERT(ep.type == usb::descriptor_types::endpoint);
-            to.eps.push_back(ep);
+            auto& to_ep = to.eps.emplace_back();
+            to_ep.desc = ep;
 
             off += ep.length;
             auto& companion = *(usb::EndpointCompanion*)(buf + off);
-            if(companion.type == usb::descriptor_types::ep_companion) // Skip the companion if its there
+            if(companion.type == usb::descriptor_types::ep_companion) {
+                to_ep.companion = companion;
                 off += companion.length;
+            }
         }
     }
 
@@ -175,14 +178,38 @@ void usb::init() {
     }
 }
 
-
+void usb::Device::configure() {
+    set_configuration(*this, configs[curr_config].desc.config_val);
+}
 
 uint8_t usb::Device::find_ep(bool in, uint8_t type) {
     auto& interface = configs[curr_config].interfaces[curr_interface];
 
     for(auto& ep : interface.eps)
-        if(ep.dir == in && ep.ep_type == type)
-            return ep.ep_num;
+        if(ep.desc.dir == in && ep.desc.ep_type == type)
+            return ep.desc.ep_num;
 
     return -1;
+}
+
+usb::Endpoint& usb::Device::setup_ep(uint8_t ep_num) {
+    auto& interface = configs[curr_config].interfaces[curr_interface];
+
+    for(auto& ep : interface.eps) {
+        if(ep.desc.ep_num == ep_num) {
+            ASSERT(hci.setup_ep(hci.userptr, ep));
+
+            auto& ctx = endpoints.emplace_back();
+            ctx.data = ep;
+            ctx.device = this;
+            
+            return ctx;
+        }
+    }
+
+    PANIC("Unable to setup EP");
+}
+
+void usb::Endpoint::xfer(std::span<uint8_t> xfer) {
+    ASSERT(device->hci.ep_bulk_xfer(device->hci.userptr, (2 * data.desc.ep_num) + data.desc.dir, xfer));
 }

@@ -7,7 +7,7 @@ namespace usb {
     struct [[gnu::packed]] DeviceRequestPacket {
         uint8_t type;
         uint8_t request;
-        uint16_t value;
+        uint16_t value = 0;
         uint16_t index = 0;
         uint16_t length = 0;
     };
@@ -109,7 +109,9 @@ namespace usb {
         uint8_t ep_type : 2;
         uint8_t reserved_0 : 6;
 
-        uint16_t max_packet_size;
+        uint16_t max_packet_size : 11;
+        uint16_t reserved_1 : 5;
+        
         uint8_t interval;
     };
 
@@ -140,16 +142,14 @@ namespace usb {
         uint8_t* buf = nullptr;
     };
 
-    struct DeviceDriver {
-        bool addressed;
-
-        void* userptr;
-        bool (*ep0_control_xfer)(void* userptr, const ControlXfer& xfer);
+    struct EndpointData {
+        EndpointDescriptor desc;
+        EndpointCompanion companion;
     };
 
     struct Interface {
         InterfaceDescriptor desc;
-        std::vector<EndpointDescriptor> eps;
+        std::vector<EndpointData> eps;
     };
 
     struct Configuration {
@@ -178,6 +178,24 @@ namespace usb {
 
     #define DECLARE_USB_DRIVER(driver) [[maybe_unused, gnu::used, gnu::section(".usb_drivers")]] static usb::Driver* usb_driver_##driver = &driver
 
+    struct Endpoint {
+        EndpointData data;
+        EndpointCompanion companion;
+        Device* device;
+
+        void xfer(std::span<uint8_t> data);
+    };
+
+    struct DeviceDriver {
+        bool addressed;
+
+        void* userptr;
+        bool (*setup_ep)(void* userptr, const EndpointData& ep);
+        bool (*ep0_control_xfer)(void* userptr, const ControlXfer& xfer);
+        bool (*ep_bulk_xfer)(void* userptr, uint8_t epid, std::span<uint8_t> data);
+    };
+
+
     struct Device {
         DeviceDriver hci;
         Driver* driver;
@@ -189,7 +207,12 @@ namespace usb {
 
         uint8_t curr_config, curr_interface;
 
+        std::vector<Endpoint> endpoints;
+
+        void configure();
+
         uint8_t find_ep(bool in, uint8_t type);
+        Endpoint& setup_ep(uint8_t ep_num);
     };
 
 

@@ -40,6 +40,7 @@ namespace xhci {
 
     namespace trb_codes {
         constexpr uint8_t success = 1;
+        constexpr uint8_t short_packet = 13;
     } // namespace trb_codes
     
     
@@ -201,7 +202,7 @@ namespace xhci {
     };
     static_assert(TRB<TRBCmdEnableSlot>);
 
-    struct [[gnu::packed]] TRBAddressDevice {
+    struct [[gnu::packed]] TRBCmdAddressDevice {
         uint64_t input_ctx;
         uint32_t reserved;
 
@@ -212,9 +213,9 @@ namespace xhci {
         uint32_t reserved_1 : 8;
         uint32_t slot_id : 8;
     };
-    static_assert(TRB<TRBCmdEnableSlot>);
+    static_assert(TRB<TRBCmdAddressDevice>);
 
-    struct [[gnu::packed]] TRBEvaluateContext {
+    struct [[gnu::packed]] TRBCmdEvaluateContext {
         uint64_t input_ctx;
         uint32_t reserved;
 
@@ -225,7 +226,20 @@ namespace xhci {
         uint32_t reserved_1 : 8;
         uint32_t slot_id : 8;
     };
-    static_assert(TRB<TRBEvaluateContext>);
+    static_assert(TRB<TRBCmdEvaluateContext>);
+
+    struct [[gnu::packed]] TRBCmdConfigureEP {
+        uint64_t input_ctx;
+        uint32_t reserved;
+
+        uint32_t cycle : 1;
+        uint32_t reserved_0 : 8;
+        uint32_t dc : 1;
+        uint32_t type : 6;
+        uint32_t reserved_1 : 8;
+        uint32_t slot_id : 8;
+    };
+    static_assert(TRB<TRBCmdConfigureEP>);
 
     struct [[gnu::packed]] TRBRaw {
         uint32_t reserved[3];

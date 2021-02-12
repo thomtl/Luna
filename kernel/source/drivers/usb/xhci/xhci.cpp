@@ -298,7 +298,7 @@ void xhci::HCI::enumerate_ports() {
             ep0.tr_dequeue = port.ep0_queue->get_guest_base() | port.ep0_queue->get_cycle();
         }
 
-        TRBAddressDevice addr_dev{};
+        TRBCmdAddressDevice addr_dev{};
         {
             addr_dev.type = trb_types::address_device_cmd;
             addr_dev.bsr = 0; // Don't send ADDRESS_DEVICE packet yet
@@ -332,7 +332,7 @@ void xhci::HCI::enumerate_ports() {
             port.max_packet_size = max_packet;
             port.in_ctx->get_ep0_ctx().max_packet_size = max_packet;
 
-            TRBAddressDevice eval{};
+            TRBCmdAddressDevice eval{};
             eval.type = trb_types::evaluate_context_cmd;
             eval.input_ctx = port.in_ctx->get_guest_base();
             eval.slot_id = port.slot_id;
@@ -358,9 +358,19 @@ void xhci::HCI::enumerate_ports() {
         usb::DeviceDriver driver{};
         driver.addressed = true; // xHCI sends the ADDRESS_DEVICE packet for us
         driver.userptr = &port;
+        driver.setup_ep = +[](void* userptr, const usb::EndpointData& ep) -> bool {
+            auto& port = *(Port*)userptr;
+            return port.hci->setup_ep(port, ep);
+        };
+
         driver.ep0_control_xfer = +[](void* userptr, const usb::ControlXfer& xfer) -> bool {
             auto& port = *(Port*)userptr;
             return port.hci->send_ep0_control(port, xfer.packet, xfer.write, xfer.len, xfer.buf);
+        };
+
+        driver.ep_bulk_xfer = +[](void* userptr, uint8_t epid, std::span<uint8_t> data) -> bool {
+            auto& port = *(Port*)userptr;
+            return port.hci->send_ep_bulk(port, epid, data);
         };
 
         usb::register_device(driver);
@@ -388,6 +398,7 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::DeviceRequestPacket& pac
     port.ep0_queue->enqueue(setup);
 
     iovmm::Iovmm::Allocation dma{};
+    bool allocated = false;
     if(len > 0) {
         TRBData data{};
         data.type = trb_types::data;
@@ -397,12 +408,13 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::DeviceRequestPacket& pac
         data.direction = write ? 0 : 1;
 
         if(len <= 8 && write) {
-            memcpy((uint8_t*)data.buf, buf, len);
+            memcpy((uint8_t*)&data.buf, buf, len);
 
             data.immediate_data = 1;
             data.len = len;
         } else {
             dma = mm.alloc(len, write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+            allocated = true;
             if(write)
                 memcpy(dma.host_base, buf, len);
                 
@@ -428,7 +440,114 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::DeviceRequestPacket& pac
     if(!write)
         memcpy(buf, dma.host_base, len);
 
-    mm.free(dma);
+    if(allocated)
+        mm.free(dma);
+
+    return true;
+}
+
+bool xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, uint8_t epid, std::span<uint8_t> data) {
+    auto& ring = *port.ep_rings[epid].second;
+    auto& ep = port.ep_rings[epid].first;
+    bool write = !ep.desc.dir;
+
+    TRBNormal xfer{};
+    xfer.type = trb_types::normal;
+    xfer.ioc = 1;
+    xfer.len = data.size_bytes();
+
+    iovmm::Iovmm::Allocation dma{};
+    bool allocated = false;
+    if(data.size_bytes() <= 8 && write) { // Eligible for Immediate Data
+        xfer.immediate_data = 1;
+        memcpy((uint8_t*)&xfer.data_buf, data.data(), data.size_bytes());
+    } else {
+        dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+        allocated = true;
+
+        if(write)
+            memcpy(dma.host_base, data.data(), data.size_bytes());
+
+        xfer.data_buf = dma.guest_base;
+    }
+
+    auto i = ring.enqueue(xfer);
+    auto res = ring.run(i, epid);
+    if(auto code = res.code; code != trb_codes::success && code != trb_codes::short_packet) {
+        print("xhci: Failed to do EP Bulk Transfer, code: {}\n", code);
+        return false;
+    }
+
+    if(!write)
+        memcpy(data.data(), dma.host_base, data.size_bytes());
+
+    if(allocated)
+        mm.free(dma);
+
+    return true;
+}
+
+bool xhci::HCI::setup_ep(xhci::HCI::Port& port, const usb::EndpointData& ep) {
+    uint8_t n = (ep.desc.ep_num * 2) + (ep.desc.dir ? 1 : 0);
+
+    auto& in = port.in_ctx->get_in_ctx();
+    in.add_flags = 1 | (1 << n);
+    in.drop_flags = 0;
+
+    auto& slot = port.in_ctx->get_slot_ctx();
+    memcpy((uint8_t*)&slot, (uint8_t*)&port.dev_ctx->get_slot_ctx(), context_size);
+    slot.context_entries = n + 1;
+
+    auto& ctx = port.in_ctx->get_ep_ctx(ep.desc.ep_num, ep.desc.dir);
+
+    ctx.error_count = 3;
+
+    ctx.max_primary_streams = 0;
+    ctx.linear_stream_array = 0;
+    ctx.host_initiate_disable = 0;
+
+    ctx.max_packet_size = ep.desc.max_packet_size;
+    if(port.proto->major >= 3)
+        ctx.max_burst_size = ep.companion.max_burst;
+    if(port.proto->major >= 3 && ep.desc.ep_type == usb::ep_type::isoch)
+        ctx.mult = ep.companion.attributes & 0b11;
+    ctx.average_trb_len = 0;//ep.max_packet_size * 2;
+
+    ctx.interval = 0; // 0 for SS Bulk EPs
+
+    ctx.max_esit_low = 0;
+    ctx.max_esit_high = 0;
+
+    if(ep.desc.ep_type == usb::ep_type::bulk)
+        ctx.ep_type = ep.desc.dir ? ep_types::bulk_in : ep_types::bulk_out;
+    else if(ep.desc.ep_type == usb::ep_type::irq)
+        ctx.ep_type = ep.desc.dir ? ep_types::interrupt_in : ep_types::interrupt_out;
+    else if(ep.desc.ep_type == usb::ep_type::isoch)
+        ctx.ep_type = ep.desc.dir ? ep_types::isoch_in : ep_types::isoch_out;
+    else if(ep.desc.ep_type == usb::ep_type::control)
+        ctx.ep_type = ep_types::control_bi;
+    else
+        PANIC("Unknown EP Type");
+
+
+    
+
+    auto* ring = new TransferRing{mm, 256, &db[port.slot_id]};
+    ctx.tr_dequeue = ring->get_guest_base() | ring->get_cycle();
+
+    port.ep_rings[n] = {ep, ring};
+
+    TRBCmdConfigureEP cmd{};
+    cmd.type = trb_types::configure_ep_cmd;
+    cmd.dc = 0;
+    cmd.slot_id = port.slot_id;
+    cmd.input_ctx = port.in_ctx->get_guest_base();
+
+    const auto res = cmd_ring->issue(cmd);
+    if(res.code != trb_codes::success) {
+        print("xhci: Failed to configure EP: {}\n", res.code);
+        return false;
+    }
 
     return true;
 }
@@ -506,35 +625,6 @@ bool xhci::HCI::reset_port(Port& port) {
 
 void xhci::HCI::handle_irq() {
     auto sts = op->usbsts;
-        /*auto e_base = erst->ring_base;
-        auto e_size = erst->ring_size;
-        print("ER BASE: {:#x}\n", e_base);
-        print("ER BASE: {:#x}\n", e_size);
-        
-        auto iman = run->interrupters[0].iman;
-        auto imod = run->interrupters[0].imod;
-        auto sz = run->interrupters[0].erst_size;
-        auto deq = run->interrupters[0].erst_dequeue;
-        auto base = run->interrupters[0].erst_base;
-
-        print("IMAN: {:#x}\n", iman);
-        print("IMOD: {:#x}\n", imod);
-        print("ERSZ: {:#x}\n", sz);
-        print("ERDP: {:#x}\n", deq);
-        print("ERBR: {:#x}\n", base);
-
-        auto dp_idx = ((deq & ~(1 << 3)) - e_base) / 16;
-        print("dp_idx: {:#x}\n", dp_idx);
-
-        auto dc = op->dcbaap;
-        auto cr = op->crcr;
-        print("DCBAAP: {:#x}\n", dc);
-        print("CRCR: {:#x}\n", cr);
-
-
-        auto cmd = op->usbcmd;
-        print("USBCMD: {:#x}\n", cmd);
-        print("USBSTS: {:#x}\n", sts);*/
     if(!(sts & usbsts::irq))
         return;
     
@@ -570,12 +660,11 @@ void xhci::HCI::handle_irq() {
                 if(evt->epid == 1) { // EP0
                     ring = port_by_slot[evt->slot_id]->ep0_queue.get();
                 } else {
-                    auto epid = evt->epid;
-                    print("xhci: Unknown EP ID: {}\n", epid);
-                    PANIC("Error in Event handling");
+                    ring = port_by_slot[evt->slot_id]->ep_rings[evt->epid].second;
                 }
 
-                if(auto code = evt->code; code != trb_codes::success) {
+                // TODO: Error handling on EP0
+                if(auto code = evt->code; evt->epid == 1 && code != trb_codes::success) {
                     print("xhci: Transfer Event Error: {}\n", code);
 
                     auto ptr = evt->cmd_ptr;
