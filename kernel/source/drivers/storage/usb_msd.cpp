@@ -122,15 +122,10 @@ void init(usb::Device& device) {
 static usb::Driver driver = {
     .name = "USB Mass Storage Driver",
     .init = init,
-    .version = {
-        .bind = false
-    },
-
-    .proto = {
-        .bind = true,
-        .class_code = 0x8, // Mass Storage
-        .subclass_code = 0x6, // SCSI
-        .prog_if = 0x50 // Bulk Only
-    }
+    .match = usb::match::class_code | usb::match::subclass_code | usb::match::protocol_code,
+    
+    .class_code = 0x8, // Mass Storage
+    .subclass_code = 0x6, // SCSI
+    .protocol_code = 0x50, // Bulk Only
 };
 DECLARE_USB_DRIVER(driver);

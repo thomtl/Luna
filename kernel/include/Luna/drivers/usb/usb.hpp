@@ -159,21 +159,26 @@ namespace usb {
 
 
     struct Device;
-    
+
+    namespace match {
+        constexpr uint32_t version = (1 << 0);
+        constexpr uint32_t class_code = (1 << 1);
+        constexpr uint32_t subclass_code = (1 << 2);
+        constexpr uint32_t protocol_code = (1 << 3);
+        constexpr uint32_t vendor_product = (1 << 4);
+    } // namespace match
+
     struct Driver {
         const char* name;
 
         void (*init)(Device& device);
 
-        struct {
-            bool bind = false;
-            uint16_t version = 0;
-        } version = {};
+        uint32_t match;
 
-        struct {
-            bool bind = false;
-            uint8_t class_code = 0, subclass_code = 0, prog_if = 0;
-        } proto = {};
+        uint16_t version = 0;
+        uint8_t class_code = 0, subclass_code = 0, protocol_code = 0;
+
+        std::span<std::pair<uint16_t, uint16_t>> id_list = {};
     };
 
     #define DECLARE_USB_DRIVER(driver) [[maybe_unused, gnu::used, gnu::section(".usb_drivers")]] static usb::Driver* usb_driver_##driver = &driver

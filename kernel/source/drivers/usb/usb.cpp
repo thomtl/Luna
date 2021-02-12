@@ -116,19 +116,40 @@ void usb::init() {
     auto* start = (Driver**)&_usb_drivers_start;
     auto* end = (Driver**)&_usb_drivers_end;
     size_t size = end - start;
-    auto find = [&](usb::Device& dev, uint8_t class_id, uint8_t subclass_id, uint8_t prog_if) -> Driver* {
+    auto find = [&](usb::Device& dev, uint8_t class_code, uint8_t subclass_code, uint8_t protocol_code) -> Driver* {
         for(size_t i = 0; i < size; i++) {
             auto& driver = *start[i];
 
-            bool suitable = true;
-            if(driver.version.bind && !(dev.device_descriptor.usb_version >= driver.version.version))
-                suitable = false;
+            if(driver.match == 0)
+                continue;
 
-            if(driver.proto.bind && !(driver.proto.class_code == class_id && driver.proto.subclass_code == subclass_id && driver.proto.prog_if == prog_if))
-                suitable = false;
+            if(driver.match & match::version && driver.version != dev.device_descriptor.usb_version)
+                continue;
 
-            if(suitable)
-                return &driver;
+            if(driver.match & match::class_code && driver.class_code != class_code)
+                continue;
+
+            if(driver.match & match::subclass_code && driver.subclass_code != subclass_code)
+                continue;
+
+            if(driver.match & match::protocol_code && driver.protocol_code != protocol_code)
+                continue;
+
+            if(driver.match & match::vendor_product) {
+                bool found = false;
+                for(const auto [vid, pid] : driver.id_list) {
+                    if(dev.device_descriptor.vendor_id == vid && dev.device_descriptor.product_id == pid) {
+                        found = true;
+                        break; // We don't have to touch suitable since suitable = suitable && true is a no-op
+                    }
+                }
+                
+                if(!found)
+                    continue;
+            }
+
+            
+            return &driver;
         }
 
         return nullptr;
