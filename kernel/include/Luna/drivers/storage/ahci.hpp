@@ -193,6 +193,4 @@ namespace ahci
 
         std::vector<Port> ports;
     };
-
-    void init();
 } // namespace ahci

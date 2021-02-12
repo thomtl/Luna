@@ -224,6 +224,4 @@ namespace hda {
         quirkNoTCSEL = (1 << 3),
         quirkOldSsync = (1 << 4),
     };
-
-    void init();
 } // namespace hda

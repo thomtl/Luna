@@ -241,6 +241,59 @@ void pci::init() {
     }
 }
 
+extern "C" uintptr_t _pci_drivers_start;
+extern "C" uintptr_t _pci_drivers_end;
+
+void pci::init_drivers() {
+    auto* start = (Driver**)&_pci_drivers_start;
+    auto* end = (Driver**)&_pci_drivers_end;
+    size_t size = end - start;
+    auto find = [&](pci::Device& dev) -> Driver* {
+        for(size_t i = 0; i < size; i++) {
+            auto& driver = *start[i];
+
+            if(driver.match == 0)
+                continue;
+
+            if(driver.match & match::class_code && driver.class_code != dev.read<uint8_t>(11))
+                continue;
+
+            if(driver.match & match::subclass_code && driver.subclass_code != dev.read<uint8_t>(10))
+                continue;
+
+            if(driver.match & match::protocol_code && driver.protocol_code != dev.read<uint8_t>(9))
+                continue;
+
+            if(driver.match & match::vendor_device) {
+                bool found = false;
+                for(const auto [vid, did] : driver.id_list) {
+                    if(dev.read<uint16_t>(0) == vid && dev.read<uint16_t>(2) == did) {
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if(!found)
+                    continue;
+            }
+
+            
+            return &driver;
+        }
+
+        return nullptr;
+    };
+
+    for(auto& device : devices) {
+        auto* driver = find(device);
+        if(!driver)
+            continue;
+
+        ASSERT(driver->init);
+        driver->init(device);
+    }
+}
+
 pci::Device* pci::device_by_class(uint8_t class_code, uint8_t subclass_code, uint8_t prog_if, size_t i) {
     size_t curr = 0;
     for(auto& device : devices) {

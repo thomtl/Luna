@@ -698,9 +698,17 @@ void xhci::HCI::handle_irq() {
 }
 
 
-void xhci::init() {
-    pci::Device* dev = nullptr;
-    size_t i = 0;
-    while((dev = pci::device_by_class(0xC, 0x3, 0x30, i++)) != nullptr)
-        new HCI{*dev};
+static void init(pci::Device& dev) {
+    new xhci::HCI{dev};
 }
+
+static pci::Driver driver = {
+    .name = "xHCI Driver",
+    .init = init,
+
+    .match = pci::match::class_code | pci::match::subclass_code | pci::match::protocol_code,
+    .class_code = 0xC,
+    .subclass_code = 0x3,
+    .protocol_code = 0x30
+};
+DECLARE_PCI_DRIVER(driver);

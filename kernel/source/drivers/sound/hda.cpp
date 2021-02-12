@@ -678,26 +678,27 @@ hda::Path* hda::HDAController::get_device(uint8_t codec, uint8_t path) {
 struct {
     uint16_t vid, did;
     uint32_t quirks;
-} known_hda_devices[] = {
-    {0x8086, 0x2668, hda::quirkOldSsync}, // Intel ICH6 HDA
-    {0x8086, 0x293E, hda::quirkOldSsync}, // Intel ICH9 HDA
-    {0x8086, 0x1E20, hda::quirkSnoopSCH}, // Intel 7 Series HDA (Ivy Bridge Mobile)
+} hda_quirks[] = {
+    {0x8086, 0x2668, hda::quirkOldSsync},
+    {0x8086, 0x293E, hda::quirkOldSsync},
+    {0x8086, 0x1E20, hda::quirkSnoopSCH},
 
-
-
-    {0x1022, 0x15E3, hda::quirkNoTCSEL | hda::quirkSnoopATI} // AMD Family 17h (Models 10h-1fh) HDA Controller
+    {0x1022, 0x15E3, hda::quirkNoTCSEL | hda::quirkSnoopATI}
 };
 
 static std::linked_list<hda::HDAController> controllers;
 
-void hda::init() {
-    for(const auto [vid, did, quirks] : known_hda_devices) {
-        pci::Device* dev = nullptr;
-        size_t i = 0;
-        while((dev = pci::device_by_id(vid, did, i++))) {
-            controllers.emplace_back(*dev, vid, quirks);
+static void init(pci::Device& dev) {
+    auto vid = dev.read<uint16_t>(0);
+    auto did = dev.read<uint32_t>(2);
+    uint32_t quirks = 0;
+    for(auto& quirk : hda_quirks) {
+        if(quirk.vid == vid && quirk.did == did) {
+            quirks = quirk.quirks;
+            break;
         }
     }
+    controllers.emplace_back(dev, vid, quirks);
 
     /*auto& path = *controllers[0].get_device(0, 0);
 
@@ -720,3 +721,20 @@ void hda::init() {
     delete[] data;
     file->close();*/
 }
+
+static std::pair<uint16_t, uint16_t> known_cards[] = {
+    {0x8086, 0x2668}, // Intel ICH6 HDA
+    {0x8086, 0x293E}, // Intel ICH9 HDA
+    {0x8086, 0x1E20}, // Intel 7 Series HDA (Ivy Bridge Mobile)
+
+    {0x1022, 0x15E3} // AMD Family 17h (Models 10h-1fh) HDA Controller
+};
+
+static pci::Driver driver = {
+    .name = "HDA Sound Driver",
+    .init = init,
+
+    .match = pci::match::vendor_device,
+    .id_list = {known_cards}
+};
+DECLARE_PCI_DRIVER(driver);

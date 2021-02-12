@@ -335,9 +335,17 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
 
 std::linked_list<ahci::Controller> controllers;
 
-void ahci::init() {
-    pci::Device* dev = nullptr;
-    size_t i = 0;
-    while((dev = pci::device_by_class(1, 6, 1, i++)) != nullptr)
-        controllers.emplace_back(dev);
+static void init(pci::Device& dev) {
+    controllers.emplace_back(&dev);
 }
+
+static pci::Driver driver = {
+    .name = "AHCI Driver",
+    .init = init,
+
+    .match = pci::match::class_code | pci::match::subclass_code | pci::match::protocol_code,
+    .class_code = 1,
+    .subclass_code = 6,
+    .protocol_code = 1
+};
+DECLARE_PCI_DRIVER(driver);

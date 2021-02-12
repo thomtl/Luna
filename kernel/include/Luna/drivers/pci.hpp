@@ -240,4 +240,27 @@ namespace pci {
     void write(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, size_t offset, T value) {
         write_raw(seg, bus, slot, func, offset, value, sizeof(T));
     }
+
+    namespace match {
+        constexpr uint32_t class_code = (1 << 0);
+        constexpr uint32_t subclass_code = (1 << 1);
+        constexpr uint32_t protocol_code = (1 << 2);
+        constexpr uint32_t vendor_device = (1 << 3);
+    } // namespace match
+
+    struct Driver {
+        const char* name;
+
+        void (*init)(Device& device);
+
+        uint32_t match;
+
+        uint8_t class_code = 0, subclass_code = 0, protocol_code = 0;
+
+        std::span<std::pair<uint16_t, uint16_t>> id_list = {};
+    };
+
+    #define DECLARE_PCI_DRIVER(driver) [[maybe_unused, gnu::used, gnu::section(".pci_drivers")]] static pci::Driver* pci_driver_##driver = &driver
+
+    void init_drivers();
 } // namespace pci

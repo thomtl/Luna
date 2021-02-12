@@ -176,6 +176,4 @@ namespace rtl81x9 {
         net::Mac mac;
         size_t tx_index;
     };
-
-    void init();
 } // namespace rtl81x9

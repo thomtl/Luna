@@ -174,24 +174,22 @@ void rtl81x9::Nic::handle_tx_ok() {
     }
 }
 
-struct {
-    uint16_t vid, did;
-} known_cards[] = {
+static void init(pci::Device& dev) {
+    auto* nic = new rtl81x9::Nic{dev, dev.read<uint16_t>(2)};
+    ASSERT(nic);
+
+    net::register_nic(nic);
+}
+
+static std::pair<uint16_t, uint16_t> known_cards[] = {
     {0x10EC, 0x8168}
 };
 
+static pci::Driver driver = {
+    .name = "RTL81x9 Family NIC Driver",
+    .init = init,
 
-std::linked_list<rtl81x9::Nic> devices{};
-
-void rtl81x9::init() {
-    for(const auto [vid, did] : known_cards) {
-        auto* dev = pci::device_by_id(vid, did, 0);
-        if(!dev)
-            continue;
-
-        auto* nic = &devices.emplace_back(*dev, did);
-        net::register_nic(nic);
-
-        return;
-    }
-}
+    .match = pci::match::vendor_device,
+    .id_list = {known_cards}
+};
+DECLARE_PCI_DRIVER(driver);

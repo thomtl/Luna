@@ -28,6 +28,4 @@ namespace intel_gpu {
         iovmm::Iovmm mm;
         iovmm::Iovmm::Allocation gtt_dummy, lfb;
     };
-
-    void init();
 } // namespace intel_gpu

@@ -15,11 +15,7 @@ struct Mode {
     uint8_t bpp;
 };
 
-struct {
-    uint16_t vid, did;
-} known_intel_gpus[] = {
-    {0x8086, 0x0166}, // Intel 3rd Gen Core GPU (Ivy Bridge)
-};
+
 
 intel_gpu::Gpu::Gpu(pci::Device* dev): dev{dev}, mm{dev} {
     dev->set_privileges(pci::privileges::Pio | pci::privileges::Mmio | pci::privileges::Dma);
@@ -107,18 +103,25 @@ uint8_t* intel_gpu::Gpu::get_lfb() const {
     return lfb.host_base;
 }
 
-void intel_gpu::init() {
-    for(const auto [vid, did] : known_intel_gpus) {
-        auto* dev = pci::device_by_id(vid, did, 0);
-        if(!dev)
-            continue;
 
-        auto* igpu = new Gpu{dev};
-        gpu::get_gpu().register_gpu(igpu);
-        gpu::get_gpu().make_gpu_main(igpu);
-        gpu::get_gpu().set_mode(igpu->get_modes()[0]);
-        print("gpu: Using Native Intel GPU driver\n");
 
-        return;
-    }
+static void init(pci::Device& dev) {
+    auto* igpu = new intel_gpu::Gpu{&dev};
+    gpu::get_gpu().register_gpu(igpu);
+    gpu::get_gpu().make_gpu_main(igpu);
+    gpu::get_gpu().set_mode(igpu->get_modes()[0]);
+    print("gpu: Using Native Intel GPU driver\n");
 }
+
+static std::pair<uint16_t, uint16_t> known_intel_gpus[] = {
+    {0x8086, 0x0166}, // Intel 3rd Gen Core GPU (Ivy Bridge)
+};
+
+static pci::Driver driver = {
+    .name = "Intel i915 GPU Driver",
+    .init = init,
+
+    .match = pci::match::vendor_device,
+    .id_list = {known_intel_gpus}
+};
+DECLARE_PCI_DRIVER(driver);

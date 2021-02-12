@@ -208,6 +208,4 @@ namespace xhci {
         std::vector<Port> ports;
         std::unordered_map<uint8_t, Port*> port_by_slot;
     };
-
-    void init();
 } // namespace xhci

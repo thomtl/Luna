@@ -1,8 +1,6 @@
 #include <Luna/drivers/usb/usb.hpp>
 #include <Luna/misc/log.hpp>
 
-#include <Luna/drivers/usb/xhci/xhci.hpp>
-
 static void set_configuration(usb::Device& dev, uint8_t n) {
     auto v = dev.hci.ep0_control_xfer(dev.hci.userptr, {.packet = {.type = usb::request_type::host_to_device | usb::request_type::to_standard | usb::request_type::device, 
                                                   .request = usb::request_ops::set_configuration,
@@ -110,9 +108,7 @@ void usb::register_device(usb::DeviceDriver& driver) {
 extern "C" uintptr_t _usb_drivers_start;
 extern "C" uintptr_t _usb_drivers_end;
 
-void usb::init() {
-    xhci::init();
-
+void usb::init_devices() {
     auto* start = (Driver**)&_usb_drivers_start;
     auto* end = (Driver**)&_usb_drivers_end;
     size_t size = end - start;
@@ -140,7 +136,7 @@ void usb::init() {
                 for(const auto [vid, pid] : driver.id_list) {
                     if(dev.device_descriptor.vendor_id == vid && dev.device_descriptor.product_id == pid) {
                         found = true;
-                        break; // We don't have to touch suitable since suitable = suitable && true is a no-op
+                        break;
                     }
                 }
                 

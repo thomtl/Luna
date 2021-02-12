@@ -17,6 +17,11 @@ SECTIONS {
         _usb_drivers_start = .;
         KEEP(*(.usb_drivers*))
         _usb_drivers_end = .;
+
+        . = ALIGN(8);
+        _pci_drivers_start = .;
+        KEEP(*(.pci_drivers*))
+        _pci_drivers_end = .;
     }
 
     .data : ALIGN(4K) {

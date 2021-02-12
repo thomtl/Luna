@@ -15,12 +15,8 @@
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
 
-#include <Luna/drivers/gpu/intel/gpu.hpp>
 #include <Luna/drivers/gpu/lfb/lfb.hpp>
 #include <Luna/drivers/gpu/lfb/vbe.hpp>
-#include <Luna/drivers/net/realtek/rtl81x9.hpp>
-#include <Luna/drivers/sound/hda.hpp>
-#include <Luna/drivers/storage/ahci.hpp>
 #include <Luna/drivers/usb/usb.hpp>
 #include <Luna/drivers/iommu/iommu.hpp>
 #include <Luna/drivers/acpi.hpp>
@@ -115,16 +111,8 @@ void kernel_main(const stivale2_struct* info) {
 
     iommu::init();
 
-
-    rtl81x9::init();
-
-    intel_gpu::init();
-
-
-    ahci::init();
-    hda::init();
-
-    usb::init();
+    pci::init_drivers();
+    usb::init_devices();
 
     vm::init();
 

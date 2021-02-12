@@ -222,5 +222,5 @@ namespace usb {
 
 
     void register_device(DeviceDriver& driver);
-    void init();
+    void init_devices();
 } // namespace usb
