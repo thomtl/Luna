@@ -12,7 +12,8 @@ SECTIONS {
 
     .rodata : ALIGN(4K) {
         *(.rodata*)
-
+        
+        . = ALIGN(8);
         _usb_drivers_start = .;
         KEEP(*(.usb_drivers*))
         _usb_drivers_end = .;
