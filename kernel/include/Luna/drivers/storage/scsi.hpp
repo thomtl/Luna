@@ -132,6 +132,7 @@ namespace scsi {
     
     struct SCSICommand {
         uint8_t packet[32];
+        uint8_t packet_len;
         bool write;
     };
 

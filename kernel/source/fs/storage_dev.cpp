@@ -58,9 +58,11 @@ bool storage_dev::Device::read(size_t offset, size_t count, uint8_t* data) {
     }
 
     size_t n_sectors = end_lba - start_lba + 1;
-    std::span<uint8_t> xfer{data + x_offset, sector_size * n_sectors};
-    driver.xfer(driver.userptr, false, start_lba, n_sectors, xfer);
-
+    if(n_sectors > 0) {
+        std::span<uint8_t> xfer{data + x_offset, sector_size * n_sectors};
+        driver.xfer(driver.userptr, false, start_lba, n_sectors, xfer);
+    }
+    
     return true;
 }
 
@@ -114,8 +116,10 @@ bool storage_dev::Device::write(size_t offset, size_t count, uint8_t* data) {
     }
 
     size_t n_sectors = end_lba - start_lba + 1;
-    std::span<uint8_t> xfer{data + x_offset, sector_size * n_sectors};
-    driver.xfer(driver.userptr, true, start_lba, n_sectors, xfer);
+    if(n_sectors > 0) {
+        std::span<uint8_t> xfer{data + x_offset, sector_size * n_sectors};
+        driver.xfer(driver.userptr, true, start_lba, n_sectors, xfer);   
+    }
 
     return true;
 }

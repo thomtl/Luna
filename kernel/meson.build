@@ -42,10 +42,9 @@ main_sources = files(
     'source/drivers/storage/ahci.cpp',
     'source/drivers/storage/ata.cpp',
     'source/drivers/storage/scsi.cpp',
+    'source/drivers/storage/usb_msd.cpp',
 
     'source/drivers/usb/xhci/xhci.cpp',
-
-
     'source/drivers/usb/usb.cpp',
 
     'source/drivers/acpi.cpp',

@@ -11,6 +11,7 @@ static std::linked_list<scsi::Device*> devices;
 std::pair<uint32_t, uint32_t> scsi_read_capacity(scsi::Device& device) {
     scsi::SCSICommand cmd{};
     cmd.write = false;
+    cmd.packet_len = sizeof(scsi::commands::read_capacity::Packet);
 
     auto* packet = (scsi::commands::read_capacity::Packet*)cmd.packet;
     packet->command = scsi::commands::read_capacity::command;
@@ -28,6 +29,8 @@ std::pair<uint32_t, uint32_t> scsi_read_capacity(scsi::Device& device) {
 
 void scsi_inquiry(scsi::Device& dev) {
     scsi::SCSICommand cmd{};
+    cmd.write = false;
+    cmd.packet_len = sizeof(scsi::commands::inquiry::Packet);
     auto& packet = *(scsi::commands::inquiry::Packet*)cmd.packet;
 
     packet.command = scsi::commands::inquiry::command;
@@ -81,6 +84,8 @@ void scsi_read12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* d
         return;
     
     scsi::SCSICommand cmd{};
+    cmd.packet_len = sizeof(scsi::commands::read12::Packet);
+    cmd.write = false;
     auto& packet = *(scsi::commands::read12::Packet*)cmd.packet;
 
     packet.command = scsi::commands::read12::command;
@@ -96,6 +101,8 @@ void scsi_read10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* d
         return;
     
     scsi::SCSICommand cmd{};
+    cmd.packet_len = sizeof(scsi::commands::read10::Packet);
+    cmd.write = false;
     auto& packet = *(scsi::commands::read10::Packet*)cmd.packet;
 
     packet.command = scsi::commands::read10::command;
@@ -111,6 +118,7 @@ void scsi_write12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* 
         return;
     
     scsi::SCSICommand cmd{};
+    cmd.packet_len = sizeof(scsi::commands::write12::Packet);
     cmd.write = true;
 
     auto& packet = *(scsi::commands::write12::Packet*)cmd.packet;
@@ -128,6 +136,7 @@ void scsi_write10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* 
         return;
     
     scsi::SCSICommand cmd{};
+    cmd.packet_len = sizeof(scsi::commands::write10::Packet);
     cmd.write = true;
 
     auto& packet = *(scsi::commands::write10::Packet*)cmd.packet;
@@ -156,6 +165,7 @@ void scsi::register_device(scsi::DriverDevice& dev) {
         driver.userptr = device;
 
         driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t>& xfer) {
+            //print("scsi: {} LBA: {} Count: {}\n", write ? "Write" : "Read", lba, n_lbas);
             auto& device = *(scsi::Device*)userptr;
 
             if(write) {
