@@ -179,9 +179,11 @@ amd_vi::IOMMUEngine::IOMMUEngine(const amd_vi::IVHDInfo& ivhd): segment{ivhd.seg
                         }
                     } else if(type == 0b101) {
                         print("amdvi: Illegal Command Error\n");
-                        auto* cmd = (uint32_t*)(self.cmd_ring.ring + self.regs->cmd_evt_ptrs.cmd_buf_head);
+                        const auto err = *(EvtIllegalCmd*)evt;
+                        auto* cmd = (uint32_t*)(err.address + phys_mem_map);
 
                         auto op = cmd[1] >> 28;
+                        print("       Op address: {:#x}\n", err.address);
                         print("       cw0: {:#x}, cw1: {:#x}, cw2: {:#x}, cw3: {:#x}\n", cmd[0], cmd[1], cmd[2], cmd[3]);
                         print("       Opcode: {:#b}\n", op);
                     } else {
@@ -599,36 +601,50 @@ amd_vi::IOMMU::IOMMU() {
     ASSERT(!iv.preboot_dma);
 
     size_t size = ivrs->header.length - sizeof(Ivrs);
+    uint8_t highest_ivhd_type = 0xFF;
+    auto devid = ((Type10IVHD*)&ivrs->ivdb[0])->device_id;
+    for(size_t i = 0; (i < size) && (ivrs->ivdb[i] <= 0x40);) {
+        auto* ivhd = (Type10IVHD*)&ivrs->ivdb[i];
+        if(ivhd->device_id == devid)
+            highest_ivhd_type = ivhd->type;
+        
+        i += ivhd->length;
+    }
+
     for(size_t i = 0; i < size;) {
         uint8_t* header = &ivrs->ivdb[i];
         if(header[0] == Type10IVHD::sig) {
-            auto* ivhd = (Type10IVHD*)header;
+            if(highest_ivhd_type == Type10IVHD::sig) {
+                auto* ivhd = (Type10IVHD*)header;
 
-            IVHDInfo info{};
-            info.base = ivhd->iommu_base;
-            info.capability_offset = ivhd->capability_offset;
-            info.device_id = ivhd->device_id;
-            info.flags = ivhd->flags;
-            info.segment = ivhd->pci_segment;
+                IVHDInfo info{};
+                info.base = ivhd->iommu_base;
+                info.capability_offset = ivhd->capability_offset;
+                info.device_id = ivhd->device_id;
+                info.flags = ivhd->flags;
+                info.segment = ivhd->pci_segment;
 
-            info.devices_length = ivhd->length - 24; // Type 10 header is 24 bytes long
-            info.devices = ivhd->ivhd_devices;
+                info.devices_length = ivhd->length - 24; // Type 10 header is 24 bytes long
+                info.devices = ivhd->ivhd_devices;
 
-            engines.emplace_back(info);
+                engines.emplace_back(info);
+            }
         } else if(header[0] == Type11IVHD::sig) {
-            auto* ivhd = (Type11IVHD*)header;
+            if(highest_ivhd_type == Type11IVHD::sig) {
+                auto* ivhd = (Type11IVHD*)header;
 
-            IVHDInfo info{};
-            info.base = ivhd->iommu_base;
-            info.capability_offset = ivhd->capability_offset;
-            info.device_id = ivhd->device_id;
-            info.flags = ivhd->flags;
-            info.segment = ivhd->pci_segment;
+                IVHDInfo info{};
+                info.base = ivhd->iommu_base;
+                info.capability_offset = ivhd->capability_offset;
+                info.device_id = ivhd->device_id;
+                info.flags = ivhd->flags;
+                info.segment = ivhd->pci_segment;
 
-            info.devices_length = ivhd->length - 40; // Type 11 header is 40 bytes long
-            info.devices = ivhd->ivhd_devices;
+                info.devices_length = ivhd->length - 40; // Type 11 header is 40 bytes long
+                info.devices = ivhd->ivhd_devices;
 
-            engines.emplace_back(info);
+                engines.emplace_back(info);
+            }
         } else {
             print("       Unknown IVRS Entry Type {:#x}\n", (uint16_t)header[0]);
         }

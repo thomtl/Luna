@@ -362,6 +362,16 @@ namespace amd_vi {
     };
     static_assert(IOMMUEvent<EvtIOPageFault>);
 
+    struct [[gnu::packed]] EvtIllegalCmd {
+        uint32_t reserved;
+
+        uint32_t reserved_0 : 28;
+        uint32_t type : 4;
+
+        uint64_t address;
+    };
+    static_assert(IOMMUEvent<EvtIllegalCmd>);
+
     enum class EngineControl : uint64_t {
         IOMMUEnable = (1ull << 0),
         HyperTransportTunnelEnable = (1ull << 1),
