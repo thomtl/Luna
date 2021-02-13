@@ -1,9 +1,11 @@
 #include <Luna/drivers/usb/usb.hpp>
 #include <Luna/misc/log.hpp>
 
+using namespace usb::spec;
+
 static void set_configuration(usb::Device& dev, uint8_t n) {
-    auto v = dev.hci.ep0_control_xfer(dev.hci.userptr, {.packet = {.type = usb::request_type::host_to_device | usb::request_type::to_standard | usb::request_type::device, 
-                                                  .request = usb::request_ops::set_configuration,
+    auto v = dev.hci.ep0_control_xfer(dev.hci.userptr, {.packet = {.type = request_type::host_to_device | request_type::to_standard | request_type::device, 
+                                                  .request = request_ops::set_configuration,
                                                   .value = n},
                                         .write = false,
                                         .len = 0});
@@ -22,8 +24,8 @@ static void set_configuration(usb::Device& dev, uint8_t n) {
 }*/
 
 static void get_descriptor(usb::Device& dev, uint16_t len, uint8_t* buf, uint8_t type, uint8_t index = 0, uint16_t language_id = 0) {
-    auto v = dev.hci.ep0_control_xfer(dev.hci.userptr, {.packet = {.type = usb::request_type::device_to_host | usb::request_type::to_standard | usb::request_type::device, 
-                                                  .request = usb::request_ops::get_descriptor,
+    auto v = dev.hci.ep0_control_xfer(dev.hci.userptr, {.packet = {.type = request_type::device_to_host | request_type::to_standard | request_type::device, 
+                                                  .request = request_ops::get_descriptor,
                                                   .value = (uint16_t)((type << 8) | index),
                                                   .index = language_id,
                                                   .length = len},
@@ -35,40 +37,55 @@ static void get_descriptor(usb::Device& dev, uint16_t len, uint8_t* buf, uint8_t
 }
 
 static void get_configuration(usb::Device& dev, uint8_t i) {
-    usb::ConfigDescriptor desc{};
-    get_descriptor(dev, sizeof(usb::ConfigDescriptor), (uint8_t*)&desc, usb::descriptor_types::config, i);
+    auto& config = dev.configs[i];
 
+    ConfigDescriptor desc{};
+    get_descriptor(dev, sizeof(ConfigDescriptor), (uint8_t*)&desc, descriptor_types::config, i);
+    config.desc = desc;
 
     auto* buf = new uint8_t[desc.total_length];
-
-    get_descriptor(dev, desc.total_length, (uint8_t*)buf, usb::descriptor_types::config, i);
-
-    auto& config = dev.configs[i];
-    config.desc = *(usb::ConfigDescriptor*)buf;
+    get_descriptor(dev, desc.total_length, (uint8_t*)buf, descriptor_types::config, i);
 
     size_t off = desc.length;
-    for(size_t i = 0; i < config.desc.n_interfaces; i++) {
-        auto& interface = *(usb::InterfaceDescriptor*)(buf + off);
-        ASSERT(interface.type == usb::descriptor_types::interface);
-        auto& to = config.interfaces.emplace_back();
 
-        to.desc = interface;
-        off += interface.length;
+    usb::Interface* curr_interface = nullptr;
+    usb::EndpointData* curr_ep = nullptr;
 
-        for(size_t j = 0; j < interface.n_endpoints; j++) {
-            auto& ep = *(usb::EndpointDescriptor*)(buf + off);
-            ASSERT(ep.type == usb::descriptor_types::endpoint);
-            auto& to_ep = to.eps.emplace_back();
-            to_ep.desc = ep;
+    auto consume = [&] {
+        const auto* header = (DescriptorHeader*)(buf + off);
+        switch (header->type) { // TODO: Parse interface association descriptors
+        case descriptor_types::interface:
+            curr_interface = &config.interfaces.emplace_back();
+            curr_interface->desc = *(const InterfaceDescriptor*)header;
+            break;
 
-            off += ep.length;
-            auto& companion = *(usb::EndpointCompanion*)(buf + off);
-            if(companion.type == usb::descriptor_types::ep_companion) {
-                to_ep.companion = companion;
-                off += companion.length;
-            }
+        case descriptor_types::endpoint:
+            curr_ep = &curr_interface->eps.emplace_back();
+            curr_ep->desc = *(const EndpointDescriptor*)header;
+            break;
+
+        case descriptor_types::ss_ep_companion:
+            ASSERT(curr_ep); // Dangling EP Companion?
+
+            curr_ep->companion = *(const EndpointCompanion*)header;
+            break;
+
+        case descriptor_types::ssp_ep_isoch_companion:
+            ASSERT(curr_ep); // Dangling EP Companion?
+
+            curr_ep->isoch_companion = *(const IsochEndpointCompanion*)header;
+            break;
+        
+        default:
+            //print("usb: Unknown descriptor {} in configuration, skipping\n", header->type);
+            break;
         }
-    }
+
+        off += header->length;
+    };
+
+    while(off < desc.total_length)
+        consume();
 
     delete[] buf;
 }
@@ -77,9 +94,9 @@ static void print_string(usb::Device& dev, uint8_t i, const char* prefix, uint32
     if(i == 0) {
         print("{}{}\n", prefix, alternative);
     } else {
-        usb::StringUnicodeDescriptor str{};
-        get_descriptor(dev, 2, (uint8_t*)&str, usb::descriptor_types::string, i, dev.langid); // First the the size
-        get_descriptor(dev, str.length, (uint8_t*)&str, usb::descriptor_types::string, i, dev.langid); // Now everything
+        StringUnicodeDescriptor str{};
+        get_descriptor(dev, 2, (uint8_t*)&str, descriptor_types::string, i, dev.langid); // First the the size
+        get_descriptor(dev, str.length, (uint8_t*)&str, descriptor_types::string, i, dev.langid); // Now everything
 
         print("{}", prefix);
         for(int i = 0; i < (str.length - 2) / 2; i++) {
@@ -102,7 +119,8 @@ void usb::register_device(usb::DeviceDriver& driver) {
     get_descriptor(dev, sizeof(DeviceDescriptor), (uint8_t*)&dev.device_descriptor, descriptor_types::device);
     
     dev.configs.resize(dev.device_descriptor.num_configs);
-    get_configuration(dev, 0);
+    for(size_t i = 0; i < dev.device_descriptor.num_configs; i++)
+        get_configuration(dev, i);
 }
 
 extern "C" uintptr_t _usb_drivers_start;
@@ -152,7 +170,7 @@ void usb::init_devices() {
     };
 
     for(auto& dev : devices) {
-        usb::StringLanguageDescriptor lang{};
+        StringLanguageDescriptor lang{};
         get_descriptor(dev, 2, (uint8_t*)&lang, descriptor_types::string, 0); // First the the size
         get_descriptor(dev, lang.length, (uint8_t*)&lang, descriptor_types::string, 0); // Now everything
         dev.langid = lang.lang_ids[0]; // Just pick the first one for now

@@ -302,13 +302,13 @@ void xhci::HCI::enumerate_ports() {
             }
         }
 
-        usb::DeviceRequestPacket packet{};
-        packet.type = usb::request_type::device_to_host | usb::request_type::to_standard | usb::request_type::device;
-        packet.request = usb::request_ops::get_descriptor;
+        usb::spec::DeviceRequestPacket packet{};
+        packet.type = usb::spec::request_type::device_to_host | usb::spec::request_type::to_standard | usb::spec::request_type::device;
+        packet.request = usb::spec::request_ops::get_descriptor;
         packet.value = (1 << 8);
         packet.length = 8;
 
-        usb::DeviceDescriptor desc{};
+        usb::spec::DeviceDescriptor desc{};
         send_ep0_control(port, packet, false, 8, (uint8_t*)&desc);
 
         //ASSERT(reset_port(port));
@@ -368,7 +368,7 @@ void xhci::HCI::enumerate_ports() {
     }
 }
 
-bool xhci::HCI::send_ep0_control(Port& port, const usb::DeviceRequestPacket& packet, bool write, size_t len, uint8_t* buf) {
+bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacket& packet, bool write, size_t len, uint8_t* buf) {
     uint8_t type = 0;
     if(len > 0 && write) type = 2; // OUT Data Stage
     else if(len > 0 && !write) type = 3; // IN Data Stage
@@ -500,7 +500,7 @@ bool xhci::HCI::setup_ep(xhci::HCI::Port& port, const usb::EndpointData& ep) {
     ctx.max_packet_size = ep.desc.max_packet_size;
     if(port.proto->major >= 3)
         ctx.max_burst_size = ep.companion.max_burst;
-    if(port.proto->major >= 3 && ep.desc.ep_type == usb::ep_type::isoch)
+    if(port.proto->major >= 3 && ep.desc.ep_type == usb::spec::ep_type::isoch)
         ctx.mult = ep.companion.attributes & 0b11;
     ctx.average_trb_len = 0;//ep.max_packet_size * 2;
 
@@ -509,13 +509,13 @@ bool xhci::HCI::setup_ep(xhci::HCI::Port& port, const usb::EndpointData& ep) {
     ctx.max_esit_low = 0;
     ctx.max_esit_high = 0;
 
-    if(ep.desc.ep_type == usb::ep_type::bulk)
+    if(ep.desc.ep_type == usb::spec::ep_type::bulk)
         ctx.ep_type = ep.desc.dir ? ep_types::bulk_in : ep_types::bulk_out;
-    else if(ep.desc.ep_type == usb::ep_type::irq)
+    else if(ep.desc.ep_type == usb::spec::ep_type::irq)
         ctx.ep_type = ep.desc.dir ? ep_types::interrupt_in : ep_types::interrupt_out;
-    else if(ep.desc.ep_type == usb::ep_type::isoch)
+    else if(ep.desc.ep_type == usb::spec::ep_type::isoch)
         ctx.ep_type = ep.desc.dir ? ep_types::isoch_in : ep_types::isoch_out;
-    else if(ep.desc.ep_type == usb::ep_type::control)
+    else if(ep.desc.ep_type == usb::spec::ep_type::control)
         ctx.ep_type = ep_types::control_bi;
     else
         PANIC("Unknown EP Type");

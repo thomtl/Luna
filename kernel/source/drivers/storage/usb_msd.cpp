@@ -57,8 +57,8 @@ void init(usb::Device& device) {
     dev->usb_dev = &device;
     dev->tag = 1;
 
-    auto out_n = dev->usb_dev->find_ep(false, usb::ep_type::bulk);
-    auto in_n = dev->usb_dev->find_ep(true, usb::ep_type::bulk);
+    auto out_n = dev->usb_dev->find_ep(false, usb::spec::ep_type::bulk);
+    auto in_n = dev->usb_dev->find_ep(true, usb::spec::ep_type::bulk);
 
     dev->in = &dev->usb_dev->setup_ep(in_n);
     dev->out = &dev->usb_dev->setup_ep(out_n);
