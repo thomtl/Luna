@@ -690,7 +690,7 @@ static std::linked_list<hda::HDAController> controllers;
 
 static void init(pci::Device& dev) {
     auto vid = dev.read<uint16_t>(0);
-    auto did = dev.read<uint32_t>(2);
+    auto did = dev.read<uint16_t>(2);
     uint32_t quirks = 0;
     for(auto& quirk : hda_quirks) {
         if(quirk.vid == vid && quirk.did == did) {
