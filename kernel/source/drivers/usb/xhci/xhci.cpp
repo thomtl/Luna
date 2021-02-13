@@ -491,38 +491,72 @@ bool xhci::HCI::setup_ep(xhci::HCI::Port& port, const usb::EndpointData& ep) {
 
     auto& ctx = port.in_ctx->get_ep_ctx(ep.desc.ep_num, ep.desc.dir);
 
-    ctx.error_count = 3;
-
+    // Disable streams
     ctx.max_primary_streams = 0;
     ctx.linear_stream_array = 0;
     ctx.host_initiate_disable = 0;
 
     ctx.max_packet_size = ep.desc.max_packet_size;
-    if(port.proto->major >= 3)
-        ctx.max_burst_size = ep.companion.max_burst;
-    if(port.proto->major >= 3 && ep.desc.ep_type == usb::spec::ep_type::isoch)
-        ctx.mult = ep.companion.attributes & 0b11;
-    ctx.average_trb_len = 0;//ep.max_packet_size * 2;
 
-    ctx.interval = 0; // 0 for SS Bulk EPs
+    auto set_max_esit = [&] {
+        uint32_t v = 0;
+        if(port.proto->major >= 3)
+            v = ep.companion.bytes_per_interval;
+        else
+            v = ctx.max_packet_size * (ep.desc.usb2_max_burst + 1);
 
-    ctx.max_esit_low = 0;
-    ctx.max_esit_high = 0;
+        ctx.max_esit_low = v & 0xFFFF;
+        ctx.max_esit_high = (v >> 16) & 0xFF;
+    };
 
-    if(ep.desc.ep_type == usb::spec::ep_type::bulk)
-        ctx.ep_type = ep.desc.dir ? ep_types::bulk_in : ep_types::bulk_out;
-    else if(ep.desc.ep_type == usb::spec::ep_type::irq)
-        ctx.ep_type = ep.desc.dir ? ep_types::interrupt_in : ep_types::interrupt_out;
-    else if(ep.desc.ep_type == usb::spec::ep_type::isoch)
-        ctx.ep_type = ep.desc.dir ? ep_types::isoch_in : ep_types::isoch_out;
-    else if(ep.desc.ep_type == usb::spec::ep_type::control)
+    if(ep.desc.ep_type == usb::spec::ep_type::control) {
         ctx.ep_type = ep_types::control_bi;
-    else
-        PANIC("Unknown EP Type");
 
+        ctx.error_count = 3;
+        ctx.average_trb_len = 8;
+    } else if(ep.desc.ep_type == usb::spec::ep_type::bulk) {
+        ctx.ep_type = ep.desc.dir ? ep_types::bulk_in : ep_types::bulk_out;
+        
+        ctx.error_count = 3;
+        if(port.proto->major >= 3)
+            ctx.max_burst_size = ep.companion.max_burst;
 
+        // TODO: Set interval for USB2 devices
+        
+        ctx.average_trb_len = 0;
+    } else if(ep.desc.ep_type == usb::spec::ep_type::irq) {
+        ctx.ep_type = ep.desc.dir ? ep_types::interrupt_in : ep_types::interrupt_out;
+
+        ctx.error_count = 3;
+        if(port.proto->major >= 3)
+            ctx.max_burst_size = ep.companion.max_burst;
+        else
+            ctx.max_burst_size = ep.desc.usb2_max_burst - 1;
+        
+        ctx.average_trb_len = 0;
+
+        // TODO: Set interval
+
+        set_max_esit();
+    } else if(ep.desc.ep_type == usb::spec::ep_type::isoch) {
+        ctx.ep_type = ep.desc.dir ? ep_types::isoch_in : ep_types::isoch_out;
+
+        ctx.error_count = 0;
+        if(port.proto->major >= 3)
+            ctx.max_burst_size = ep.companion.max_burst;
+        else
+            ctx.max_burst_size = ep.desc.usb2_max_burst - 1;
+
+        if(port.proto->major >= 3)
+            ctx.mult = ep.companion.attributes & 0b11;
+
+        // TODO: Set interval
+
+        ctx.average_trb_len = 0;
+
+        set_max_esit();
+    }
     
-
     auto* ring = new TransferRing{mm, 256, &db[port.slot_id]};
     ctx.tr_dequeue = ring->get_guest_base() | ring->get_cycle();
 

@@ -113,7 +113,8 @@ namespace usb::spec {
         uint8_t reserved_0 : 6;
 
         uint16_t max_packet_size : 11;
-        uint16_t reserved_1 : 5;
+        uint16_t usb2_max_burst : 2;
+        uint16_t reserved_1 : 3;
         
         uint8_t interval;
     };
