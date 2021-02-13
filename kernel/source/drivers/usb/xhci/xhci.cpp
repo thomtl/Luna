@@ -214,20 +214,23 @@ void xhci::HCI::enumerate_ports() {
 
     // Mark all ports active, in the case of a paired port prefer USB3
     for(auto& port : ports)
-        if(port.proto->major == 3 || (port.proto->major == 2 && !port.has_pair))
-            port.active = true;
+        if(port.proto)
+            if(port.proto->major == 3 || (port.proto->major == 2 && !port.has_pair))
+                port.active = true;
 
     // Try to reset all USB3 ports, if that fails for any paired ports retry with USB2
     for(auto& port : ports)
-        if(port.proto->major == 3 && port.active)
-            port.active = reset_port(port);
+        if(port.proto)
+            if(port.proto->major == 3 && port.active)
+                port.active = reset_port(port);
 
     for(auto& port : ports)
-        if(port.proto->major == 2 && port.active)
-            port.active = reset_port(port);
+        if(port.proto)
+            if(port.proto->major == 2 && port.active)
+                port.active = reset_port(port);
 
     for(auto& port : ports) {
-        if(!port.active)
+        if(!port.active || !port.proto)
             continue;
 
         port.hci = this;
