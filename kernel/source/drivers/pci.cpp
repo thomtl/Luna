@@ -186,6 +186,9 @@ size_t eval_aml_method(lai_nsnode_t* node, const char* name, lai_state_t* state)
     return ret;
 }
 
+extern "C" uintptr_t _pci_drivers_start;
+extern "C" uintptr_t _pci_drivers_end;
+
 void pci::init() {
     auto* mcfg = acpi::get_table<acpi::Mcfg>();
     ASSERT(mcfg);
@@ -222,29 +225,6 @@ void pci::init() {
             print("pci: Failed to set {}:{}:{}.{} to D0\n", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func);
     }
 
-    print("pci: Enumerated devices:\n");
-    for(auto& device : devices) {
-        auto req_id = device.requester_id.raw;
-        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}, ReqID: {:#x}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(11), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(9), req_id);
-
-        if(device.power.supported)
-            print(" Power{{{}{}{}{}}}", (device.power.supported_states & (1 << 0)) ? "D0, " : "", (device.power.supported_states & (1 << 1)) ? "D1, " : "", (device.power.supported_states & (1 << 2)) ? "D2, " : "", (device.power.supported_states & (1 << 3)) ? "D3" : "");
-        if(device.msi.supported)
-            print(" MSI");
-        if(device.msix.supported)
-            print(" MSI-X");
-        if(device.pcie.found)
-            print(" PCIe");
-        
-        
-        print("\n");
-    }
-}
-
-extern "C" uintptr_t _pci_drivers_start;
-extern "C" uintptr_t _pci_drivers_end;
-
-void pci::init_drivers() {
     auto* start = (Driver**)&_pci_drivers_start;
     auto* end = (Driver**)&_pci_drivers_end;
     size_t size = end - start;
@@ -284,13 +264,46 @@ void pci::init_drivers() {
         return nullptr;
     };
 
+    print("pci: Enumerated devices:\n");
     for(auto& device : devices) {
+        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(11), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(9));
+
+        if(device.power.supported)
+            print(" Power{{{}{}{}{}}}", (device.power.supported_states & (1 << 0)) ? "D0, " : "", (device.power.supported_states & (1 << 1)) ? "D1, " : "", (device.power.supported_states & (1 << 2)) ? "D2, " : "", (device.power.supported_states & (1 << 3)) ? "D3" : "");
+        if(device.msi.supported)
+            print(" MSI");
+        if(device.msix.supported)
+            print(" MSI-X");
+        if(device.pcie.found)
+            print(" PCIe");
+
         auto* driver = find(device);
-        if(!driver)
+        if(driver) {
+            device.driver = driver;
+            print(" [{}]", driver->name);
+        }
+        
+        print("\n");
+    }
+}
+
+void pci::handoff_bios() {
+    for(auto& device : devices) {
+        if(!device.driver)
             continue;
 
-        ASSERT(driver->init);
-        driver->init(device);
+        if(device.driver->bios_handoff)
+        device.driver->bios_handoff(device);
+    }
+}
+
+void pci::init_drivers() {
+    for(auto& device : devices) {
+        if(!device.driver)
+            continue;
+
+        ASSERT(device.driver->init);
+        device.driver->init(device);
     }
 }
 

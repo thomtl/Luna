@@ -109,9 +109,10 @@ void kernel_main(const stivale2_struct* info) {
     pci::init();
     asm("sti");
 
+    pci::handoff_bios();
     iommu::init();
-
     pci::init_drivers();
+    
     usb::init_devices();
 
     vm::init();

@@ -165,7 +165,8 @@ namespace pci {
         };
         uint16_t raw;
     };
-        
+
+    struct Driver;  
 
     struct Device {
         uint16_t seg;
@@ -174,6 +175,8 @@ namespace pci {
 
         BridgeType bridge_type = BridgeType::None;
         RequesterID requester_id;
+
+        Driver* driver = nullptr;
 
         struct {
             bool supported = false;
@@ -251,6 +254,7 @@ namespace pci {
     struct Driver {
         const char* name;
 
+        void (*bios_handoff)(Device& device) = nullptr;
         void (*init)(Device& device);
 
         uint32_t match;
@@ -263,4 +267,5 @@ namespace pci {
     #define DECLARE_PCI_DRIVER(driver) [[maybe_unused, gnu::used, gnu::section(".pci_drivers")]] static pci::Driver* pci_driver_##driver = &driver
 
     void init_drivers();
+    void handoff_bios();
 } // namespace pci

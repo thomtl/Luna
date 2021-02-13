@@ -78,19 +78,7 @@ xhci::HCI::HCI(pci::Device& dev): device{&dev}, mm{&dev} {
             auto off = (ext_caps[i] >> 8) & 0xFF;
 
             if(id == 1) {
-                auto* item = (volatile LegacyCap*)&ext_caps[i];
-
-                if(item->usblegsup & usblegsup::bios_owned) {
-                    print("      Requesting control from BIOS ... ");
-
-                    item->usblegsup |= usblegsup::os_owned;
-                    while(item->usblegsup & usblegsup::bios_owned)
-                        asm("pause");
-
-                    print("Done\n");
-                }
-
-                item->usblegctlsts &= ~1;
+                // BIOS-OS handoff was already done
             } else if(id == 2) {
                 auto* item = (volatile ProtocolCap*)&ext_caps[i];
 
@@ -700,6 +688,40 @@ void xhci::HCI::handle_irq() {
     //print("end\n");
 }
 
+static void handoff_bios(pci::Device& dev) {
+    auto va = dev.read_bar(0).base + phys_mem_map;
+    auto* cap = (xhci::CapabilityRegs*)va;
+
+    uint16_t off = (cap->hccparams1 >> 16) & 0xFFFF;
+    auto* ext_caps = (volatile uint32_t*)(va + (off * 4));
+
+    size_t i = 0;
+    while(true) {
+        auto id = ext_caps[i] & 0xFF;
+        auto off = (ext_caps[i] >> 8) & 0xFF;
+
+        if(id == 1) {
+            auto* item = (volatile xhci::LegacyCap*)&ext_caps[i];
+
+            if(item->usblegsup & xhci::usblegsup::bios_owned) {
+                print("xhci: Doing BIOS <=> OS Handoff ... ");
+
+                item->usblegsup |= xhci::usblegsup::os_owned;
+                if(timeout(1000, [&] { return (item->usblegsup & xhci::usblegsup::bios_owned) == 0; }))
+                    print("Done\n");
+                else
+                    print("BIOS failed to release ownership, trying anyway\n");
+            }
+
+            item->usblegctlsts &= ~1;
+        }
+
+        if(off == 0)
+            break;
+            
+        i += off;
+    }
+}
 
 static void init(pci::Device& dev) {
     new xhci::HCI{dev};
@@ -707,6 +729,7 @@ static void init(pci::Device& dev) {
 
 static pci::Driver driver = {
     .name = "xHCI Driver",
+    .bios_handoff = handoff_bios,
     .init = init,
 
     .match = pci::match::class_code | pci::match::subclass_code | pci::match::protocol_code,

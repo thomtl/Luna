@@ -18,9 +18,6 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
 
     print("ahci: Version {}.{}.{}\n", regs->ghcr.vs >> 16, (regs->ghcr.vs >> 8) & 0xFF, regs->ghcr.vs & 0xFF);
 
-    if(!bios_handshake())
-        return;
-
     regs->ghcr.ghc |= (1 << 31); // Enable aHCI
 
     a64 = (regs->ghcr.cap & (1 << 31)) != 0;
@@ -122,32 +119,6 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
         ata::register_device(device);
     }
 
-}
-
-bool ahci::Controller::bios_handshake() {
-    if(regs->ghcr.vs >= make_version(1, 2, 0)) {
-        if((regs->ghcr.cap2 & (1 << 0)) == 0)
-            return true;
-
-        regs->ghcr.bohc |= (1 << 1); // Request Ownership
-
-        for(size_t i = 0; i < 100000; i++)
-            asm("pause");
-
-        if(regs->ghcr.bohc & (1 << 4)) // Bios is busy wait a bit more
-            for(size_t i = 0; i < 800000; i++)
-                asm("pause");
-
-        if(!(regs->ghcr.bohc & (1 << 1) && ((regs->ghcr.bohc & (1 << 0)) || (regs->ghcr.bohc & (1 << 4))))) {
-            print("ahci: Failed to do BIOS handshake\n");
-            return false;
-        }
-
-        regs->ghcr.bohc &= ~(1 << 3);
-        return true;
-    }
-
-    return true;
 }
 
 void ahci::Controller::Port::wait_idle() {
@@ -335,12 +306,46 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
 
 std::linked_list<ahci::Controller> controllers;
 
+static void handoff_bios(pci::Device& dev) {
+    auto bar = dev.read_bar(5);
+    ASSERT(bar.type == pci::Bar::Type::Mmio);
+    ASSERT(bar.base != 0);
+
+    vmm::kernel_vmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
+    auto* regs = (volatile ahci::Hba*)(bar.base + phys_mem_map);
+
+    if(regs->ghcr.vs >= ahci::make_version(1, 2, 0)) {
+        if((regs->ghcr.cap2 & (1 << 0)) == 0)
+            return;
+
+        regs->ghcr.bohc |= (1 << 1); // Request Ownership
+
+        for(size_t i = 0; i < 100000; i++)
+            asm("pause");
+
+        if(regs->ghcr.bohc & (1 << 4)) // Bios is busy wait a bit more
+            for(size_t i = 0; i < 800000; i++)
+                asm("pause");
+
+        if(!(regs->ghcr.bohc & (1 << 1) && ((regs->ghcr.bohc & (1 << 0)) || (regs->ghcr.bohc & (1 << 4))))) {
+            print("ahci: Failed to do BIOS handshake\n");
+            return;
+        }
+
+        regs->ghcr.bohc &= ~(1 << 3);
+        return;
+    }
+
+    return;
+}
+
 static void init(pci::Device& dev) {
     controllers.emplace_back(&dev);
 }
 
 static pci::Driver driver = {
     .name = "AHCI Driver",
+    .bios_handoff = handoff_bios,
     .init = init,
 
     .match = pci::match::class_code | pci::match::subclass_code | pci::match::protocol_code,
