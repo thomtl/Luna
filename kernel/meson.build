@@ -44,6 +44,7 @@ main_sources = files(
     'source/drivers/storage/scsi.cpp',
     'source/drivers/storage/usb_msd.cpp',
 
+    'source/drivers/usb/serial/ch341.cpp',
     'source/drivers/usb/xhci/xhci.cpp',
     'source/drivers/usb/usb.cpp',
 

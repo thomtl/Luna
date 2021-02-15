@@ -24,6 +24,10 @@ constexpr uint64_t max(uint64_t a, uint64_t b) {
     return (a > b) ? a : b;
 }
 
+constexpr uint64_t clamp(uint64_t v, uint64_t minimum, uint64_t maximum) {
+    return min(max(v, minimum), maximum);
+}
+
 constexpr size_t div_ceil(size_t a, size_t b) {
     return (a + b - 1) / b;
 }

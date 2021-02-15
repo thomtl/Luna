@@ -85,8 +85,8 @@ namespace usb {
 
         void configure();
 
-        uint8_t find_ep(bool in, uint8_t type);
-        Endpoint& setup_ep(uint8_t ep_num);
+        EndpointData find_ep(bool in, uint8_t type);
+        Endpoint& setup_ep(const EndpointData& data);
     };
 
 

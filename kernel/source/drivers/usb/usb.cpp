@@ -217,21 +217,21 @@ void usb::Device::configure() {
     set_configuration(*this, configs[curr_config].desc.config_val);
 }
 
-uint8_t usb::Device::find_ep(bool in, uint8_t type) {
+usb::EndpointData usb::Device::find_ep(bool in, uint8_t type) {
     auto& interface = configs[curr_config].interfaces[curr_interface];
 
     for(auto& ep : interface.eps)
         if(ep.desc.dir == in && ep.desc.ep_type == type)
-            return ep.desc.ep_num;
+            return ep;
 
-    return -1;
+    PANIC("Was not able to find endpoint\n");
 }
 
-usb::Endpoint& usb::Device::setup_ep(uint8_t ep_num) {
+usb::Endpoint& usb::Device::setup_ep(const EndpointData& data) {
     auto& interface = configs[curr_config].interfaces[curr_interface];
 
     for(auto& ep : interface.eps) {
-        if(ep.desc.ep_num == ep_num) {
+        if(ep.desc.dir == data.desc.dir && ep.desc.ep_num == data.desc.ep_num) {
             ASSERT(hci.setup_ep(hci.userptr, ep));
 
             auto& ctx = endpoints.emplace_back();

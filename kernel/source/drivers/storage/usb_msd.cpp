@@ -57,15 +57,15 @@ void init(usb::Device& device) {
     dev->usb_dev = &device;
     dev->tag = 1;
 
-    auto out_n = dev->usb_dev->find_ep(false, usb::spec::ep_type::bulk);
-    auto in_n = dev->usb_dev->find_ep(true, usb::spec::ep_type::bulk);
+    const auto out_data = dev->usb_dev->find_ep(false, usb::spec::ep_type::bulk);
+    const auto in_data = dev->usb_dev->find_ep(true, usb::spec::ep_type::bulk);
 
-    dev->in = &dev->usb_dev->setup_ep(in_n);
-    dev->out = &dev->usb_dev->setup_ep(out_n);
+    dev->in = &dev->usb_dev->setup_ep(in_data);
+    dev->out = &dev->usb_dev->setup_ep(out_data);
 
     dev->usb_dev->configure();
 
-    print("usb/msd: OUT: EP{}, IN: EP{}\n", out_n, in_n);
+    print("usb/msd: OUT: EP{}, IN: EP{}\n", out_data.desc.ep_num, in_data.desc.ep_num);
 
     /*ASSERT(dev->usb_dev->hci.ep0_control_xfer(dev->usb_dev->hci.userptr, {.packet = {.type = usb::request_type::host_to_device | usb::request_type::to_class | usb::request_type::interface, 
                                                                               .request = req_bulk_only_reset,
