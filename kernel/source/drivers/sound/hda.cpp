@@ -156,7 +156,7 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
 
     update_ssync(true, 0x3FFF'FFFF); // Make sure all streams are halted
 
-    regs->rirbsts = (1 << 0) | (1 << 4);
+    regs->rirbsts = (1 << 0) | (1 << 2);
 
     auto calculate_ringbuffer_size = [&](uint8_t size) -> std::pair<uint8_t, size_t> {
         auto mask = (size >> 4) & 0xF;
