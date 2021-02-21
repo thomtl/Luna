@@ -289,10 +289,10 @@ void xhci::HCI::enumerate_ports() {
             ep0.tr_dequeue = port.ep0_queue->get_guest_base() | port.ep0_queue->get_cycle();
         }
 
-        TRBCmdAddressDevice addr_dev{};
         {
+            TRBCmdAddressDevice addr_dev{};
             addr_dev.type = trb_types::address_device_cmd;
-            addr_dev.bsr = 0; // Don't send ADDRESS_DEVICE packet yet
+            addr_dev.bsr = 0; // Do send ADDRESS_DEVICE packet
             addr_dev.input_ctx = port.in_ctx->get_guest_base();
             addr_dev.slot_id = port.slot_id;
             auto res = cmd_ring->issue(addr_dev);
@@ -321,9 +321,14 @@ void xhci::HCI::enumerate_ports() {
         
         if(port.max_packet_size != max_packet) {
             port.max_packet_size = max_packet;
-            port.in_ctx->get_ep0_ctx().max_packet_size = max_packet;
 
-            TRBCmdAddressDevice eval{};
+            auto& ep = port.in_ctx->get_ep0_ctx();
+            ep = port.dev_ctx->get_ep0_ctx();
+            ep.state = 0;
+            ep.max_packet_size = max_packet;
+            port.in_ctx->get_in_ctx().add_flags = 0b10; // Only EP0
+
+            TRBCmdEvaluateContext eval{};
             eval.type = trb_types::evaluate_context_cmd;
             eval.input_ctx = port.in_ctx->get_guest_base();
             eval.slot_id = port.slot_id;
@@ -344,7 +349,7 @@ void xhci::HCI::enumerate_ports() {
                 print("      Failed to Address Device, Code: {}\n", code);
                 continue;
             }
-        }*/
+        }*/ 
 
         usb::DeviceDriver driver{};
         driver.addressed = true; // xHCI sends the ADDRESS_DEVICE packet for us
@@ -369,6 +374,8 @@ void xhci::HCI::enumerate_ports() {
 }
 
 bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacket& packet, bool write, size_t len, uint8_t* buf) {
+    hpet::poll_sleep(5); // For some reason this sleep is needed to make it work on USB 1.1 devices????
+    
     uint8_t type = 0;
     if(len > 0 && write) type = 2; // OUT Data Stage
     else if(len > 0 && !write) type = 3; // IN Data Stage
@@ -394,15 +401,17 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
         TRBData data{};
         data.type = trb_types::data;
         data.chain = 0;
-        data.ioc = 0;
+        data.ioc = 0; // No IRQ on completion, leave that to the STATUS stage
+        if(!write)
+            data.isp = 1; // IRQ on Short Packet
         data.td_size = 0;
         data.direction = write ? 0 : 1;
+        data.len = len;
 
         if(len <= 8 && write) {
             memcpy((uint8_t*)&data.buf, buf, len);
 
             data.immediate_data = 1;
-            data.len = len;
         } else {
             dma = mm.alloc(len, write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
             allocated = true;
@@ -410,7 +419,6 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
                 memcpy(dma.host_base, buf, len);
                 
             data.buf = dma.guest_base;
-            data.len = len;
         }
 
         port.ep0_queue->enqueue(data);
@@ -428,7 +436,7 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
         return false;
     }
 
-    if(!write)
+    if(!write && len > 0)
         memcpy(buf, dma.host_base, len);
 
     if(allocated)

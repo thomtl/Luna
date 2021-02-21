@@ -120,7 +120,7 @@ namespace xhci {
 
         uint32_t cycle : 1;
         uint32_t eval_next_trb : 1;
-        uint32_t irq_on_short_packet : 1;
+        uint32_t isp : 1;
         uint32_t no_snoop : 1;
         uint32_t chain : 1;
         uint32_t ioc : 1;
