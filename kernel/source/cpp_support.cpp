@@ -10,6 +10,10 @@ extern "C" int __cxa_atexit(void (*func) (void *), void * arg, void * dso_handle
     return 1;
 }
 
+extern "C" void __cxa_pure_virtual() {
+    PANIC("Pure Virtual function called");
+}
+
 void* operator new(size_t size){
     return (void*)hmm::alloc(size, 16);
 }

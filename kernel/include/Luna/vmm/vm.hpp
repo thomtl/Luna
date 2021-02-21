@@ -94,7 +94,7 @@ namespace vm {
         virtual ~AbstractMM() {}
 
         virtual void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags) = 0;
-        virtual uintptr_t unmap(uintptr_t gpa);
+        virtual uintptr_t unmap(uintptr_t gpa) = 0;
         virtual void protect(uintptr_t gpa, uint64_t flags) = 0;
         virtual uintptr_t get_phys(uintptr_t gpa) = 0;
 

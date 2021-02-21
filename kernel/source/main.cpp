@@ -224,7 +224,7 @@ void kernel_main_ap(stivale2_smp_info* info){
         ;
 }
 
-constexpr size_t bsp_stack_size = 0x1000;
+constexpr size_t bsp_stack_size = 0x4000;
 uint8_t bsp_stack[bsp_stack_size];
 
 stivale2_header_tag_framebuffer fb_tab {

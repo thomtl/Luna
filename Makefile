@@ -26,10 +26,18 @@ kernel:
 bios:
 	echfs-utils -m -p0 luna.hdd import /home/thomas/Desktop/Projects/seabios/out/bios.bin luna/bios.bin
 
+
+QEMU_FLAGS := -enable-kvm -cpu host -device intel-iommu,aw-bits=48 -machine q35 -global hpet.msi=true -smp 4 -hda luna.hdd -serial file:/dev/stdout -monitor stdio -no-reboot -no-shutdown \
+				-device ich9-intel-hda -device hda-output
+
 run: kernel bios
 	# -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
 	# Intel IOMMU: -device intel-iommu,aw-bits=48
 	# AMD IOMMU: -device amd-iommu
-	qemu-system-x86_64 -enable-kvm -cpu host -device intel-iommu,aw-bits=48 -machine q35 -global hpet.msi=true -smp 4 -hda luna.hdd -serial file:/dev/stdout -monitor stdio -no-reboot -no-shutdown \
-					   -device ich9-intel-hda -device hda-output
+	qemu-system-x86_64 ${QEMU_FLAGS}
+
+debug: kernel bios
+	qemu-system-x86_64 ${QEMU_FLAGS} -s -S &
+
+	gdb build/kernel/luna.bin -ex "target remote localhost:1234" -ex "set disassemble-next-line on" -ex "set disassembly-flavor intel"
 
