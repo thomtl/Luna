@@ -473,7 +473,7 @@ bool pci::Device::set_power(uint8_t state) {
     control.power_state = state;
     write<uint16_t>(power.offset + pci::power::control, control.raw);
 
-    hpet::poll_sleep(delay);
+    hpet::poll_msleep(delay);
 
     control.raw = read<uint16_t>(power.offset + pci::power::control);
 

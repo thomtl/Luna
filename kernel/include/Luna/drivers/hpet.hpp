@@ -24,7 +24,9 @@ namespace hpet {
     struct Device {
         Device(acpi::Hpet* table);
 
-        void poll_sleep(uint64_t ms);
+        void poll_msleep(uint64_t ms);
+        void poll_nsleep(uint64_t ns);
+        uint64_t time_ns();
         bool start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr);
 
         private:
@@ -51,6 +53,8 @@ namespace hpet {
     };
 
     void init();
-    void poll_sleep(uint64_t ms);
+    void poll_msleep(uint64_t ms);
+    void poll_nsleep(uint64_t ns);
+    uint64_t time_ns();
     bool start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr = nullptr);
 } // namespace hpet

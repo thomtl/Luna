@@ -136,7 +136,7 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
         mm.push_region({0x1000, 0xFFFF'FFFF - 0x1000});
 
     // Only really need to wait 521us for codecs to wake up, but give it a little bit of time
-    hpet::poll_sleep(10);
+    hpet::poll_msleep(10);
 
     oss = (regs->gcap >> 12) & 0xF;
     iss = (regs->gcap >> 8) & 0xF;

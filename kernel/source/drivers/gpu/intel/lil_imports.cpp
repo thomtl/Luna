@@ -16,7 +16,7 @@ extern "C" {
     uint16_t lil_pci_readw(void* device, uint16_t offset) { return ((pci::Device*)device)->read<uint16_t>(offset); }
     uint32_t lil_pci_readd(void* device, uint16_t offset) { return ((pci::Device*)device)->read<uint32_t>(offset); }
 
-    void lil_sleep(uint64_t ms) { hpet::poll_sleep(ms); }
+    void lil_sleep(uint64_t ms) { hpet::poll_msleep(ms); }
     void lil_panic(const char* msg) {
         print("lil: Panic: {}\n", msg);
         PANIC("LIL PANIC");

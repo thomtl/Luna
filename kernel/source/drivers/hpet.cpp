@@ -8,6 +8,7 @@
 #include <std/linked_list.hpp>
 
 constexpr uint64_t femto_per_milli = 1'000'000'000'000;
+constexpr uint64_t femto_per_nano = 1'000'000;
 
 hpet::Device::Device(acpi::Hpet* table): table{table} {
     ASSERT(table->base.id == 0); // Assert it is in MMIO space
@@ -179,11 +180,23 @@ bool hpet::Device::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void
     return true;
 }
 
-void hpet::Device::poll_sleep(uint64_t ms) {
+void hpet::Device::poll_msleep(uint64_t ms) {
     auto goal = regs->main_counter + (ms * (femto_per_milli / period));
 
     while(regs->main_counter < goal)
         asm("pause");
+}
+
+void hpet::Device::poll_nsleep(uint64_t ns) {
+    auto goal = regs->main_counter + (ns * (femto_per_nano / period));
+
+    while(regs->main_counter < goal)
+        asm("pause");
+}
+
+uint64_t hpet::Device::time_ns() {
+    ASSERT(period > femto_per_nano);
+    return regs->main_counter * (period / femto_per_nano);
 }
 
 
@@ -199,11 +212,25 @@ void hpet::init() {
     }
 }
 
-void hpet::poll_sleep(uint64_t ms) {
+void hpet::poll_msleep(uint64_t ms) {
     // For polling it doesn't really matter which one we pick, so just take the first one
     ASSERT(devices.size() >= 1);
 
-    devices[0].poll_sleep(ms);
+    devices[0].poll_msleep(ms);
+}
+
+void hpet::poll_nsleep(uint64_t ns) {
+    // For polling it doesn't really matter which one we pick, so just take the first one
+    ASSERT(devices.size() >= 1);
+
+    devices[0].poll_nsleep(ns);
+}
+
+uint64_t hpet::time_ns() {
+    // For polling it doesn't really matter which one we pick, so just take the first one
+    ASSERT(devices.size() >= 1);
+
+    return devices[0].time_ns();
 }
 
 bool hpet::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) {
