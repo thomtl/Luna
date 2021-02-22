@@ -26,6 +26,12 @@ namespace vm::q35::dram {
     constexpr uint64_t pciexbar_len_64 = 0b10;
     constexpr uint64_t pciexbar_enable = (1 << 0);
 
+    constexpr uint16_t smram = 0x9D;
+    constexpr uint16_t smram_global_enable = (1 << 3);
+    constexpr uint16_t smram_lock = (1 << 4);
+    constexpr uint16_t smram_closed = (1 << 5);
+    constexpr uint16_t smram_open = (1 << 6);
+
     constexpr struct {
         uintptr_t base, limit;
     } pam_regions[] = {
@@ -46,6 +52,9 @@ namespace vm::q35::dram {
         {.base = 0xE'8000, .limit = 0xE'BFFF}, // PAM6 lo
         {.base = 0xE'C000, .limit = 0xE'FFFF}, //      hi
     };
+
+    constexpr uint32_t c_smram_base = 0xA'0000;
+    constexpr uint32_t c_smram_limit = 0xB'FFFF;
 
     struct Driver : public vm::pci::AbstractPCIDriver {
         Driver(vm::Vm* vm, pci::ecam::Driver* ecam): ecam{ecam}, vm{vm} {
@@ -71,6 +80,8 @@ namespace vm::q35::dram {
             space.data8[cap_off + 2] = 0xB; // Length
             space.data8[cap_off + 3] = 1; // Low Nybble = version
             // Rest of the cap fields are 0
+
+            space.data8[smram] = 0x2;
         }
 
         void register_pci_driver(vm::pci::HostBridge* bus) {
@@ -78,20 +89,28 @@ namespace vm::q35::dram {
         }
 
         void pci_write([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint32_t value, uint8_t size) {
-            switch (size) {
-                case 1: space.data8[reg] = value; break;
-                case 2: space.data16[reg / 2] = value; break;
-                case 4: space.data32[reg / 4] = value; break;
-                default: PANIC("Unknown PCI Access size");
-            }
+            auto do_write = [&] {
+                switch (size) {
+                    case 1: space.data8[reg] = value; break;
+                    case 2: space.data16[reg / 2] = value; break;
+                    case 4: space.data32[reg / 4] = value; break;
+                    default: PANIC("Unknown PCI Access size");
+                }
+            };
+            
 
             if(ranges_overlap(reg, size, 0, sizeof(pci::ConfigSpaceHeader)))
-                ; // TODO: Handle header accesses
-            else if(ranges_overlap(reg, size, pam0, pam_size))
+                pci_update(reg, size, value);
+            else if(ranges_overlap(reg, size, pam0, pam_size)) {
+                do_write();
                 pam_update();
-            else if(ranges_overlap(reg, size, pciexbar, pciexbar_size))
+            } else if(ranges_overlap(reg, size, pciexbar, pciexbar_size)) {
+                do_write();
                 pciexbar_update();
-            else
+            } else if(ranges_overlap(reg, size, smram, 1)) {
+                do_write();
+                smram_update();
+            } else
                 print("q35::dram: Unhandled PCI write, reg: {:#x}, value: {:#x}\n", reg, value);
         }
 
@@ -112,6 +131,45 @@ namespace vm::q35::dram {
                 print("q35::dram: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
 
             return ret;
+        }
+
+        // TODO: Abstract this to common class
+        void pci_update(uint16_t reg, uint8_t size, uint32_t value) {
+            // TODO: This is horrible and broken and horrible
+            auto handle_bar = [&](uint16_t bar) {
+                if(reg != bar)
+                    return false;
+                
+                ASSERT(size == 4); // Please don't tell me anyone does unaligned BAR r/w
+                if(value == 0xFFFF'FFFF) // Do stupid size thing
+                    space.data32[reg] = 0xFFFF'FFFF; // We don't decode any bits
+                else
+                    space.data32[reg] = value;
+
+                return true;
+            };
+
+            if(handle_bar(0x10)) // BAR0
+                return;
+            if(handle_bar(0x14)) // BAR1
+                return;
+            if(handle_bar(0x18)) // BAR2
+                return;
+            if(handle_bar(0x1C)) // BAR3
+                return;
+            if(handle_bar(0x20)) // BAR4
+                return;
+            if(handle_bar(0x24)) // BAR5
+                return;
+            if(handle_bar(0x30)) // Expansion ROM Bar
+                return;
+
+            switch (size) {
+                case 1: space.data8[reg] = value; break;
+                case 2: space.data16[reg / 2] = value; break;
+                case 4: space.data32[reg / 4] = value; break;
+                default: PANIC("Unknown PCI Access size");
+            }
         }
 
         void pciexbar_update() {
@@ -153,10 +211,51 @@ namespace vm::q35::dram {
             }
         }
 
+        void smram_update() {
+            auto& v = space.data8[smram];
+
+            v &= ~0b111;
+            v |= 0b010; // Field is hardwired to this
+
+            if((v & smram_lock) || smram_locked) {
+                smram_locked = true;
+                v |= smram_lock;
+                return;
+            }
+
+            smram_enabled = (v & smram_global_enable) ? true : false;
+
+            if(!smram_enabled)
+                return;
+
+            if((v & smram_open) && (v & smram_closed))
+                PANIC("SMRAM Open and Closed at thesame time");
+
+            bool new_state = false;
+            if(v & smram_open)
+                new_state = true;
+            
+            // TODO: SMRAM can be closed after lock bit is set
+            if(v & smram_closed)
+                PANIC("TODO: Implement SMRAM Closing"); // Code accesses references reference SMRAM, however Data accesses reference VGA VRAM
+
+            if(new_state != smram_accessible) {
+                uint64_t flags = 0;
+                if(new_state)
+                    flags |= paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute;
+
+                for(size_t addr = c_smram_base; addr < c_smram_limit; addr += pmm::block_size)
+                    vm->mm->protect(addr, flags);
+
+                smram_accessible = new_state;
+            }
+        }
+
         pci::ecam::Driver* ecam;
         pci::ConfigSpace space;
 
         uint8_t pam_cache[n_pam];
+        bool smram_locked = false, smram_accessible = true, smram_enabled = false; // TODO: Maybe SMRAM shouldn't be enabled by default
 
         vm::Vm* vm;
     };

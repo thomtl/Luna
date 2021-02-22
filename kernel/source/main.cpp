@@ -34,8 +34,12 @@
 #include <Luna/vmm/drivers/pci/pci.hpp>
 #include <Luna/vmm/drivers/pci/pio_access.hpp>
 #include <Luna/vmm/drivers/pci/ecam.hpp>
+#include <Luna/vmm/drivers/pci/hotplug.hpp>
 
 #include <Luna/vmm/drivers/q35/q35_dram.hpp>
+#include <Luna/vmm/drivers/q35/lpc.hpp>
+#include <Luna/vmm/drivers/q35/acpi.hpp>
+#include <Luna/vmm/drivers/q35/smi.hpp>
 
 #include <Luna/vmm/drivers/irqs/lapic.hpp>
 #include <Luna/vmm/drivers/irqs/8259.hpp>
@@ -216,6 +220,9 @@ void kernel_main(const stivale2_struct* info) {
 
     auto* pci_host_bridge = new vm::pci::HostBridge{};
 
+    auto* pci_hotplug = new vm::pci::hotplug::Driver{};
+    pci_hotplug->register_pio_driver(&vm);
+
     auto* pci_pio_access = new vm::pci::pio_access::Driver{vm::pci::pio_access::default_base, 0, pci_host_bridge};
     pci_pio_access->register_pio_driver(&vm);
 
@@ -224,6 +231,14 @@ void kernel_main(const stivale2_struct* info) {
 
     auto* dram_dev = new vm::q35::dram::Driver{&vm, pci_mmio_access};
     dram_dev->register_pci_driver(pci_host_bridge);
+
+    auto* smi_dev = new vm::q35::smi::Driver{};
+    smi_dev->register_pio_driver(&vm);
+
+    auto* acpi_dev = new vm::q35::acpi::Driver{&vm, smi_dev};
+
+    auto* lpc_dev = new vm::q35::lpc::Driver{&vm, acpi_dev};
+    lpc_dev->register_pci_driver(pci_host_bridge);
 
     auto* pic_dev = new vm::irqs::pic::Driver{};
     pic_dev->register_pio_driver(&vm);

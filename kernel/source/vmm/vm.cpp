@@ -171,6 +171,7 @@ bool vm::VCPU::run() {
                     }
                 }
                 
+                set_regs(regs);
                 break;
             }
 
