@@ -10,6 +10,15 @@ namespace vm::cmos {
     constexpr uint8_t cmd = 0;
     constexpr uint8_t data = 1;
 
+
+    constexpr uint8_t cmos_extmem2_low = 0x34;
+    constexpr uint8_t cmos_extmem2_high = 0x35;
+
+    constexpr uint8_t cmos_bootflag1 = 0x38;
+    constexpr uint8_t cmos_bootflag2 = 0x3d;
+
+    constexpr uint8_t cmos_ap_count = 0x5f;
+
     struct Driver : public vm::AbstractPIODriver {
         void register_pio_driver(Vm* vm) {
             vm->pio_map[base + cmd] = this;
@@ -50,6 +59,9 @@ namespace vm::cmos {
                 return 0;
             }
         }
+
+        uint8_t read(uint8_t i) const { return ram[i]; }
+        void write(uint8_t i, uint8_t v) { ram[i] = v; }
 
         private:
         uint8_t address;

@@ -117,11 +117,11 @@ void kernel_main(const stivale2_struct* info) {
 
     vm::init();
 
-    vbe::init();
+    //vbe::init();
 
 
-
-    
+    constexpr uintptr_t himem_start = 0x10'0000;
+    constexpr size_t himem_size = 16 * 1024 * 1024; // 16MiB
 
     vm::Vm vm{1};
     {
@@ -130,9 +130,10 @@ void kernel_main(const stivale2_struct* info) {
 
         auto bios_size = file->get_size();
         ASSERT((bios_size % 0x1000) == 0);
+
         
         auto isa_bios_size = min(bios_size, 128 * 1024);
-        auto isa_bios_start = 0x10'0000 - isa_bios_size;
+        auto isa_bios_start = himem_start - isa_bios_size;
         size_t isa_curr = 0;
 
 
@@ -162,6 +163,17 @@ void kernel_main(const stivale2_struct* info) {
 
             vm.mm->map(block, i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
         }
+
+        // Setup himem
+        for(size_t i = 0; i < himem_size; i += 0x1000) {
+            auto block = pmm::alloc_block();
+            ASSERT(block);
+
+            auto* va = (uint8_t*)(block + phys_mem_map);
+            memset(va, 0, pmm::block_size);
+
+            vm.mm->map(block, himem_start + i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+        }
     }
 
     auto* e9_dev = new vm::e9::Driver{};
@@ -169,6 +181,32 @@ void kernel_main(const stivale2_struct* info) {
 
     auto* cmos_dev = new vm::cmos::Driver{};
     cmos_dev->register_pio_driver(&vm);
+
+    {
+        auto size = himem_start + himem_size - (16 * 1024 * 1024); // TODO: Investigate this, seems to be what Seabios does
+        cmos_dev->write(vm::cmos::cmos_extmem2_low, (size >> 16) & 0xFF);
+        cmos_dev->write(vm::cmos::cmos_extmem2_high, (size >> 24) & 0xFF);
+
+
+        /*
+            Boot Priority Numbers
+                1: Floppy
+                2: Harddisk
+                3: CD-Rom
+                4: BEV???
+
+            1st priority is Bootflag2 bits 0:3
+            2nd priority is Bootflag2 bits 4:7
+            3rd priority is Bootflag1 bits 4:7
+
+            We do HDD -> CD -> Floppy
+        */
+        cmos_dev->write(vm::cmos::cmos_bootflag1, (1 << 4) | 0); // Bit0 = Disable Floppy MBR Sig Check
+        cmos_dev->write(vm::cmos::cmos_bootflag2, (3 << 4) | (2 << 0));
+
+        cmos_dev->write(vm::cmos::cmos_ap_count, 0); // Currently we only support the BSP, no APs
+    }
+    
 
     auto* a20_dev = new vm::fast_a20::Driver{};
     a20_dev->register_pio_driver(&vm);
