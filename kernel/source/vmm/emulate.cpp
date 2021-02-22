@@ -69,6 +69,7 @@ Modrm parse_modrm(uint8_t v) {
 
 
 void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_size], vm::RegisterState& regs, vm::AbstractMMIODriver* driver) {
+    ASSERT(!(regs.efer & (1 << 10)));
     uint8_t default_operand_size = regs.cs.attrib.db ? 4 : 2;
     uint8_t other_operand_size = regs.cs.attrib.db ? 2 : 4;
     uint8_t address_size = default_operand_size, operand_size = default_operand_size;
@@ -102,6 +103,27 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
         case 0x66: operand_size = other_operand_size; break; // Operand Size Override
         case 0x67: address_size = other_operand_size; break; // Address Size Override
         
+        case 0x88: { // MOV r/m8, r8
+            auto mod = parse_modrm(instruction[++i]);
+            
+            if(mod.mod == 0) {
+                if(mod.rm == 0b100 || mod.rm == 0b101) {
+                    PANIC("TODO");
+                } else {
+                    auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+                    auto v = read_r64(regs, (vm::emulate::r64)mod.reg, 1);
+
+                    driver->mmio_write(segment->base + src, v, 1);
+                }
+            } else {
+                print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
+                PANIC("Unknown");
+            }
+
+            done = true;
+            break;
+        }
+
         case 0x89: { // MOV r/m{16, 32}, r{16, 32}
             auto mod = parse_modrm(instruction[++i]);
             
@@ -147,8 +169,12 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
             auto mod = parse_modrm(instruction[++i]);
             
             if(mod.mod == 0) {
-                if(mod.rm == 0b100 || mod.rm == 0b101) {
+                if(mod.rm == 0b100)
                     PANIC("TODO");
+                else if(mod.rm == 0b101) {
+                    auto src = readN(address_size);
+                    auto v = driver->mmio_read(segment->base + src, operand_size);
+                    write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
                 } else {
                     auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
                     auto v = driver->mmio_read(segment->base + src, operand_size);

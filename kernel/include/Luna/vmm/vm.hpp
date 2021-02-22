@@ -46,7 +46,7 @@ namespace vm {
 
     constexpr size_t max_x86_instruction_size = 15;
     struct VmExit {
-        enum class Reason { Unknown, Hlt, Vmcall, MMUViolation, PIO, MSR, CPUID };
+        enum class Reason { Unknown, Hlt, Vmcall, MMUViolation, PIO, MSR, CPUID, RSM };
         static constexpr const char* reason_to_string(const Reason& reason) {
             switch (reason) {
                 case Reason::Unknown: return "Unknown";
@@ -56,6 +56,7 @@ namespace vm {
                 case Reason::PIO: return "Port IO";
                 case Reason::MSR: return "MSR";
                 case Reason::CPUID: return "CPUID";
+                case Reason::RSM: return "RSM";
                 default: return "Unknown";
             }
         }
@@ -131,6 +132,9 @@ namespace vm {
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
 
+        void enter_smm();
+        void handle_rsm();
+
         void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags);
         void protect(uintptr_t gpa, uint64_t flags);
         bool run();
@@ -151,6 +155,11 @@ namespace vm {
         } mtrr;
         uint64_t apicbase;
         uint64_t tsc;
+        uint64_t smbase;
+
+        bool is_in_smm;
+
+        uint64_t cr0_constraint = 0, cr4_constraint = 0, efer_constraint = 0;
 
         Vm* vm;
         AbstractVm* vcpu;

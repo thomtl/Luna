@@ -194,8 +194,7 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
 
     {
         uint32_t min = (uint32_t)ProcBasedControls2::EPTEnable \
-                     | (uint32_t)ProcBasedControls2::UnrestrictedGuest \
-                     | (uint32_t)ProcBasedControls2::VMExitOnWbinvd;
+                     | (uint32_t)ProcBasedControls2::UnrestrictedGuest;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls2, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls2));
     }
@@ -354,6 +353,23 @@ bool vmx::Vm::run(vm::VmExit& exit) {
                         next_instruction();
 
                         return true;
+                    } else if(instruction[0] == 0x0F && instruction[1] == 0xAA) {
+                        exit.reason = vm::VmExit::Reason::RSM;
+
+                        exit.instruction_len = 2;
+                        exit.instruction[0] = 0x0F;
+                        exit.instruction[1] = 0xAA;
+
+                        next_instruction();
+
+                        return true;
+                    } else {
+                        print("VT-x: #UD: gRIP: {:#x} : ", grip);
+
+                        for(uint8_t i = 0; i < 15; i++)
+                            print("{:x} ", instruction[i]);
+
+                        print("\n");
                     }
                 }
 
