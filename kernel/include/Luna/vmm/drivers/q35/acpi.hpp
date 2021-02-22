@@ -20,7 +20,7 @@ namespace vm::q35::acpi {
     constexpr uint16_t apmc_en = (1 << 5);
 
     struct Driver : public vm::AbstractPIODriver {
-        Driver(vm::Vm* vm, vm::q35::smi::Driver* smi_dev): vm{vm}, smi_dev{smi_dev}, start_ns{cpu::time_ns()} {}
+        Driver(vm::Vm* vm, vm::q35::smi::Driver* smi_dev): vm{vm}, smi_dev{smi_dev}, start_ns{::hpet::time_ns()} {}
 
         void register_pio_driver([[maybe_unused]] Vm* vm) { }
 

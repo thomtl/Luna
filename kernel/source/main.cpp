@@ -31,6 +31,7 @@
 #include <Luna/vmm/drivers/uart.hpp>
 #include <Luna/vmm/drivers/hpet.hpp>
 #include <Luna/vmm/drivers/cmos.hpp>
+#include <Luna/vmm/drivers/ps2.hpp>
 #include <Luna/vmm/drivers/fast_a20.hpp>
 #include <Luna/vmm/drivers/pci/pci.hpp>
 #include <Luna/vmm/drivers/pci/pio_access.hpp>
@@ -218,6 +219,9 @@ void kernel_main(const stivale2_struct* info) {
 
     auto* uart_dev = new vm::uart::Driver{0x3F8};
     uart_dev->register_pio_driver(&vm);
+
+    auto* ps2_dev = new vm::ps2::Driver{};
+    ps2_dev->register_pio_driver(&vm);
 
     auto* hpet_dev = new vm::hpet::Driver{};
     hpet_dev->register_mmio_driver(&vm);
