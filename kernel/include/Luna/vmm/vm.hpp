@@ -135,6 +135,9 @@ namespace vm {
         void enter_smm();
         void handle_rsm();
 
+        void dma_write(uintptr_t gpa, std::span<uint8_t> buf);
+        void dma_read(uintptr_t gpa, std::span<uint8_t> buf);
+
         void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags);
         void protect(uintptr_t gpa, uint64_t flags);
         bool run();

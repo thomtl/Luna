@@ -29,6 +29,7 @@
 #include <Luna/vmm/vm.hpp>
 #include <Luna/vmm/drivers/e9.hpp>
 #include <Luna/vmm/drivers/uart.hpp>
+#include <Luna/vmm/drivers/nvme.hpp>
 #include <Luna/vmm/drivers/hpet.hpp>
 #include <Luna/vmm/drivers/cmos.hpp>
 #include <Luna/vmm/drivers/ps2.hpp>
@@ -213,6 +214,8 @@ void kernel_main(const stivale2_struct* info) {
         cmos_dev->write(vm::cmos::cmos_ap_count, 0); // Currently we only support the BSP, no APs
     }
     
+    auto* pci_host_bridge = new vm::pci::HostBridge{};
+
 
     auto* a20_dev = new vm::fast_a20::Driver{};
     a20_dev->register_pio_driver(&vm);
@@ -226,7 +229,10 @@ void kernel_main(const stivale2_struct* info) {
     auto* hpet_dev = new vm::hpet::Driver{};
     hpet_dev->register_mmio_driver(&vm);
 
-    auto* pci_host_bridge = new vm::pci::HostBridge{};
+    auto* file = vfs::get_vfs().open("A:/disk.bin");
+    auto* nvme_dev = new vm::nvme::Driver{&vm, pci_host_bridge, 16, 0, file};
+    (void)nvme_dev;
+
 
     auto* pci_hotplug = new vm::pci::hotplug::Driver{};
     pci_hotplug->register_pio_driver(&vm);

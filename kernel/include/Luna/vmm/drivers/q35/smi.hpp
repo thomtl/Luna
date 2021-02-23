@@ -27,7 +27,7 @@ namespace vm::q35::smi {
                 cmd = value;
 
                 if(smi_generation) {
-                    print("q35::smi: Raising SMI\n");
+                    //print("q35::smi: Raising SMI\n");
 
                     vm->cpus[0].enter_smm();
                 }

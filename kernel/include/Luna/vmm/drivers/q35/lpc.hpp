@@ -63,11 +63,7 @@ namespace vm::q35::lpc {
         }
 
         void register_pci_driver(vm::pci::HostBridge* bus) {
-            vm::pci::DeviceID id{.raw = 0};
-            id.bus = 0;
-            id.slot = 31;
-            id.func = 0;
-            bus->register_pci_driver(id, this);
+            bus->register_pci_driver(pci::DeviceID{0, 0, 31, 0}, this);
         }
 
         void pci_write([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint32_t value, uint8_t size) {
@@ -124,9 +120,9 @@ namespace vm::q35::lpc {
                 
                 ASSERT(size == 4); // Please don't tell me anyone does unaligned BAR r/w
                 if(value == 0xFFFF'FFFF) // Do stupid size thing
-                    space.data32[reg] = 0xFFFF'FFFF; // We don't decode any bits
+                    space.data32[reg / 4] = 0; // We don't decode any bits
                 else
-                    space.data32[reg] = value;
+                    space.data32[reg / 4] = value;
 
                 return true;
             };
@@ -143,8 +139,10 @@ namespace vm::q35::lpc {
                 return;
             if(handle_bar(0x24)) // BAR5
                 return;
-            if(handle_bar(0x30)) // Expansion ROM Bar
+            if(reg == 0x30) {
+                space.data32[reg / 4] = 0; // No Option ROM
                 return;
+            }
 
             switch (size) {
                 case 1: space.data8[reg] = value; break;

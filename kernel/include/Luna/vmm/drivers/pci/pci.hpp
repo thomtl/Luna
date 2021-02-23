@@ -9,6 +9,8 @@
 
 namespace vm::pci {
     union [[gnu::packed]] DeviceID {
+        constexpr DeviceID(): raw{0} {}
+        constexpr DeviceID(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func): seg{seg}, func{func}, slot{slot}, bus{bus} {}
         struct {
             uint32_t seg : 16;
             uint32_t func : 3;

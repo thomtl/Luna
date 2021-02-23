@@ -654,6 +654,35 @@ void vm::VCPU::handle_rsm() {
     is_in_smm = false;
 }
 
+void vm::VCPU::dma_read(uintptr_t gpa, std::span<uint8_t> buf) {
+    uintptr_t curr = 0;
+    while(curr != buf.size_bytes()) {
+        auto va = vm->mm->get_phys(gpa + curr) + phys_mem_map;
+        auto top = align_up(va, pmm::block_size);
+
+
+        auto chunk = min(top - va + 1, buf.size_bytes() - curr);
+
+        memcpy(buf.data() + curr, (uint8_t*)va, chunk);
+
+        curr += chunk;
+    }
+}
+
+void vm::VCPU::dma_write(uintptr_t gpa, std::span<uint8_t> buf) {
+    uintptr_t curr = 0;
+    while(curr != buf.size_bytes()) {
+        auto va = vm->mm->get_phys(gpa + curr) + phys_mem_map;
+        auto top = align_up(va, pmm::block_size);
+
+        auto chunk = min(top - va + 1, buf.size_bytes() - curr);
+
+        memcpy((uint8_t*)va, buf.data() + curr, chunk);
+
+        curr += chunk;
+    }
+}
+
 vm::Vm::Vm(uint8_t n_cpus) {
     switch (get_cpu().cpu.vm.vendor) {
         case CpuVendor::Intel:

@@ -134,7 +134,17 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
                     auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
                     auto v = read_r64(regs, (vm::emulate::r64)mod.reg, operand_size);
 
-                    driver->mmio_write(segment->base + src, v, operand_size); // TODO: Don't assume ds
+                    driver->mmio_write(segment->base + src, v, operand_size);
+                }
+            } else if(mod.mod == 1) {
+                if(mod.rm == 0b100 || mod.rm == 0b101)
+                    PANIC("TODO");
+                else {
+                    auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+                    src += instruction[++i];
+                    auto v = read_r64(regs, (vm::emulate::r64)mod.reg, operand_size);
+
+                    driver->mmio_write(segment->base + src, v, operand_size);
                 }
             } else {
                 print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
@@ -180,6 +190,15 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
                     auto v = driver->mmio_read(segment->base + src, operand_size);
                     write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
                 }
+            } else if(mod.mod == 1) {
+                if(mod.rm == 0b100 || mod.rm == 0b101)
+                    PANIC("TODO");
+                else {
+                    auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+                    src += instruction[++i];
+                    auto v = driver->mmio_read(segment->base + src, operand_size);
+                    write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
+                }
             } else {
                 print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
                 PANIC("Unknown");
@@ -220,6 +239,17 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
                 } else {
                     auto v = readN(operand_size);
                     auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+
+                    driver->mmio_write(segment->base + src, v, operand_size);
+                }
+            } else if(mod.mod == 1) {
+                if(mod.rm == 0b100 || mod.rm == 0b101)
+                    PANIC("TODO");
+                else {
+                    auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+                    src += instruction[++i];
+
+                    auto v = readN(operand_size);
 
                     driver->mmio_write(segment->base + src, v, operand_size);
                 }
