@@ -246,6 +246,9 @@ void kernel_main(const stivale2_struct* info) {
     auto* dram_dev = new vm::q35::dram::Driver{&vm, pci_mmio_access};
     dram_dev->register_pci_driver(pci_host_bridge);
 
+    vm.cpus[0].set(vm::VmCap::SMMEntryCallback, [](void* dram) { ((vm::q35::dram::Driver*)dram)->smm_enter(); }, dram_dev);
+    vm.cpus[0].set(vm::VmCap::SMMLeaveCallback, [](void* dram) { ((vm::q35::dram::Driver*)dram)->smm_leave(); }, dram_dev);
+
     auto* smi_dev = new vm::q35::smi::Driver{};
     smi_dev->register_pio_driver(&vm);
 

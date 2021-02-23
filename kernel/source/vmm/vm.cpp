@@ -83,6 +83,16 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
 void vm::VCPU::get_regs(vm::RegisterState& regs) const { vcpu->get_regs(regs); }
 void vm::VCPU::set_regs(const vm::RegisterState& regs) { vcpu->set_regs(regs); }
 void vm::VCPU::set(VmCap cap, bool value) { vcpu->set(cap, value); }
+void vm::VCPU::set(VmCap cap, void (*fn)(void*), void* userptr) { 
+    if(cap == VmCap::SMMEntryCallback) {
+        smm_entry_callback = fn;
+        smm_entry_userptr = userptr;
+    } else if(cap == VmCap::SMMLeaveCallback) {
+        smm_leave_callback = fn;
+        smm_leave_userptr = userptr;
+    } else
+        PANIC("Unknown cap");
+}
 
 bool vm::VCPU::run() {
     while(true) {
@@ -103,14 +113,8 @@ bool vm::VCPU::run() {
             auto grip = regs.cs.base + regs.rip;
 
             auto emulate_mmio = [&](AbstractMMIODriver* driver) {
-                ASSERT((grip + 15) < align_up(grip, pmm::block_size)); // TODO: Support page boundary instructions
-                    
-                auto hpa = vm->mm->get_phys(grip);
-                ASSERT(hpa); // Assert that the page is actually mapped
-                auto* host_buf = (uint8_t*)(hpa + phys_mem_map);
-
                 uint8_t instruction[max_x86_instruction_size];
-                memcpy(instruction, host_buf, 15);
+                dma_read(grip, {instruction, 15});
 
                 vm::emulate::emulate_instruction(instruction, regs, driver);
                 set_regs(regs);
@@ -530,6 +534,8 @@ void vm::VCPU::enter_smm() {
 
     set_regs(regs);
 
+    smm_entry_callback(smm_entry_userptr);
+
     is_in_smm = true;
 }
 
@@ -650,6 +656,8 @@ void vm::VCPU::handle_rsm() {
     GET_SEGMENT(5, gs);
 
     set_regs(rregs);
+
+    smm_leave_callback(smm_leave_userptr);
 
     is_in_smm = false;
 }

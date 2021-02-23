@@ -255,6 +255,22 @@ namespace vm::q35::dram {
             }
         }
 
+        void smm_enter() {
+            if(smram_accessible)
+                return;
+            
+            for(size_t addr = c_smram_base; addr < c_smram_limit; addr += pmm::block_size)
+                vm->mm->protect(addr, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
+        }
+
+        void smm_leave() {
+            if(smram_accessible)
+                return;
+
+            for(size_t addr = c_smram_base; addr < c_smram_limit; addr += pmm::block_size)
+                vm->mm->protect(addr, 0);
+        }
+
         pci::ecam::Driver* ecam;
         pci::ConfigSpace space;
 

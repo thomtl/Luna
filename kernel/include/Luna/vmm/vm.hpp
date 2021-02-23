@@ -104,7 +104,7 @@ namespace vm {
         virtual uint8_t get_levels() const = 0;
     };
 
-    enum class VmCap { FullPIOAccess };
+    enum class VmCap { FullPIOAccess, SMMEntryCallback, SMMLeaveCallback };
 
     struct AbstractVm {
         virtual ~AbstractVm() {}
@@ -128,6 +128,7 @@ namespace vm {
 
         
         void set(VmCap cap, bool value);
+        void set(VmCap cap, void (*fn)(void*), void* userptr);
         
         void get_regs(vm::RegisterState& regs) const;
         void set_regs(const vm::RegisterState& regs);
@@ -168,6 +169,9 @@ namespace vm {
         AbstractVm* vcpu;
 
         irqs::lapic::Driver lapic;
+
+        void (*smm_entry_callback)(void*); void* smm_entry_userptr;
+        void (*smm_leave_callback)(void*); void* smm_leave_userptr;
     };
 
     struct Vm {
