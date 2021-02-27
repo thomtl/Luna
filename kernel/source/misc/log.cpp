@@ -9,7 +9,7 @@
 log::Logger* log::global_logger;
 
 std::lazy_initializer<uart::Writer> early_logger;
-std::lazy_initializer<tty::Writer> late_logger;
+std::lazy_initializer<uart::Writer> late_logger;
 
 void log::select_logger(log::LoggerType type) {
     switch (type) {
@@ -21,7 +21,7 @@ void log::select_logger(log::LoggerType type) {
             break;
         case LoggerType::Late:
             if(!late_logger)
-                late_logger.init();
+                late_logger.init(uart::com1_base);
 
             global_logger = late_logger.get();
             break;

@@ -4,7 +4,6 @@
 #include <Luna/vmm/vm.hpp>
 
 #include <Luna/misc/log.hpp>
-#include <Luna/drivers/uart.hpp>
 
 namespace vm::uart {
     constexpr uint32_t clock = 115200;
@@ -19,8 +18,7 @@ namespace vm::uart {
     constexpr uint8_t scratch_reg = 7;
 
     struct Driver : public vm::AbstractPIODriver {
-        Driver(uint16_t base): base{base}, baud{3}, dlab{false} {}
-
+        Driver(uint16_t base, log::Logger* logger): base{base}, baud{3}, dlab{false}, logger{logger} {}
 
         void register_pio_driver(Vm* vm) {
             vm->pio_map[base + data_reg] = this;
@@ -36,7 +34,10 @@ namespace vm::uart {
         void pio_write(uint16_t port, uint32_t value, [[maybe_unused]] uint8_t size) {
             if(port == (base + data_reg)) {
                 if(!dlab) {
-                    ::uart::Writer{::uart::com1_base}.putc(value);
+                    logger->putc(value);
+
+                    if(value == '\n')
+                        logger->flush();
                 } else {
                     baud &= ~0xFF;
                     baud |= value;
@@ -95,5 +96,7 @@ namespace vm::uart {
         uint16_t baud;
 
         bool dlab;
+
+        log::Logger* logger;
     };
 } // namespace vm::uart

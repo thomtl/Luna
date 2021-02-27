@@ -47,6 +47,9 @@
 #include <Luna/vmm/drivers/irqs/lapic.hpp>
 #include <Luna/vmm/drivers/irqs/8259.hpp>
 
+#include <Luna/gui/gui.hpp>
+#include <Luna/gui/log_window.hpp>
+
 #include <std/mutex.hpp>
 
 std::minimal_vector<CpuData, 1> per_cpu_data{};
@@ -125,6 +128,8 @@ void kernel_main(const stivale2_struct* info) {
     vm::init();
 
     //vbe::init();
+
+    gui::init();
 
 
     constexpr uintptr_t himem_start = 0x10'0000;
@@ -220,7 +225,9 @@ void kernel_main(const stivale2_struct* info) {
     auto* a20_dev = new vm::fast_a20::Driver{};
     a20_dev->register_pio_driver(&vm);
 
-    auto* uart_dev = new vm::uart::Driver{0x3F8};
+    auto* log_window = new gui::LogWindow{"VM Log"};
+    gui::get_desktop().add_window(log_window);
+    auto* uart_dev = new vm::uart::Driver{0x3F8, log_window};
     uart_dev->register_pio_driver(&vm);
 
     auto* ps2_dev = new vm::ps2::Driver{};
