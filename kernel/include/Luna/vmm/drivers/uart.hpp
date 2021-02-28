@@ -10,6 +10,7 @@ namespace vm::uart {
 
     constexpr uint8_t data_reg = 0;
     constexpr uint8_t irq_enable_reg = 1;
+    constexpr uint8_t irq_identification_reg = 2;
     constexpr uint8_t fifo_control_reg = 2;
     constexpr uint8_t line_control_reg = 3;
     constexpr uint8_t modem_control_reg = 4;
@@ -27,6 +28,8 @@ namespace vm::uart {
             vm->pio_map[base + line_status_reg] = this;
             vm->pio_map[base + modem_status_reg] = this;
             vm->pio_map[base + scratch_reg] = this;
+
+            iir = 2;
         }
 
         void pio_write(uint16_t port, uint32_t value, [[maybe_unused]] uint8_t size) {
@@ -77,6 +80,8 @@ namespace vm::uart {
                     return ier;
                 else
                     return (baud >> 8) & 0xFF;
+            } else if(port == (base + irq_identification_reg)) {
+                return iir;
             } else if(port == (base + line_control_reg)) {
                 return (dlab << 7);
             } else if(port == (base + line_status_reg)) {
@@ -89,7 +94,7 @@ namespace vm::uart {
 
         private:
         uint16_t base;
-        uint8_t ier;
+        uint8_t ier, iir;
 
         uint16_t baud;
 
