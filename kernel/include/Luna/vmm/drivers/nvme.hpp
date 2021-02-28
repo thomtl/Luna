@@ -144,12 +144,11 @@ namespace vm::nvme {
 
                 cc = value;
             } else if(reg == regs::aqa && size == 4) {
-                queues[0].cqs = (value >> 16) & 0xFFF;
-                queues[0].sqs = value & 0xFFF;
+                queues[0].cqs = ((value >> 16) & 0xFFF) + 1;
+                queues[0].sqs = (value & 0xFFF) + 1;
 
-                ASSERT(queues[0].cqs < max_queue_entries);
-                ASSERT(queues[0].sqs < max_queue_entries);
-                
+                ASSERT(queues[0].cqs <= max_queue_entries);
+                ASSERT(queues[0].sqs <= max_queue_entries);
             } else if(reg == regs::asq) {
                 queues[0].sq_base = value;
 
@@ -340,7 +339,7 @@ namespace vm::nvme {
                 ASSERT(cmd.cmd_data[1] & (1 << 0)); // Physically Contiguous
 
                 auto qid = cmd.cmd_data[0] & 0xFFFF;
-                auto size = cmd.cmd_data[0] >> 16;
+                auto size = (cmd.cmd_data[0] >> 16) + 1;
 
                 auto cqid = cmd.cmd_data[1] >> 16;
 
@@ -350,13 +349,13 @@ namespace vm::nvme {
                     c.status = (1 << 8) | 0;
                 } else if(qid == 0) {
                     c.status = (1 << 8) | 1;
-                } else if(size == 0 || cq_entry_size == 0) {
+                } else if(size == 1 || cq_entry_size == 0) { // Size cannot be 0, and minimum is 2
                     c.status = (1 << 8) | 2;
                 } else {
                     auto& queue = queues[qid];
 
                     queue.sq_base = cmd.prp0;
-                    queue.sqs = size / sq_entry_size;
+                    queue.sqs = size;
 
                     c.status = 0;
                 }
@@ -365,7 +364,7 @@ namespace vm::nvme {
                 ASSERT(!(cmd.cmd_data[1] & (1 << 1))); // No IRQs
 
                 auto qid = cmd.cmd_data[0] & 0xFFFF;
-                auto size = cmd.cmd_data[0] >> 16;
+                auto size = (cmd.cmd_data[0] >> 16) + 1;
                 
                 if(qid == 0 || queues.contains(qid)) {
                     c.status = (1 << 8) | 1;
@@ -374,7 +373,7 @@ namespace vm::nvme {
                 } else {
                     Queue queue{};
                     queue.cq_base = cmd.prp0;
-                    queue.cqs = size / cq_entry_size;
+                    queue.cqs = size;
 
                     queues[qid] = queue;
 
