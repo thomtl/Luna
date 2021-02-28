@@ -10,6 +10,14 @@ namespace vm::cmos {
     constexpr uint8_t cmd = 0;
     constexpr uint8_t data = 1;
 
+    constexpr uint8_t rtc_seconds = 0x0;
+    constexpr uint8_t rtc_minutes = 0x2;
+    constexpr uint8_t rtc_hours = 0x4;
+    constexpr uint8_t rtc_day = 0x7;
+    constexpr uint8_t rtc_month = 0x8;
+    constexpr uint8_t rtc_year = 0x9;
+
+    constexpr uint8_t rtc_century = 0x32;
 
     constexpr uint8_t cmos_extmem2_low = 0x34;
     constexpr uint8_t cmos_extmem2_high = 0x35;
@@ -18,6 +26,14 @@ namespace vm::cmos {
     constexpr uint8_t cmos_bootflag2 = 0x3d;
 
     constexpr uint8_t cmos_ap_count = 0x5f;
+
+    constexpr uint8_t implemented_regs[] = {
+        cmos_extmem2_low, cmos_extmem2_high, cmos_bootflag1, cmos_bootflag2, cmos_ap_count,
+        rtc_seconds, rtc_minutes, rtc_hours, // Just ignore for now, should be implemented though
+        rtc_day, rtc_month, rtc_year, rtc_century,
+        0xF, // Reset status, used by BIOS
+
+    };
 
     struct Driver : public vm::AbstractPIODriver {
         Driver(Vm* vm) {
@@ -35,9 +51,8 @@ namespace vm::cmos {
             } else if(port == (base + data)) {
                 ram[address] = value;
 
-                print("cmos: Write ram[{:#x}] = {:#x}\n", (uint16_t)address, (uint16_t)value);
-
-                address = 0xD; // According to wiki.osdev.org/CMOS
+                if(!reg_is_implemented(address))
+                    print("cmos: Unhandled Write ram[{:#x}] = {:#x}\n", (uint16_t)address, (uint16_t)value);
             } else {
                 print("cmos: Unhandled CMOS write: {:#x} <- {:#x}\n", port, value);
             }
@@ -49,9 +64,8 @@ namespace vm::cmos {
             } else if(port == (base + data)) {
                 auto ret = ram[address];
 
-                print("cmos: Read ram[{:#x}] = {:#x}\n", (uint16_t)address, (uint16_t)ret);
-
-                address = 0xD;
+                if(!reg_is_implemented(address))
+                    print("cmos: Unhandled Read ram[{:#x}] = {:#x}\n", (uint16_t)address, (uint16_t)ret);
 
                 return ret;
             } else {
@@ -64,6 +78,13 @@ namespace vm::cmos {
         void write(uint8_t i, uint8_t v) { ram[i] = v; }
 
         private:
+        bool reg_is_implemented(uint8_t reg) {
+            for(auto i : implemented_regs)
+                if(i == reg)
+                    return true;
+            return false;
+        }
+
         uint8_t address;
         bool nmi;
 

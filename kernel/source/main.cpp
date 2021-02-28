@@ -220,6 +220,12 @@ void kernel_main(const stivale2_struct* info) {
         cmos_dev->write(vm::cmos::cmos_bootflag2, (3 << 4) | (2 << 0));
 
         cmos_dev->write(vm::cmos::cmos_ap_count, 0); // Currently we only support the BSP, no APs
+
+
+        cmos_dev->write(vm::cmos::rtc_day, 28); // TODO: Don't hardcode this
+        cmos_dev->write(vm::cmos::rtc_month, 2);
+        cmos_dev->write(vm::cmos::rtc_year, 21);
+        cmos_dev->write(vm::cmos::rtc_century, 20);
     }
     
     auto* pci_host_bridge = new vm::pci::HostBridge{};
