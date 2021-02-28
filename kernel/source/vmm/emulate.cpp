@@ -224,7 +224,7 @@ void vm::emulate::emulate_instruction(vm::VCPU* vcpu, std::pair<uintptr_t, size_
 
         case 0xA1: { // MOV {AX, EAX}, moffs{16, 32}
             auto src = readN(address_size);
-            auto v = driver->mmio_read(src, operand_size);
+            auto v = driver->mmio_read(segment->base + src, operand_size);
             write_r64(regs, vm::emulate::r64::Rax, v, operand_size);
             done = true;
             break;
@@ -233,7 +233,7 @@ void vm::emulate::emulate_instruction(vm::VCPU* vcpu, std::pair<uintptr_t, size_
         case 0xA3: { // MOV moffs{16, 32}, {AX, EAX}
             auto dst = readN(address_size);
             auto v = read_r64(regs, vm::emulate::r64::Rax, operand_size);
-            driver->mmio_write(dst, v, operand_size);
+            driver->mmio_write(segment->base + dst, v, operand_size);
             done = true;
             break;
         }
@@ -290,7 +290,7 @@ void vm::emulate::emulate_instruction(vm::VCPU* vcpu, std::pair<uintptr_t, size_
                 dst += read32();
 
                 auto v = instruction[++i];
-                driver->mmio_write(dst, v, 1);
+                driver->mmio_write(segment->base + dst, v, 1);
             } else {
                 PANIC("TODO");
             }

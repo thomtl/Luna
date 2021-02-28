@@ -22,63 +22,59 @@ namespace vm::q35::lpc {
 
     constexpr uint8_t root_complex_base = 0xF0;
 
-    struct Driver : public vm::pci::AbstractPCIDriver {
-        Driver(vm::Vm* vm, vm::q35::acpi::Driver* acpi_dev): vm{vm}, acpi_dev{acpi_dev} {
-            space.header.vendor_id = 0x8086;
-            space.header.device_id = 0x2918;
-
-            space.header.command = (1 << 2) | (1 << 1) | (1 << 0);
-            space.header.status = 0x210;
-
-            space.header.revision = 2;
-
-            space.header.class_id = 6;
-            space.header.subclass = 1; // PCI-to-ISA Bridge
-            space.header.prog_if = 0;
-
-            space.header.header_type = (1 << 7); // Multifunction
-
-            space.header.capabilities = cap_base;
-
-            space.data8[cap_base] = 9; // Vendor Specific
-            space.data8[cap_base + 1] = 0; // No Other Caps
-            space.data8[cap_base + 2] = 0xC;
-            space.data8[cap_base + 3] = 0x10; // Feature Detection Cap
-            space.data32[(cap_base + 4) / 4] = 0; // Feature low dword, no fancy features supported
-            space.data32[(cap_base + 8) / 4] = 0; // Feature high dword
-
-            space.data32[pmbase / 4] = 1; // Bit0 is hardwired to 1 to indicate PIO space
-            space.data8[acpi_cntl] = 0;
-
-            space.data8[pirq_a_base] = 0x80; // Default PIRQ Values
-            space.data8[pirq_a_base + 1] = 0x80;
-            space.data8[pirq_a_base + 2] = 0x80;
-            space.data8[pirq_a_base + 3] = 0x80;
-            space.data8[pirq_b_base] = 0x80;
-            space.data8[pirq_b_base + 1] = 0x80;
-            space.data8[pirq_b_base + 2] = 0x80;
-            space.data8[pirq_b_base + 3] = 0x80;
-
-            space.data32[root_complex_base / 4] = 0;
-        }
-
-        void register_pci_driver(vm::pci::HostBridge* bus) {
+    struct Driver : pci::PCIDriver {
+        Driver(vm::Vm* vm, vm::pci::HostBridge* bus, vm::q35::acpi::Driver* acpi_dev): PCIDriver{vm}, vm{vm}, acpi_dev{acpi_dev} {
             bus->register_pci_driver(pci::DeviceID{0, 0, 31, 0}, this);
+
+            pci_space.header.vendor_id = 0x8086;
+            pci_space.header.device_id = 0x2918;
+
+            pci_space.header.command = (1 << 2) | (1 << 1) | (1 << 0);
+            pci_space.header.status = 0x210;
+
+            pci_space.header.revision = 2;
+
+            pci_space.header.class_id = 6;
+            pci_space.header.subclass = 1; // PCI-to-ISA Bridge
+            pci_space.header.prog_if = 0;
+
+            pci_space.header.header_type = (1 << 7); // Multifunction
+
+            pci_space.header.capabilities = cap_base;
+
+            pci_space.data8[cap_base] = 9; // Vendor Specific
+            pci_space.data8[cap_base + 1] = 0; // No Other Caps
+            pci_space.data8[cap_base + 2] = 0xC;
+            pci_space.data8[cap_base + 3] = 0x10; // Feature Detection Cap
+            pci_space.data32[(cap_base + 4) / 4] = 0; // Feature low dword, no fancy features supported
+            pci_space.data32[(cap_base + 8) / 4] = 0; // Feature high dword
+
+            pci_space.data32[pmbase / 4] = 1; // Bit0 is hardwired to 1 to indicate PIO space
+            pci_space.data8[acpi_cntl] = 0;
+
+            pci_space.data8[pirq_a_base] = 0x80; // Default PIRQ Values
+            pci_space.data8[pirq_a_base + 1] = 0x80;
+            pci_space.data8[pirq_a_base + 2] = 0x80;
+            pci_space.data8[pirq_a_base + 3] = 0x80;
+            pci_space.data8[pirq_b_base] = 0x80;
+            pci_space.data8[pirq_b_base + 1] = 0x80;
+            pci_space.data8[pirq_b_base + 2] = 0x80;
+            pci_space.data8[pirq_b_base + 3] = 0x80;
+
+            pci_space.data32[root_complex_base / 4] = 0;
         }
 
-        void pci_write([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint32_t value, uint8_t size) {
+        void pci_handle_write(uint16_t reg, uint32_t value, uint8_t size) {
             auto do_write = [&] {
                 switch (size) {
-                    case 1: space.data8[reg] = value; break;
-                    case 2: space.data16[reg / 2] = value; break;
-                    case 4: space.data32[reg / 4] = value; break;
+                    case 1: pci_space.data8[reg] = value; break;
+                    case 2: pci_space.data16[reg / 2] = value; break;
+                    case 4: pci_space.data32[reg / 4] = value; break;
                     default: PANIC("Unknown PCI Access size");
                 }
             };
             
-            if(ranges_overlap(reg, size, 0, sizeof(pci::ConfigSpaceHeader)))
-                pci_update(reg, size, value);
-            else if(ranges_overlap(reg, size, pirq_a_base, pirq_a_len) || ranges_overlap(reg, size, pirq_b_base, pirq_b_len)) {
+            if(ranges_overlap(reg, size, pirq_a_base, pirq_a_len) || ranges_overlap(reg, size, pirq_b_base, pirq_b_len)) {
                 do_write();
                 pirq_update();
             } else if(ranges_overlap(reg, size, pmbase, 4)) {
@@ -94,73 +90,24 @@ namespace vm::q35::lpc {
                 print("q35::lpc: Unhandled PCI write, reg: {:#x}, value: {:#x}\n", reg, value);
         }
 
-        uint32_t pci_read([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint8_t size) {
-            uint32_t ret = 0;
-            switch (size) {
-                case 1: ret = space.data8[reg]; break;
-                case 2: ret = space.data16[reg / 2]; break;
-                case 4: ret = space.data32[reg / 4]; break;
-                default: PANIC("Unknown PCI Access size");
-            }
+        uint32_t pci_handle_read(uint16_t reg, uint8_t size) {
+            print("q35::lpc: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
 
-            if(ranges_overlap(reg, size, 0, sizeof(pci::ConfigSpaceHeader)))
-                ; // Nothing special to do here
-            else
-                print("q35::lpc: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
-
-            return ret;
+            return 0;
         }
 
-        // TODO: Abstract this to common class
-        void pci_update(uint16_t reg, uint8_t size, uint32_t value) {
-            // TODO: This is horrible and broken and horrible
-            auto handle_bar = [&](uint16_t bar) {
-                if(reg != bar)
-                    return false;
-                
-                ASSERT(size == 4); // Please don't tell me anyone does unaligned BAR r/w
-                if(value == 0xFFFF'FFFF) // Do stupid size thing
-                    space.data32[reg / 4] = 0; // We don't decode any bits
-                else
-                    space.data32[reg / 4] = value;
-
-                return true;
-            };
-
-            if(handle_bar(0x10)) // BAR0
-                return;
-            if(handle_bar(0x14)) // BAR1
-                return;
-            if(handle_bar(0x18)) // BAR2
-                return;
-            if(handle_bar(0x1C)) // BAR3
-                return;
-            if(handle_bar(0x20)) // BAR4
-                return;
-            if(handle_bar(0x24)) // BAR5
-                return;
-            if(reg == 0x30) {
-                space.data32[reg / 4] = 0; // No Option ROM
-                return;
-            }
-
-            switch (size) {
-                case 1: space.data8[reg] = value; break;
-                case 2: space.data16[reg / 2] = value; break;
-                case 4: space.data32[reg / 4] = value; break;
-                default: PANIC("Unknown PCI Access size");
-            }
+        void pci_update_bars() {
+            // We don't do any BARs yet
         }
-
 
         void pirq_update() {
             // TODO: Handle PIRQ Writes somehow
         }
 
         void pmbase_update() {
-            space.data32[pmbase / 4] |= 1; // Bit0 is hardwired to 1
+            pci_space.data32[pmbase / 4] |= 1; // Bit0 is hardwired to 1
 
-            acpi_pmbase = space.data32[pmbase / 4] & ~1;
+            acpi_pmbase = pci_space.data32[pmbase / 4] & ~1;
         }
 
         void acpi_cntl_update() {
@@ -175,16 +122,16 @@ namespace vm::q35::lpc {
                 [0b111] = 0xFF,
             };
 
-            acpi_enable = (space.data8[acpi_cntl] >> 7) & 1;
-            sci = sci_map[space.data8[acpi_cntl] & 0x7];
+            acpi_enable = (pci_space.data8[acpi_cntl] >> 7) & 1;
+            sci = sci_map[pci_space.data8[acpi_cntl] & 0x7];
 
             print("q35::lpc: SCI: {} ACPI Decode: {} at IO: {:#x}\n", sci, acpi_enable, acpi_pmbase);
             acpi_dev->update(acpi_enable, acpi_pmbase);
         }
 
         void root_complex_base_update() {
-            root_complex_enable = (space.data32[root_complex_base / 4] & 1);
-            root_complex_addr = (space.data32[root_complex_base / 4] >> 13) << 13;
+            root_complex_enable = (pci_space.data32[root_complex_base / 4] & 1);
+            root_complex_addr = (pci_space.data32[root_complex_base / 4] >> 13) << 13;
 
             print("q35::lpc: Root Complex: {}, Base: {:#x}, TODO\n", root_complex_enable, root_complex_addr);
         }
@@ -197,7 +144,6 @@ namespace vm::q35::lpc {
         bool root_complex_enable;
         uint32_t root_complex_addr;
 
-        pci::ConfigSpace space;
         vm::Vm* vm;
         vm::q35::acpi::Driver* acpi_dev;
     };

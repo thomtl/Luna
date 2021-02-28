@@ -39,7 +39,7 @@
 #include <Luna/vmm/drivers/pci/ecam.hpp>
 #include <Luna/vmm/drivers/pci/hotplug.hpp>
 
-#include <Luna/vmm/drivers/q35/q35_dram.hpp>
+#include <Luna/vmm/drivers/q35/dram.hpp>
 #include <Luna/vmm/drivers/q35/lpc.hpp>
 #include <Luna/vmm/drivers/q35/acpi.hpp>
 #include <Luna/vmm/drivers/q35/smi.hpp>
@@ -244,8 +244,10 @@ void kernel_main(const stivale2_struct* info) {
     auto* nvme_dev = new vm::nvme::Driver{&vm, pci_host_bridge, 16, 0, file};
     (void)nvme_dev;
 
-    auto* bga_dev = new vm::gpu::bga::Driver{&vm, pci_host_bridge, 1};
-    bga_dev->set_option_rom(vfs::get_vfs().open("A:/luna/vgabios.bin"));
+    auto* vgabios = vfs::get_vfs().open("A:/luna/vgabios.bin");
+    ASSERT(vgabios);
+    auto* bga_dev = new vm::gpu::bga::Driver{&vm, pci_host_bridge, vgabios, 1};
+    (void)bga_dev;
 
     auto* pci_hotplug = new vm::pci::hotplug::Driver{};
     pci_hotplug->register_pio_driver(&vm);
@@ -267,8 +269,8 @@ void kernel_main(const stivale2_struct* info) {
 
     auto* acpi_dev = new vm::q35::acpi::Driver{&vm, smi_dev};
 
-    auto* lpc_dev = new vm::q35::lpc::Driver{&vm, acpi_dev};
-    lpc_dev->register_pci_driver(pci_host_bridge);
+    auto* lpc_dev = new vm::q35::lpc::Driver{&vm, pci_host_bridge, acpi_dev};
+    (void)lpc_dev;
 
     auto* pic_dev = new vm::irqs::pic::Driver{};
     pic_dev->register_pio_driver(&vm);

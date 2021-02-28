@@ -5,7 +5,7 @@
 #include <Luna/vmm/vm.hpp>
 
 #include <Luna/misc/log.hpp>
-#include <Luna/vmm/drivers/pci/pci.hpp>
+#include <Luna/vmm/drivers/pci/pci_driver.hpp>
 
 #include <Luna/fs/vfs.hpp>
 
@@ -102,25 +102,25 @@ namespace vm::nvme {
         } lbaf[16];
     };
 
-    struct Driver : public vm::AbstractMMIODriver, public vm::pci::AbstractPCIDriver {
-        Driver(Vm* vm, pci::HostBridge* bridge, uint8_t slot, uint8_t func, vfs::File* file): vm{vm}, file{file} {
+    struct Driver : vm::pci::PCIDriver, public vm::AbstractMMIODriver {
+        Driver(Vm* vm, pci::HostBridge* bridge, uint8_t slot, uint8_t func, vfs::File* file): PCIDriver{vm}, vm{vm}, file{file} {
             bridge->register_pci_driver(pci::DeviceID{0, 0, slot, func}, this);
 
-            space.header.vendor_id = 0x8086;
-            space.header.device_id = 0xF1A5; // Intel SSD 600P Series
-            space.header.revision = 3;
+            pci_space.header.vendor_id = 0x8086;
+            pci_space.header.device_id = 0xF1A5; // Intel SSD 600P Series
+            pci_space.header.revision = 3;
 
-            space.header.subsystem_vendor_id = 0x8086;
-            space.header.subsystem_device_id = 0x390A;
+            pci_space.header.subsystem_vendor_id = 0x8086;
+            pci_space.header.subsystem_device_id = 0x390A;
 
-            space.header.class_id = 1; // Storage
-            space.header.subclass = 8; // NVMe
-            space.header.prog_if = 2; // NVMe IO Controller
+            pci_space.header.class_id = 1; // Storage
+            pci_space.header.subclass = 8; // NVMe
+            pci_space.header.prog_if = 2; // NVMe IO Controller
 
             if(func > 0)
-                space.header.header_type = 0x80;
-            
-            space.header.bar[0] = 2 << 1; // Non-prefetchable, 64bit, MMIO
+                pci_space.header.header_type = 0x80;
+
+            pci_init_bar(0, bar_size, true, true); // MMIO, 64bit
         }
 
         void register_mmio_driver([[maybe_unused]] Vm* vm) { }
@@ -200,102 +200,21 @@ namespace vm::nvme {
             return 0;
         }
 
-        void pci_write([[maybe_unused]] const pci::DeviceID dev, uint16_t reg, uint32_t value, uint8_t size) {
-            /*auto do_write = [&] {
-                switch (size) {
-                    case 1: space.data8[reg] = value; break;
-                    case 2: space.data16[reg / 2] = value; break;
-                    case 4: space.data32[reg / 4] = value; break;
-                    default: PANIC("Unknown PCI Access size");
-                }
-            };*/
-            
-            if(ranges_overlap(reg, size, 0, sizeof(pci::ConfigSpaceHeader)))
-                pci_update(reg, size, value);
-            else
-                print("nvme: Unhandled PCI write, reg: {:#x}, value: {:#x}\n", reg, value);
+        void pci_handle_write(uint16_t reg, uint32_t value, [[maybe_unused]] uint8_t size) {
+            print("nvme: Unhandled PCI write, reg: {:#x}, value: {:#x}\n", reg, value);
         }
 
-        uint32_t pci_read([[maybe_unused]] const pci::DeviceID dev, uint16_t reg, uint8_t size) {
-            uint32_t ret = 0;
-            switch (size) {
-                case 1: ret = space.data8[reg]; break;
-                case 2: ret = space.data16[reg / 2]; break;
-                case 4: ret = space.data32[reg / 4]; break;
-                default: PANIC("Unknown PCI Access size");
-            }
+        uint32_t pci_handle_read(uint16_t reg, uint8_t size) {
+            print("nvme: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
 
-            if(ranges_overlap(reg, size, 0, sizeof(pci::ConfigSpaceHeader)))
-                ; // Nothing special to do here
-            else
-                print("nvme: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
-
-            return ret;
+            return 0;
         }
 
-        // TODO: Abstract this to common class
-        void pci_update(uint16_t reg, uint8_t size, uint32_t value) {
-            // TODO: This is horrible and broken and horrible
-            auto handle_bar = [&](uint16_t bar) {
-                if(reg != bar)
-                    return false;
-                
-                ASSERT(size == 4); // Please don't tell me anyone does unaligned BAR r/w
-                if(value == 0xFFFF'FFFF) { // Do stupid size thing
-                    if(bar == 0x10)
-                        space.data32[reg / 4] = (uint32_t)~(bar_size - 1);
-                    else if(bar == 0x14)
-                        space.data32[reg / 4] = ~0;
-                    else
-                        space.data32[reg / 4] = 0; // We don't decode any bits
-                } else
-                    space.data32[reg / 4] = value;
-
-                update_bar();
-
-                return true;
-            };
-
-            if(reg == 4) { // Command
-                auto old = space.header.command;
-                space.header.command = value;
-
-                if((old & (1 << 1)) != (value & (1 << 1)))
-                    update_bar();
-            }
-
-            if(handle_bar(0x10)) // BAR0
-                return;
-            if(handle_bar(0x14)) // BAR1
-                return;
-            if(handle_bar(0x18)) // BAR2
-                return;
-            if(handle_bar(0x1C)) // BAR3
-                return;
-            if(handle_bar(0x20)) // BAR4
-                return;
-            if(handle_bar(0x24)) // BAR5
-                return;
-            
-            if(reg == 0x30) {
-                space.data32[reg / 4] = 0; // No Option ROM
-                return;
-            }
-
-            switch (size) {
-                case 1: space.data8[reg] = value; break;
-                case 2: space.data16[reg / 2] = value; break;
-                case 4: space.data32[reg / 4] = value; break;
-                default: PANIC("Unknown PCI Access size");
-            }
-        }
-
-        private:
-        void update_bar() {
-            if(!(space.header.command & (1 << 1)))
+        void pci_update_bars() {
+            if(!(pci_space.header.command & (1 << 1)))
                 return;
 
-            uint64_t base = (space.header.bar[0] & ~0xF) | ((uint64_t)space.header.bar[1] << 32);
+            uint64_t base = (pci_space.header.bar[0] & ~0xF) | ((uint64_t)pci_space.header.bar[1] << 32);
             
             if(mmio_enabled)
                 vm->mmio_map[mmio_base] = {nullptr, 0};
@@ -305,6 +224,7 @@ namespace vm::nvme {
             mmio_enabled = true;
         }
 
+        private:
         void kick_queue(uint16_t qid, uint32_t value) {
             auto& queue = queues[qid];
             queue.sq_tail = value;
@@ -480,8 +400,6 @@ namespace vm::nvme {
 
             return true;
         }
-
-        pci::ConfigSpace space;
 
         bool mmio_enabled = false;
         uintptr_t mmio_base;
