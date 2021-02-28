@@ -12,7 +12,7 @@ namespace vm::pci::hotplug {
     constexpr uint16_t size = 0x10;
 
     struct Driver : public vm::AbstractPIODriver {
-        void register_pio_driver(Vm* vm) {
+        Driver(Vm* vm) {
             for(size_t i = 0; i < size; i++)
                 vm->pio_map[base + i] = this;
         }

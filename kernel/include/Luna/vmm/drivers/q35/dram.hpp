@@ -57,7 +57,9 @@ namespace vm::q35::dram {
     constexpr uint32_t c_smram_limit = 0xB'FFFF;
 
     struct Driver : vm::pci::PCIDriver {
-        Driver(vm::Vm* vm, pci::ecam::Driver* ecam): PCIDriver{vm}, ecam{ecam}, vm{vm} {
+        Driver(vm::Vm* vm, vm::pci::HostBridge* bus, pci::ecam::Driver* ecam): PCIDriver{vm}, ecam{ecam}, vm{vm} {
+            bus->register_pci_driver(vm::pci::DeviceID{0, 0, 0, 0}, this); // Bus 0, Slot 0, Func 0
+
             pci_space.header.vendor_id = 0x8086;
             pci_space.header.device_id = 0x29C0;
 
@@ -82,10 +84,6 @@ namespace vm::q35::dram {
             // Rest of the cap fields are 0
 
             pci_space.data8[smram] = 0x2;
-        }
-
-        void register_pci_driver(vm::pci::HostBridge* bus) {
-            bus->register_pci_driver(vm::pci::DeviceID{0, 0, 0, 0}, this); // Bus 0, Slot 0, Func 0
         }
 
         void pci_handle_write(uint16_t reg, uint32_t value, uint8_t size) {

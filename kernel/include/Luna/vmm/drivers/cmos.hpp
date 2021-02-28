@@ -20,7 +20,7 @@ namespace vm::cmos {
     constexpr uint8_t cmos_ap_count = 0x5f;
 
     struct Driver : public vm::AbstractPIODriver {
-        void register_pio_driver(Vm* vm) {
+        Driver(Vm* vm) {
             vm->pio_map[base + cmd] = this;
             vm->pio_map[base + data] = this;
 

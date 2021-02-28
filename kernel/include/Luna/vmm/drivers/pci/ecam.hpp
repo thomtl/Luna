@@ -30,14 +30,11 @@ namespace vm::pci::ecam {
     static_assert(sizeof(EcamAddress) == 8);
 
     struct Driver : public vm::AbstractMMIODriver {
-        Driver(uint16_t segment, HostBridge* bridge): segment{segment}, bridge{bridge}, curr_config{.base = 0, .size = 0, .bus_start = 0, .bus_end = 0, .enabled = false} {}
-
-        void register_mmio_driver(Vm* vm) {
-            this->vm = vm;
-        }
+        Driver(Vm* vm, HostBridge* bridge, uint16_t segment): vm{vm}, bridge{bridge}, segment{segment}, curr_config{.base = 0, .size = 0, .bus_start = 0, .bus_end = 0, .enabled = false} {}
 
         void update_region(const EcamConfig& config) {
-            vm->mmio_map[curr_config.base] = {nullptr, 0}; // Deregister old region
+            if(curr_config.enabled)
+                vm->mmio_map[curr_config.base] = {nullptr, 0}; // Deregister old region
 
             if(config.enabled)
                 vm->mmio_map[config.base] = {this, config.size};
@@ -87,10 +84,10 @@ namespace vm::pci::ecam {
             return id;
         }
 
-        uint16_t segment;
+        vm::Vm* vm;
         HostBridge* bridge;
 
+        uint16_t segment;
         EcamConfig curr_config;
-        vm::Vm* vm;
     };
 } // namespace vm::pci

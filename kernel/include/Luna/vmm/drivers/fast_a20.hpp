@@ -9,7 +9,7 @@ namespace vm::fast_a20 {
     constexpr uint16_t gate = 0x92;
 
     struct Driver : public vm::AbstractPIODriver {
-        void register_pio_driver(Vm* vm) {
+        Driver(Vm* vm) {
             vm->pio_map[gate] = this;
         }
 

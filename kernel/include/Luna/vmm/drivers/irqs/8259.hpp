@@ -19,13 +19,10 @@ namespace vm::irqs::pic {
     constexpr uint16_t elcr_slave = 0x4D1;
 
     struct Driver : public vm::AbstractPIODriver {
-        Driver() {
+        Driver(Vm* vm): vm{vm} {
             pics[0].elcr_mask = 0xF8;
             pics[1].elcr_mask = 0xDE;
-        }
 
-        void register_pio_driver(Vm* vm) {
-            this->vm = vm;
             vm->pio_map[master_base + cmd] = this;
             vm->pio_map[master_base + data] = this;
 

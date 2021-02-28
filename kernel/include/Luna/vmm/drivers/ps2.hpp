@@ -13,7 +13,7 @@ namespace vm::ps2 {
     constexpr uint8_t buffer_size = 16;
 
     struct Driver : public vm::AbstractPIODriver {
-        void register_pio_driver(Vm* vm) {
+        Driver(Vm* vm) {
             vm->pio_map[data] = this;
             vm->pio_map[cmd] = this;
         }

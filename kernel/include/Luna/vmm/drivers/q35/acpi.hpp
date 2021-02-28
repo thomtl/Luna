@@ -22,8 +22,6 @@ namespace vm::q35::acpi {
     struct Driver : public vm::AbstractPIODriver {
         Driver(vm::Vm* vm, vm::q35::smi::Driver* smi_dev): vm{vm}, smi_dev{smi_dev}, start_ns{::hpet::time_ns()} {}
 
-        void register_pio_driver([[maybe_unused]] Vm* vm) { }
-
         void update(bool enabled, uint16_t base) {
             if(this->enabled)
                 for(uint8_t i = 0; i < size; i++)

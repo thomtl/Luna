@@ -18,9 +18,7 @@ namespace vm::uart {
     constexpr uint8_t scratch_reg = 7;
 
     struct Driver : public vm::AbstractPIODriver {
-        Driver(uint16_t base, log::Logger* logger): base{base}, baud{3}, dlab{false}, logger{logger} {}
-
-        void register_pio_driver(Vm* vm) {
+        Driver(Vm* vm, uint16_t base, log::Logger* logger): base{base}, baud{3}, dlab{false}, logger{logger} {
             vm->pio_map[base + data_reg] = this;
             vm->pio_map[base + irq_enable_reg] = this;
             vm->pio_map[base + fifo_control_reg] = this;

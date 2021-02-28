@@ -192,11 +192,10 @@ void kernel_main(const stivale2_struct* info) {
         file->close();
     }
 
-    auto* e9_dev = new vm::e9::Driver{};
-    e9_dev->register_pio_driver(&vm);
+    auto* e9_dev = new vm::e9::Driver{&vm};
+    (void)e9_dev;
 
-    auto* cmos_dev = new vm::cmos::Driver{};
-    cmos_dev->register_pio_driver(&vm);
+    auto* cmos_dev = new vm::cmos::Driver{&vm};
 
     {
         auto size = himem_start + himem_size - (16 * 1024 * 1024); // TODO: Investigate this, seems to be what Seabios does
@@ -226,19 +225,19 @@ void kernel_main(const stivale2_struct* info) {
     auto* pci_host_bridge = new vm::pci::HostBridge{};
 
 
-    auto* a20_dev = new vm::fast_a20::Driver{};
-    a20_dev->register_pio_driver(&vm);
+    auto* a20_dev = new vm::fast_a20::Driver{&vm};
+    (void)a20_dev;
 
     auto* log_window = new gui::LogWindow{"VM Log"};
     gui::get_desktop().add_window(log_window);
-    auto* uart_dev = new vm::uart::Driver{0x3F8, log_window};
-    uart_dev->register_pio_driver(&vm);
+    auto* uart_dev = new vm::uart::Driver{&vm, 0x3F8, log_window};
+    (void)uart_dev;
 
-    auto* ps2_dev = new vm::ps2::Driver{};
-    ps2_dev->register_pio_driver(&vm);
+    auto* ps2_dev = new vm::ps2::Driver{&vm};
+    (void)ps2_dev;
 
-    auto* hpet_dev = new vm::hpet::Driver{};
-    hpet_dev->register_mmio_driver(&vm);
+    auto* hpet_dev = new vm::hpet::Driver{&vm};
+    (void)hpet_dev;
 
     auto* file = vfs::get_vfs().open("A:/disk.bin");
     auto* nvme_dev = new vm::nvme::Driver{&vm, pci_host_bridge, 16, 0, file};
@@ -249,31 +248,29 @@ void kernel_main(const stivale2_struct* info) {
     auto* bga_dev = new vm::gpu::bga::Driver{&vm, pci_host_bridge, vgabios, 1};
     (void)bga_dev;
 
-    auto* pci_hotplug = new vm::pci::hotplug::Driver{};
-    pci_hotplug->register_pio_driver(&vm);
+    auto* pci_hotplug = new vm::pci::hotplug::Driver{&vm};
+    (void)pci_hotplug;
 
-    auto* pci_pio_access = new vm::pci::pio_access::Driver{vm::pci::pio_access::default_base, 0, pci_host_bridge};
-    pci_pio_access->register_pio_driver(&vm);
+    auto* pci_pio_access = new vm::pci::pio_access::Driver{&vm, vm::pci::pio_access::default_base, 0, pci_host_bridge};
+    (void)pci_pio_access;
 
-    auto* pci_mmio_access = new vm::pci::ecam::Driver{0, pci_host_bridge};
-    pci_mmio_access->register_mmio_driver(&vm);
+    auto* pci_mmio_access = new vm::pci::ecam::Driver{&vm, pci_host_bridge, 0};
+    (void)pci_mmio_access;
 
-    auto* dram_dev = new vm::q35::dram::Driver{&vm, pci_mmio_access};
-    dram_dev->register_pci_driver(pci_host_bridge);
+    auto* dram_dev = new vm::q35::dram::Driver{&vm, pci_host_bridge, pci_mmio_access};
 
     vm.cpus[0].set(vm::VmCap::SMMEntryCallback, [](void* dram) { ((vm::q35::dram::Driver*)dram)->smm_enter(); }, dram_dev);
     vm.cpus[0].set(vm::VmCap::SMMLeaveCallback, [](void* dram) { ((vm::q35::dram::Driver*)dram)->smm_leave(); }, dram_dev);
 
-    auto* smi_dev = new vm::q35::smi::Driver{};
-    smi_dev->register_pio_driver(&vm);
+    auto* smi_dev = new vm::q35::smi::Driver{&vm};
 
     auto* acpi_dev = new vm::q35::acpi::Driver{&vm, smi_dev};
 
     auto* lpc_dev = new vm::q35::lpc::Driver{&vm, pci_host_bridge, acpi_dev};
     (void)lpc_dev;
 
-    auto* pic_dev = new vm::irqs::pic::Driver{};
-    pic_dev->register_pio_driver(&vm);
+    auto* pic_dev = new vm::irqs::pic::Driver{&vm};
+    (void)pic_dev;
     
     ASSERT(vm.cpus[0].run());
 

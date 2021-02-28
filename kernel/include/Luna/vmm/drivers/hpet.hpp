@@ -20,9 +20,7 @@ namespace vm::hpet {
     constexpr uint64_t clk_val = clk_period * fs_per_ns;
 
     struct Driver : public vm::AbstractMMIODriver {
-        void register_mmio_driver(Vm* vm) {
-            this->vm = vm;
-
+        Driver(Vm* vm): vm{vm} {
             vm->mmio_map[base] = {this, 0x1000};
         }
 
