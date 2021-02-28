@@ -71,6 +71,8 @@ main_sources = files(
     'source/net/ipv4.cpp',
     'source/net/udp.cpp',
 
+    'source/vmm/drivers/gpu/edid.cpp',
+    
     'source/vmm/emulate.cpp',
     'source/vmm/vm.cpp',
 

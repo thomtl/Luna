@@ -66,7 +66,7 @@ namespace gui {
     };
 
     struct LogWindow : public Widget, public log::Logger {
-        LogWindow(const char* title): window{{50, 50}, {706, 528}, title}, logger{{4, 8}, {87, 32}} {
+        LogWindow(const char* title): window{{25, 30}, {400, 700}, title}, logger{{4, 8}, {49, 42}} {
             window.add_widget(&logger);
         }
 

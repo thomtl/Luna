@@ -47,6 +47,8 @@
 #include <Luna/vmm/drivers/irqs/lapic.hpp>
 #include <Luna/vmm/drivers/irqs/8259.hpp>
 
+#include <Luna/vmm/drivers/gpu/bga.hpp>
+
 #include <Luna/gui/gui.hpp>
 #include <Luna/gui/log_window.hpp>
 
@@ -186,6 +188,8 @@ void kernel_main(const stivale2_struct* info) {
 
             vm.mm->map(block, himem_start + i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
         }
+
+        file->close();
     }
 
     auto* e9_dev = new vm::e9::Driver{};
@@ -240,6 +244,8 @@ void kernel_main(const stivale2_struct* info) {
     auto* nvme_dev = new vm::nvme::Driver{&vm, pci_host_bridge, 16, 0, file};
     (void)nvme_dev;
 
+    auto* bga_dev = new vm::gpu::bga::Driver{&vm, pci_host_bridge, 1};
+    bga_dev->set_option_rom(vfs::get_vfs().open("A:/luna/vgabios.bin"));
 
     auto* pci_hotplug = new vm::pci::hotplug::Driver{};
     pci_hotplug->register_pio_driver(&vm);

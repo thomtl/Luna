@@ -68,12 +68,14 @@ Modrm parse_modrm(uint8_t v) {
 
 
 
-void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_size], vm::RegisterState& regs, vm::AbstractMMIODriver* driver) {
+void vm::emulate::emulate_instruction(vm::VCPU* vcpu, std::pair<uintptr_t, size_t> mmio_region, uint8_t instruction[max_x86_instruction_size], vm::RegisterState& regs, vm::AbstractMMIODriver* driver) {
     ASSERT(!(regs.efer & (1 << 10)));
+    ASSERT(!(regs.cr0 & (1 << 31)));
     uint8_t default_operand_size = regs.cs.attrib.db ? 4 : 2;
     uint8_t other_operand_size = regs.cs.attrib.db ? 2 : 4;
     uint8_t address_size = default_operand_size, operand_size = default_operand_size;
     auto* segment = &get_sreg(regs, sreg::Ds);
+    bool rep = false;
 
     uint8_t i = 0;
     bool done = false;
@@ -102,6 +104,8 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
 
         case 0x66: operand_size = other_operand_size; break; // Operand Size Override
         case 0x67: address_size = other_operand_size; break; // Address Size Override
+        
+        case 0xF3: rep = true; break; // REP Prefix
         
         case 0x88: { // MOV r/m8, r8
             auto mod = parse_modrm(instruction[++i]);
@@ -191,7 +195,7 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
                     write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
                 }
             } else if(mod.mod == 1) {
-                if(mod.rm == 0b100 || mod.rm == 0b101)
+                if(mod.rm == 0b100)
                     PANIC("TODO");
                 else {
                     auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
@@ -199,6 +203,16 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
                     auto v = driver->mmio_read(segment->base + src, operand_size);
                     write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
                 }
+            } else if(mod.mod == 2) {
+                if(mod.rm == 0b100)
+                    PANIC("TODO");
+                else {
+                    auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+                    src += read32();
+                    auto v = driver->mmio_read(segment->base + src, operand_size);
+                    write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
+                }
+
             } else {
                 print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
                 PANIC("Unknown");
@@ -220,6 +234,67 @@ void vm::emulate::emulate_instruction(uint8_t instruction[max_x86_instruction_si
             auto dst = readN(address_size);
             auto v = read_r64(regs, vm::emulate::r64::Rax, operand_size);
             driver->mmio_write(dst, v, operand_size);
+            done = true;
+            break;
+        }
+
+        case 0xA5: { // MOVS
+            auto do_mov = [&]() {
+                auto src = read_r64(regs, vm::emulate::r64::Rsi, address_size);
+                auto dst = read_r64(regs, vm::emulate::r64::Rdi, address_size);
+
+                uint64_t v = 0;
+                if(ranges_overlap(segment->base + src, operand_size, mmio_region.first, mmio_region.second))
+                    v = driver->mmio_read(segment->base + src, operand_size);
+                else
+                    vcpu->dma_read(segment->base + src, {(uint8_t*)&v, operand_size});
+            
+                if(ranges_overlap(regs.es.base + dst, operand_size, mmio_region.first, mmio_region.second))
+                    driver->mmio_write(regs.es.base + dst, v, operand_size);
+                else
+                    vcpu->dma_write(regs.es.base + dst, {(uint8_t*)&v, operand_size});
+
+                write_r64(regs, vm::emulate::r64::Rsi, src + operand_size, address_size);
+                write_r64(regs, vm::emulate::r64::Rdi, dst + operand_size, address_size);
+            };
+
+            if(!rep) {
+                do_mov();
+            } else {
+                size_t count = read_r64(regs, vm::emulate::r64::Rcx, address_size);
+                bool dir = (regs.rflags >> 10) & 1;
+
+                if(!dir) {
+                    for(size_t i = 0; i < count; i++)
+                        do_mov();
+
+                    regs.rcx = 0;
+                } else {
+                    PANIC("TODO");
+                }
+            }
+
+            done = true;
+            break;
+        }
+
+        case 0xC6: { // MOV r/m8, imm8
+            auto mod = parse_modrm(instruction[++i]);
+
+            if(mod.mod == 0) {
+                PANIC("TODO");
+            } else if(mod.mod == 0b01) {
+                PANIC("TODO");
+            } else if(mod.mod == 0b10) {
+                auto dst = read_r64(regs, (vm::emulate::r64)mod.reg, address_size);
+                dst += read32();
+
+                auto v = instruction[++i];
+                driver->mmio_write(dst, v, 1);
+            } else {
+                PANIC("TODO");
+            }
+
             done = true;
             break;
         }

@@ -1,5 +1,17 @@
 bits 16
 
+
+
+mov al, ':'
+mov ah, 0xE
+int 0x10
+
+mov al, ')'
+int 0x10
+
+mov al, 10
+int 0x10
+
 mov al, ':'
 mov dx, 0x3F8
 out dx, al
@@ -9,6 +21,8 @@ out dx, al
 
 mov al, 10
 out dx, al
+
+
 
 vmmcall
 

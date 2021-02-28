@@ -17,6 +17,7 @@ namespace gui {
     using Vec2i = Vec2<int32_t>;
 
     union Colour {
+        constexpr Colour(uint32_t v): raw{v} {}
         constexpr Colour(uint8_t r, uint8_t g, uint8_t b): b{b}, g{g}, r{r}, a{255} {}
         constexpr Colour(uint8_t r, uint8_t g, uint8_t b, uint8_t a): b{b}, g{g}, r{r}, a{a} {}
         uint32_t raw;
