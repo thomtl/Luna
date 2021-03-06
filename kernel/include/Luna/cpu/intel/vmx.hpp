@@ -78,6 +78,7 @@ namespace vmx {
     };
     
     enum class VMEntryControls : uint32_t {
+        IA32eModeGuest = (1 << 9),
         LoadIA32PAT = (1 << 14),
         LoadIA32EFER = (1 << 15)
     };

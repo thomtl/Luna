@@ -112,23 +112,23 @@ bool vm::VCPU::run() {
 
             auto grip = regs.cs.base + regs.rip;
 
-            auto emulate_mmio = [&](AbstractMMIODriver* driver, uintptr_t base, size_t size) {
+            auto emulate_mmio = [&](AbstractMMIODriver* driver, uintptr_t gpa, uintptr_t base, size_t size) {
                 uint8_t instruction[max_x86_instruction_size];
-                dma_read(grip, {instruction, 15});
+                mem_read(grip, {instruction, 15});
 
-                vm::emulate::emulate_instruction(this, {base, size}, instruction, regs, driver);
+                vm::emulate::emulate_instruction(this, gpa, {base, size}, instruction, regs, driver);
                 set_regs(regs);
             };
 
             if((exit.mmu.gpa & ~0xFFF) == (apicbase & ~0xFFF)) {
-                emulate_mmio(&lapic, apicbase & ~0xFFF, 0x1000);
+                emulate_mmio(&lapic, exit.mmu.gpa, apicbase & ~0xFFF, 0x1000);
                 goto did_mmio;
             }
             
             for(const auto [base, driver] : vm->mmio_map) {
                 if(exit.mmu.gpa >= base && exit.mmu.gpa <= (base + driver.second))  {
                     // Access is in an MMIO region
-                    emulate_mmio(driver.first, base, driver.second);
+                    emulate_mmio(driver.first, exit.mmu.gpa, base, driver.second);
                     goto did_mmio;
                 }
             }
