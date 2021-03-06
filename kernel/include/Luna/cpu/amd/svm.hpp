@@ -198,8 +198,8 @@ namespace svm {
         bool run(vm::VmExit& exit);
 
         void set(vm::VmCap cap, bool value);
-        void get_regs(vm::RegisterState& regs) const;
-        void set_regs(const vm::RegisterState& regs);
+        void get_regs(vm::RegisterState& regs, uint64_t flags) const;
+        void set_regs(const vm::RegisterState& regs, uint64_t flags);
         simd::Context& get_guest_simd_context() { return guest_simd; }
 
         void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0);

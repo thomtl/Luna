@@ -105,13 +105,21 @@ namespace vm {
     };
 
     enum class VmCap { FullPIOAccess, SMMEntryCallback, SMMLeaveCallback };
+    namespace VmRegs {
+        enum {
+            General = (1 << 0),
+            Segment = (1 << 1),
+            Control = (1 << 2)
+        };
+    } // namespace VmRegs
+    
 
     struct AbstractVm {
         virtual ~AbstractVm() {}
 
         virtual void set(VmCap cap, bool v) = 0;
-        virtual void get_regs(vm::RegisterState& regs) const = 0;
-        virtual void set_regs(const vm::RegisterState& regs) = 0;
+        virtual void get_regs(vm::RegisterState& regs, uint64_t flags) const = 0;
+        virtual void set_regs(const vm::RegisterState& regs, uint64_t flags) = 0;
         
         virtual simd::Context& get_guest_simd_context() = 0;
 
@@ -130,8 +138,8 @@ namespace vm {
         void set(VmCap cap, bool value);
         void set(VmCap cap, void (*fn)(void*), void* userptr);
         
-        void get_regs(vm::RegisterState& regs) const;
-        void set_regs(const vm::RegisterState& regs);
+        void get_regs(vm::RegisterState& regs, uint64_t flags = VmRegs::General | VmRegs::Segment | VmRegs::Control) const;
+        void set_regs(const vm::RegisterState& regs, uint64_t flags = VmRegs::General | VmRegs::Segment | VmRegs::Control);
 
         void enter_smm();
         void handle_rsm();

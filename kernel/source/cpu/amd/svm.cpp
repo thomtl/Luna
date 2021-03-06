@@ -307,133 +307,144 @@ bool svm::Vm::run(vm::VmExit& exit) {
     }
 }
 
-void svm::Vm::get_regs(vm::RegisterState& regs) const {
-    regs.rax = vmcb->rax;
+void svm::Vm::get_regs(vm::RegisterState& regs, uint64_t flags) const {
+    if(flags & vm::VmRegs::General) {
+        regs.rax = vmcb->rax;
 
-    regs.rbx = guest_gprs.rbx;
-    regs.rcx = guest_gprs.rcx;
-    regs.rdx = guest_gprs.rdx;
-    regs.rsi = guest_gprs.rsi;
-    regs.rdi = guest_gprs.rdi;
-    regs.rbp = guest_gprs.rbp;
+        regs.rbx = guest_gprs.rbx;
+        regs.rcx = guest_gprs.rcx;
+        regs.rdx = guest_gprs.rdx;
+        regs.rsi = guest_gprs.rsi;
+        regs.rdi = guest_gprs.rdi;
+        regs.rbp = guest_gprs.rbp;
 
-    regs.r8 = guest_gprs.r8;
-    regs.r9 = guest_gprs.r9;
-    regs.r10 = guest_gprs.r10;
-    regs.r11 = guest_gprs.r11;
-    regs.r12 = guest_gprs.r12;
-    regs.r13 = guest_gprs.r13;
-    regs.r14 = guest_gprs.r14;
-    regs.r15 = guest_gprs.r15;
+        regs.r8 = guest_gprs.r8;
+        regs.r9 = guest_gprs.r9;
+        regs.r10 = guest_gprs.r10;
+        regs.r11 = guest_gprs.r11;
+        regs.r12 = guest_gprs.r12;
+        regs.r13 = guest_gprs.r13;
+        regs.r14 = guest_gprs.r14;
+        regs.r15 = guest_gprs.r15;
 
-    regs.rsp = vmcb->rsp;
-    regs.rip = vmcb->rip;
-    regs.rflags = vmcb->rflags;
+        regs.rsp = vmcb->rsp;
+        regs.rip = vmcb->rip;
+        regs.rflags = vmcb->rflags;
 
-    regs.dr0 = guest_gprs.dr0;
-    regs.dr1 = guest_gprs.dr1;
-    regs.dr2 = guest_gprs.dr2;
-    regs.dr3 = guest_gprs.dr3;
-    regs.dr6 = vmcb->dr6;
-    regs.dr7 = vmcb->dr7;
-
-    regs.cr0 = vmcb->cr0;
-    regs.cr3 = vmcb->cr3;
-    regs.cr4 = vmcb->cr4;
-
-    regs.efer = vmcb->efer;
+        regs.dr0 = guest_gprs.dr0;
+        regs.dr1 = guest_gprs.dr1;
+        regs.dr2 = guest_gprs.dr2;
+        regs.dr3 = guest_gprs.dr3;
+        regs.dr6 = vmcb->dr6;
+        regs.dr7 = vmcb->dr7;
+    }
     
-    #define GET_TABLE(table) \
-        regs.table.base = vmcb->table.base; \
-        regs.table.limit = vmcb->table.limit
+    if(flags & vm::VmRegs::Control) {
+        regs.cr0 = vmcb->cr0;
+        regs.cr3 = vmcb->cr3;
+        regs.cr4 = vmcb->cr4;
 
-    GET_TABLE(gdtr);
-    GET_TABLE(idtr);
+        regs.efer = vmcb->efer;
+    }
+    
+    if(flags & vm::VmRegs::Segment) {
+        #define GET_TABLE(table) \
+            regs.table.base = vmcb->table.base; \
+            regs.table.limit = vmcb->table.limit
 
-    #define GET_SEGMENT(segment) \
-        regs.segment.base = vmcb->segment.base; \
-        regs.segment.limit = vmcb->segment.limit; \
-        regs.segment.selector = vmcb->segment.selector; \
-        regs.segment.attrib.type = vmcb->segment.attrib & 0xF; \
-        regs.segment.attrib.s = (vmcb->segment.attrib >> 4) & 1; \
-        regs.segment.attrib.dpl = (vmcb->segment.attrib >> 5) & 0b11; \
-        regs.segment.attrib.present = (vmcb->segment.attrib >> 7) & 1; \
-        regs.segment.attrib.avl = (vmcb->segment.attrib >> 8) & 1; \
-        regs.segment.attrib.l = (vmcb->segment.attrib >> 9) & 1; \
-        regs.segment.attrib.db = (vmcb->segment.attrib >> 10) & 1; \
-        regs.segment.attrib.g = (vmcb->segment.attrib >> 11) & 1
+        GET_TABLE(gdtr);
+        GET_TABLE(idtr);
 
-    GET_SEGMENT(cs);
-    GET_SEGMENT(ds);
-    GET_SEGMENT(ss);
-    GET_SEGMENT(es);
-    GET_SEGMENT(fs);
-    GET_SEGMENT(gs);
+        #define GET_SEGMENT(segment) \
+            regs.segment.base = vmcb->segment.base; \
+            regs.segment.limit = vmcb->segment.limit; \
+            regs.segment.selector = vmcb->segment.selector; \
+            regs.segment.attrib.type = vmcb->segment.attrib & 0xF; \
+            regs.segment.attrib.s = (vmcb->segment.attrib >> 4) & 1; \
+            regs.segment.attrib.dpl = (vmcb->segment.attrib >> 5) & 0b11; \
+            regs.segment.attrib.present = (vmcb->segment.attrib >> 7) & 1; \
+            regs.segment.attrib.avl = (vmcb->segment.attrib >> 8) & 1; \
+            regs.segment.attrib.l = (vmcb->segment.attrib >> 9) & 1; \
+            regs.segment.attrib.db = (vmcb->segment.attrib >> 10) & 1; \
+            regs.segment.attrib.g = (vmcb->segment.attrib >> 11) & 1
 
-    GET_SEGMENT(ldtr);
-    GET_SEGMENT(tr);
+        GET_SEGMENT(cs);
+        GET_SEGMENT(ds);
+        GET_SEGMENT(ss);
+        GET_SEGMENT(es);
+        GET_SEGMENT(fs);
+        GET_SEGMENT(gs);
 
+        GET_SEGMENT(ldtr);
+        GET_SEGMENT(tr);
+    }
 }
 
-void svm::Vm::set_regs(const vm::RegisterState& regs) {
-    vmcb->rax = regs.rax;
+void svm::Vm::set_regs(const vm::RegisterState& regs, uint64_t flags) {
+    if(flags & vm::VmRegs::General) {
+        vmcb->rax = regs.rax;
 
-    guest_gprs.rbx = regs.rbx;
-    guest_gprs.rcx = regs.rcx;
-    guest_gprs.rdx = regs.rdx;
-    guest_gprs.rsi = regs.rsi;
-    guest_gprs.rdi = regs.rdi;
-    guest_gprs.rbp = regs.rbp;
+        guest_gprs.rbx = regs.rbx;
+        guest_gprs.rcx = regs.rcx;
+        guest_gprs.rdx = regs.rdx;
+        guest_gprs.rsi = regs.rsi;
+        guest_gprs.rdi = regs.rdi;
+        guest_gprs.rbp = regs.rbp;
 
-    guest_gprs.r8 = regs.r8;
-    guest_gprs.r9 = regs.r9;
-    guest_gprs.r10 = regs.r10;
-    guest_gprs.r11 = regs.r11;
-    guest_gprs.r12 = regs.r12;
-    guest_gprs.r13 = regs.r13;
-    guest_gprs.r14 = regs.r14;
-    guest_gprs.r15 = regs.r15;
+        guest_gprs.r8 = regs.r8;
+        guest_gprs.r9 = regs.r9;
+        guest_gprs.r10 = regs.r10;
+        guest_gprs.r11 = regs.r11;
+        guest_gprs.r12 = regs.r12;
+        guest_gprs.r13 = regs.r13;
+        guest_gprs.r14 = regs.r14;
+        guest_gprs.r15 = regs.r15;
 
-    vmcb->rsp = regs.rsp;
-    vmcb->rip = regs.rip;
-    vmcb->rflags = regs.rflags;
+        vmcb->rsp = regs.rsp;
+        vmcb->rip = regs.rip;
+        vmcb->rflags = regs.rflags;
 
-    guest_gprs.dr0 = regs.dr0;
-    guest_gprs.dr1 = regs.dr1;
-    guest_gprs.dr2 = regs.dr2;
-    guest_gprs.dr3 = regs.dr3;
-    vmcb->dr6 = regs.dr6;
-    vmcb->dr7 = regs.dr7;
-
-    vmcb->cr0 = regs.cr0;
-    vmcb->cr3 = regs.cr3;
-    vmcb->cr4 = regs.cr4;
-
-    vmcb->efer = regs.efer;
+        guest_gprs.dr0 = regs.dr0;
+        guest_gprs.dr1 = regs.dr1;
+        guest_gprs.dr2 = regs.dr2;
+        guest_gprs.dr3 = regs.dr3;
+        vmcb->dr6 = regs.dr6;
+        vmcb->dr7 = regs.dr7;
+    }
     
-    #define SET_TABLE(table) \
-        vmcb->table.base = regs.table.base; \
-        vmcb->table.limit = regs.table.limit
+    if(flags & vm::VmRegs::Control) {
+        vmcb->cr0 = regs.cr0;
+        vmcb->cr3 = regs.cr3;
+        vmcb->cr4 = regs.cr4;
 
-    SET_TABLE(gdtr);
-    SET_TABLE(idtr);
+        vmcb->efer = regs.efer;
+    }
+    
+    if(flags & vm::VmRegs::Segment) {
+        #define SET_TABLE(table) \
+            vmcb->table.base = regs.table.base; \
+            vmcb->table.limit = regs.table.limit
 
-    #define SET_SEGMENT(segment) \
-        vmcb->segment.base = regs.segment.base; \
-        vmcb->segment.limit = regs.segment.limit; \
-        vmcb->segment.selector = regs.segment.selector; \
-        vmcb->segment.attrib = regs.segment.attrib.type | (regs.segment.attrib.s << 4) | \
-                               (regs.segment.attrib.dpl << 5) | (regs.segment.attrib.present << 7) | \
-                               (regs.segment.attrib.avl << 8) | (regs.segment.attrib.l << 9) | \
-                               (regs.segment.attrib.db << 10) | (regs.segment.attrib.g << 11)
+        SET_TABLE(gdtr);
+        SET_TABLE(idtr);
 
-    SET_SEGMENT(cs);
-    SET_SEGMENT(ds);
-    SET_SEGMENT(ss);
-    SET_SEGMENT(es);
-    SET_SEGMENT(fs);
-    SET_SEGMENT(gs);
+        #define SET_SEGMENT(segment) \
+            vmcb->segment.base = regs.segment.base; \
+            vmcb->segment.limit = regs.segment.limit; \
+            vmcb->segment.selector = regs.segment.selector; \
+            vmcb->segment.attrib = regs.segment.attrib.type | (regs.segment.attrib.s << 4) | \
+                                   (regs.segment.attrib.dpl << 5) | (regs.segment.attrib.present << 7) | \
+                                   (regs.segment.attrib.avl << 8) | (regs.segment.attrib.l << 9) | \
+                                   (regs.segment.attrib.db << 10) | (regs.segment.attrib.g << 11)
 
-    SET_SEGMENT(ldtr);
-    SET_SEGMENT(tr);
+        SET_SEGMENT(cs);
+        SET_SEGMENT(ds);
+        SET_SEGMENT(ss);
+        SET_SEGMENT(es);
+        SET_SEGMENT(fs);
+        SET_SEGMENT(gs);
+
+        SET_SEGMENT(ldtr);
+        SET_SEGMENT(tr);
+    }
 }

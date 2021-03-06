@@ -67,7 +67,7 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     regs.cr3 = 0;
     regs.efer = efer_constraint;
 
-    vcpu->set_regs(regs);
+    vcpu->set_regs(regs, VmRegs::General | VmRegs::Segment | VmRegs::Control);
 
     auto& simd = vcpu->get_guest_simd_context();
     simd.data()->fcw = 0x40;
@@ -80,8 +80,8 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     smbase = 0x3'0000;
 }
         
-void vm::VCPU::get_regs(vm::RegisterState& regs) const { vcpu->get_regs(regs); }
-void vm::VCPU::set_regs(const vm::RegisterState& regs) { vcpu->set_regs(regs); }
+void vm::VCPU::get_regs(vm::RegisterState& regs, uint64_t flags) const { vcpu->get_regs(regs, flags); }
+void vm::VCPU::set_regs(const vm::RegisterState& regs, uint64_t flags) { vcpu->set_regs(regs, flags); }
 void vm::VCPU::set(VmCap cap, bool value) { vcpu->set(cap, value); }
 void vm::VCPU::set(VmCap cap, void (*fn)(void*), void* userptr) { 
     if(cap == VmCap::SMMEntryCallback) {
@@ -289,6 +289,11 @@ bool vm::VCPU::run() {
                 }
             } else if(index >= 0x200 && index <= 0x2FF) {
                 update_mtrr(exit.msr.write, index, value);
+            } else if(index == msr::ia32_efer) {
+                if(exit.msr.write)
+                    regs.efer = value | efer_constraint;
+                else
+                    value = regs.efer;
             } else {
                 if(exit.msr.write) {
                     print("vcpu: Unhandled wrmsr({:#x}, {:#x})\n", index, value);
@@ -301,10 +306,9 @@ bool vm::VCPU::run() {
             if(!exit.msr.write) {
                 write_low32(regs.rax, value & 0xFFFF'FFFF);
                 write_low32(regs.rdx, value >> 32);
-
-                set_regs(regs);
             }
 
+            set_regs(regs);
             break;
         }
 

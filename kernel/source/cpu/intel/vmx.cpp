@@ -501,140 +501,166 @@ void vmx::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool e
     write(vm_entry_interruption_info, info);
 }
 
-void vmx::Vm::get_regs(vm::RegisterState& regs) const {
+void vmx::Vm::get_regs(vm::RegisterState& regs, uint64_t flags) const {
     vmptrld();
 
-    regs.rax = guest_gprs.rax;
-    regs.rbx = guest_gprs.rbx;
-    regs.rcx = guest_gprs.rcx;
-    regs.rdx = guest_gprs.rdx;
-    regs.rsi = guest_gprs.rsi;
-    regs.rdi = guest_gprs.rdi;
-    regs.rbp = guest_gprs.rbp;
+    if(flags & vm::VmRegs::General) {
+        regs.rax = guest_gprs.rax;
+        regs.rbx = guest_gprs.rbx;
+        regs.rcx = guest_gprs.rcx;
+        regs.rdx = guest_gprs.rdx;
+        regs.rsi = guest_gprs.rsi;
+        regs.rdi = guest_gprs.rdi;
+        regs.rbp = guest_gprs.rbp;
 
-    regs.r8 = guest_gprs.r8;
-    regs.r9 = guest_gprs.r9;
-    regs.r10 = guest_gprs.r10;
-    regs.r11 = guest_gprs.r11;
-    regs.r12 = guest_gprs.r12;
-    regs.r13 = guest_gprs.r13;
-    regs.r14 = guest_gprs.r14;
-    regs.r15 = guest_gprs.r15;
+        regs.r8 = guest_gprs.r8;
+        regs.r9 = guest_gprs.r9;
+        regs.r10 = guest_gprs.r10;
+        regs.r11 = guest_gprs.r11;
+        regs.r12 = guest_gprs.r12;
+        regs.r13 = guest_gprs.r13;
+        regs.r14 = guest_gprs.r14;
+        regs.r15 = guest_gprs.r15;
 
-    regs.dr0 = guest_gprs.dr0;
-    regs.dr1 = guest_gprs.dr1;
-    regs.dr2 = guest_gprs.dr2;
-    regs.dr3 = guest_gprs.dr3;
-    regs.dr6 = guest_gprs.dr6;
+        regs.dr0 = guest_gprs.dr0;
+        regs.dr1 = guest_gprs.dr1;
+        regs.dr2 = guest_gprs.dr2;
+        regs.dr3 = guest_gprs.dr3;
+        regs.dr6 = guest_gprs.dr6;
 
-    regs.rsp = read(guest_rsp);
-    regs.rip = read(guest_rip);
-    regs.rflags = read(guest_rflags);
-    regs.dr7 = read(guest_dr7);
+        regs.rsp = read(guest_rsp);
+        regs.rip = read(guest_rip);
+        regs.rflags = read(guest_rflags);
+        regs.dr7 = read(guest_dr7);
+    }
 
-    regs.cr0 = read(guest_cr0);
-    regs.cr3 = read(guest_cr3);
-    regs.cr4 = read(guest_cr4);
-    regs.efer = read(guest_efer_full);
+    if(flags & vm::VmRegs::Control) {
+        regs.cr0 = read(guest_cr0);
+        regs.cr3 = read(guest_cr3);
+        regs.cr4 = read(guest_cr4);
+        regs.efer = read(guest_efer_full);
+    }
+    
+    if(flags & vm::VmRegs::Segment) {
+        #define GET_TABLE(table) \
+            regs.table.base = read(guest_##table##_base); \
+            regs.table.limit = read(guest_##table##_limit)
 
-    #define GET_TABLE(table) \
-        regs.table.base = read(guest_##table##_base); \
-        regs.table.limit = read(guest_##table##_limit)
+        GET_TABLE(gdtr);
+        GET_TABLE(idtr);
 
-    GET_TABLE(gdtr);
-    GET_TABLE(idtr);
+        #define GET_SEGMENT(segment) \
+            regs.segment.base = read(guest_##segment##_base); \
+            regs.segment.limit = read(guest_##segment##_limit); \
+            regs.segment.selector = read(guest_##segment##_selector); \
+            { \
+                auto seg = read(guest_##segment##_access_right); \
+                regs.segment.attrib.type = seg & 0xF; \
+                regs.segment.attrib.s = (seg >> 4) & 1; \
+                regs.segment.attrib.dpl = (seg >> 5) & 3; \
+                regs.segment.attrib.present = (seg >> 7) & 1; \
+                regs.segment.attrib.avl = (seg >> 12) & 1; \
+                regs.segment.attrib.l = (seg >> 13) & 1; \
+                regs.segment.attrib.db = (seg >> 14) & 1; \
+                regs.segment.attrib.g = (seg >> 15) & 1; \
+            } 
 
-    #define GET_SEGMENT(segment) \
-        regs.segment.base = read(guest_##segment##_base); \
-        regs.segment.limit = read(guest_##segment##_limit); \
-        regs.segment.selector = read(guest_##segment##_selector); \
-        { \
-            auto seg = read(guest_##segment##_access_right); \
-            regs.segment.attrib.type = seg & 0xF; \
-            regs.segment.attrib.s = (seg >> 4) & 1; \
-            regs.segment.attrib.dpl = (seg >> 5) & 3; \
-            regs.segment.attrib.present = (seg >> 7) & 1; \
-            regs.segment.attrib.avl = (seg >> 12) & 1; \
-            regs.segment.attrib.l = (seg >> 13) & 1; \
-            regs.segment.attrib.db = (seg >> 14) & 1; \
-            regs.segment.attrib.g = (seg >> 15) & 1; \
-        } 
+        GET_SEGMENT(cs);
+        GET_SEGMENT(ds);
+        GET_SEGMENT(ss);
+        GET_SEGMENT(es);
+        GET_SEGMENT(fs);
+        GET_SEGMENT(gs);
 
-    GET_SEGMENT(cs);
-    GET_SEGMENT(ds);
-    GET_SEGMENT(ss);
-    GET_SEGMENT(es);
-    GET_SEGMENT(fs);
-    GET_SEGMENT(gs);
-
-    GET_SEGMENT(ldtr);
-    GET_SEGMENT(tr);
+        GET_SEGMENT(ldtr);
+        GET_SEGMENT(tr);
+    }
 }
 
-void vmx::Vm::set_regs(const vm::RegisterState& regs) {
+void vmx::Vm::set_regs(const vm::RegisterState& regs, uint64_t flags) {
     vmptrld();
 
-    guest_gprs.rax = regs.rax;
-    guest_gprs.rbx = regs.rbx;
-    guest_gprs.rcx = regs.rcx;
-    guest_gprs.rdx = regs.rdx;
-    guest_gprs.rsi = regs.rsi;
-    guest_gprs.rdi = regs.rdi;
-    guest_gprs.rbp = regs.rbp;
+    if(flags & vm::VmRegs::General) {
+        guest_gprs.rax = regs.rax;
+        guest_gprs.rbx = regs.rbx;
+        guest_gprs.rcx = regs.rcx;
+        guest_gprs.rdx = regs.rdx;
+        guest_gprs.rsi = regs.rsi;
+        guest_gprs.rdi = regs.rdi;
+        guest_gprs.rbp = regs.rbp;
 
-    guest_gprs.r8 = regs.r8;
-    guest_gprs.r9 = regs.r9;
-    guest_gprs.r10 = regs.r10;
-    guest_gprs.r11 = regs.r11;
-    guest_gprs.r12 = regs.r12;
-    guest_gprs.r13 = regs.r13;
-    guest_gprs.r14 = regs.r14;
-    guest_gprs.r15 = regs.r15;
+        guest_gprs.r8 = regs.r8;
+        guest_gprs.r9 = regs.r9;
+        guest_gprs.r10 = regs.r10;
+        guest_gprs.r11 = regs.r11;
+        guest_gprs.r12 = regs.r12;
+        guest_gprs.r13 = regs.r13;
+        guest_gprs.r14 = regs.r14;
+        guest_gprs.r15 = regs.r15;
 
-    guest_gprs.dr0 = regs.dr0;
-    guest_gprs.dr1 = regs.dr1;
-    guest_gprs.dr2 = regs.dr2;
-    guest_gprs.dr3 = regs.dr3;
-    guest_gprs.dr6 = regs.dr6;
+        guest_gprs.dr0 = regs.dr0;
+        guest_gprs.dr1 = regs.dr1;
+        guest_gprs.dr2 = regs.dr2;
+        guest_gprs.dr3 = regs.dr3;
+        guest_gprs.dr6 = regs.dr6;
 
-    write(guest_rsp, regs.rsp);
-    write(guest_rip, regs.rip);
-    write(guest_rflags, regs.rflags);
-    write(guest_dr7, regs.dr7);
+        write(guest_rsp, regs.rsp);
+        write(guest_rip, regs.rip);
+        write(guest_rflags, regs.rflags);
+        write(guest_dr7, regs.dr7);
+    }
 
-    write(guest_cr0, regs.cr0);
-    write(guest_cr4, regs.cr4);
-    write(guest_cr3, regs.cr3);
-    write(guest_efer_full, regs.efer);
+    if(flags & vm::VmRegs::Segment) {
+        #define SET_TABLE(table) \
+            write(guest_##table##_base, regs.table.base); \
+            write(guest_##table##_limit, regs.table.limit)
 
-    #define SET_TABLE(table) \
-        write(guest_##table##_base, regs.table.base); \
-        write(guest_##table##_limit, regs.table.limit)
+        SET_TABLE(gdtr);
+        SET_TABLE(idtr);
 
-    SET_TABLE(gdtr);
-    SET_TABLE(idtr);
+        #define SET_SEGMENT(segment) \
+            write(guest_##segment##_base, regs.segment.base); \
+            write(guest_##segment##_limit, regs.segment.limit); \
+            write(guest_##segment##_selector, regs.segment.selector); \
+            { \
+                uint32_t attrib = regs.segment.attrib.type | (regs.segment.attrib.s << 4) | \
+                                  (regs.segment.attrib.dpl << 5) | (regs.segment.attrib.present << 7) | \
+                                  (regs.segment.attrib.avl << 12) | (regs.segment.attrib.l << 13) | \
+                                  (regs.segment.attrib.db << 14) | (regs.segment.attrib.g << 15); \
+                write(guest_##segment##_access_right, attrib); \
+            }
 
-    #define SET_SEGMENT(segment) \
-        write(guest_##segment##_base, regs.segment.base); \
-        write(guest_##segment##_limit, regs.segment.limit); \
-        write(guest_##segment##_selector, regs.segment.selector); \
-        { \
-            uint32_t attrib = regs.segment.attrib.type | (regs.segment.attrib.s << 4) | \
-                              (regs.segment.attrib.dpl << 5) | (regs.segment.attrib.present << 7) | \
-                              (regs.segment.attrib.avl << 12) | (regs.segment.attrib.l << 13) | \
-                              (regs.segment.attrib.db << 14) | (regs.segment.attrib.g << 15); \
-            write(guest_##segment##_access_right, attrib); \
+        SET_SEGMENT(cs);
+        SET_SEGMENT(ds);
+        SET_SEGMENT(ss);
+        SET_SEGMENT(es);
+        SET_SEGMENT(fs);
+        SET_SEGMENT(gs);
+
+        SET_SEGMENT(ldtr);
+        SET_SEGMENT(tr);
+    }
+    
+    if(flags & vm::VmRegs::Control) {
+        write(guest_cr0, regs.cr0);
+        write(cr0_shadow, regs.cr0);
+        write(guest_cr4, regs.cr4);
+        write(guest_cr3, regs.cr3);
+
+        uint64_t efer = regs.efer;
+        if(regs.cr0 & (1 << 31) && regs.efer & (1 << 8)) {
+            efer |= (1 << 10); // If cr0.PG and IA32_EFER.LME then IA32_EFER.LMA should be set
+
+            write(guest_tr_access_right, (read(guest_tr_access_right) & ~0xF) | 11); // Set TSS type to TSS64-busy, otherwise we get an invalid guest state error
         }
 
-    SET_SEGMENT(cs);
-    SET_SEGMENT(ds);
-    SET_SEGMENT(ss);
-    SET_SEGMENT(es);
-    SET_SEGMENT(fs);
-    SET_SEGMENT(gs);
+        if(efer & (1 << 10)) // VMX needs to know if LMA is set
+            write(vm_entry_control, read(vm_entry_control) | (uint32_t)VMEntryControls::IA32eModeGuest);
+        else
+            write(vm_entry_control, read(vm_entry_control) & ~(uint32_t)VMEntryControls::IA32eModeGuest);
 
-    SET_SEGMENT(ldtr);
-    SET_SEGMENT(tr);
+        write(guest_efer_full, efer);
+    }
 }
 
 void vmx::Vm::vmptrld() const {

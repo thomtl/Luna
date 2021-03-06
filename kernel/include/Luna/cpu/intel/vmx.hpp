@@ -148,6 +148,9 @@ namespace vmx {
     constexpr uint64_t vm_entry_instruction_length = 0x401A;
     constexpr uint64_t cr3_target_count = 0x400A;
 
+    constexpr uint64_t cr0_mask = 0x6000;
+    constexpr uint64_t cr0_shadow = 0x6004;
+
     constexpr uint64_t host_cr0 = 0x6c00;
     constexpr uint64_t host_cr3 = 0x6c02;
     constexpr uint64_t host_cr4 = 0x6c04;
@@ -259,8 +262,8 @@ namespace vmx {
         bool run(vm::VmExit& exit);
 
         void set(vm::VmCap cap, bool value);
-        void get_regs(vm::RegisterState& regs) const;
-        void set_regs(const vm::RegisterState& regs);
+        void get_regs(vm::RegisterState& regs, uint64_t flags) const;
+        void set_regs(const vm::RegisterState& regs, uint64_t flags);
         simd::Context& get_guest_simd_context() { return guest_simd; }
 
         void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0);
