@@ -695,6 +695,85 @@ void vm::VCPU::dma_write(uintptr_t gpa, std::span<uint8_t> buf) {
     }
 }
 
+vm::PageWalkInfo vm::VCPU::walk_guest_paging(uintptr_t gva) {
+    vm::RegisterState regs{};
+    get_regs(regs, VmRegs::Control); // We only really care about cr0, cr3, cr4, and efer here
+
+    if(!(regs.cr0 & (1 << 31)))
+        return {.found = true, .is_write = true, .is_user = true, .is_execute = true, .gpa = gva};
+
+    // Paging is enabled, we can assume cr0.PE is true too, now figure out the various paging modes
+    // But first look in the TLB
+    auto off = gva & 0xFFF; 
+    auto page = gva & 0xFFFF'F000;
+    if(auto info = guest_tlb.lookup(page); info.found) {
+        info.gpa += off;
+        return info;
+    }
+
+    if(!(regs.efer & (1 << 10) && !(regs.cr4 & (1 << 5)))) { // No long mode and no PAE, thus normal 32bit paging
+        bool write = true, user = true;
+        auto pml2_i = (gva >> 22) & 0x3FF;
+        auto pml1_i = (gva >> 12) & 0x3FF;
+
+        uint32_t pml2_addr = regs.cr3 & 0xFFFF'F000;
+        auto* pml2 = (uint32_t*)(vm->mm->get_phys(pml2_addr) + phys_mem_map); // Page tables are always in 1 page so this is fine
+        uint32_t pml2_entry = pml2[pml2_i];
+
+        ASSERT(pml2_entry & (1 << 0)); // Assert its present
+        write = write && (pml2_entry >> 1) & 1;
+        user = user && (pml2_entry >> 2) & 1;
+
+        uint32_t pml1_addr = pml2_entry & 0xFFFF'F000;
+        auto* pml1 = (uint32_t*)(vm->mm->get_phys(pml1_addr) + phys_mem_map); // Page tables are always in 1 page so this is fine
+        uint32_t pml1_entry = pml1[pml1_i];
+        
+        ASSERT(pml1_entry & (1 << 0)); // Assert its present
+        write = write && (pml1_entry >> 1) & 1;
+        user = user && (pml1_entry >> 2) & 1;
+
+        uint32_t gpa = pml1_entry & 0xFFFF'F000;
+        guest_tlb.add(page, {.found = true, .is_write = write, .is_user = user, .is_execute = true, .gpa = gpa});
+        return {.found = true, .is_write = write, .is_user = user, .is_execute = true, .gpa = gpa + off};
+    } else {
+        print("cr0: {:#x} cr4: {:#x} efer: {:#x}\n", regs.cr0, regs.cr4, regs.efer);
+        PANIC("TODO");
+    }
+}
+
+void vm::VCPU::mem_read(uintptr_t gva, std::span<uint8_t> buf) {
+    uintptr_t curr = 0;
+    while(curr != buf.size_bytes()) {
+        auto gpa = walk_guest_paging(gva + curr).gpa;
+        auto hpa = vm->mm->get_phys(gpa);
+        auto hva = hpa + phys_mem_map;
+        auto top = align_up(hva, pmm::block_size);
+
+        auto chunk = min(top - hva + 1, buf.size_bytes() - curr);
+
+        memcpy(buf.data() + curr, (uint8_t*)hva, chunk);
+
+        curr += chunk;
+    }
+}
+
+void vm::VCPU::mem_write(uintptr_t gva, std::span<uint8_t> buf) {
+    uintptr_t curr = 0;
+    while(curr != buf.size_bytes()) {
+        auto res = walk_guest_paging(gva + curr);
+        ASSERT(res.is_write);
+        auto hpa = vm->mm->get_phys(res.gpa);
+        auto hva = hpa + phys_mem_map;
+        auto top = align_up(hva, pmm::block_size);
+
+        auto chunk = min(top - hva + 1, buf.size_bytes() - curr);
+
+        memcpy((uint8_t*)hva, buf.data() + curr, chunk);
+
+        curr += chunk;
+    }
+}
+
 vm::Vm::Vm(uint8_t n_cpus) {
     switch (get_cpu().cpu.vm.vendor) {
         case CpuVendor::Intel:

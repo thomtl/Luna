@@ -339,7 +339,8 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             // Hardware exception
             if(info.type == 3) {
                 if(info.vector == 6) { // #UD
-                    auto* instruction = (uint8_t*)(mm->get_phys(grip) + phys_mem_map); // TODO: Make sure this doesn't cross page boundaries
+                    uint8_t instruction[15] = {};
+                    vcpu->mem_read(grip, {instruction});
 
                     // Make sure we can run AMD's VMMCALL on Intel
                     if(instruction[0] == 0x0F && instruction[1] == 0x01 && instruction[2] == 0xD9) {
