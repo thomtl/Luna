@@ -242,6 +242,14 @@ bool vm::VCPU::run() {
 
                 os_support_bit(regs.rdx, 9, 24);
                 os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
+            } else if(leaf == 7) {
+                if(subleaf == 0) {
+                    passthrough();
+
+                    os_support_bit(regs.rcx, 22, 4);
+                } else {
+                    print("vcpu: Unhandled CPUID 0x7 subleaf {:#x}\n", subleaf);
+                }
             } else if(leaf == 0x4000'0000) {
                 write_low32(regs.rax, 0);
                 write_low32(regs.rbx, luna_sig);
