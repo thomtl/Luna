@@ -258,6 +258,9 @@ void kernel_main(const stivale2_struct* info) {
     auto* bga_dev = new vm::gpu::bga::Driver{&vm, pci_host_bridge, vgabios, 1};
     (void)bga_dev;
 
+    auto* vga_dev = new vm::gpu::vga::Driver{&vm};
+    (void)vga_dev;
+
     auto* pci_hotplug = new vm::pci::hotplug::Driver{&vm};
     (void)pci_hotplug;
 
