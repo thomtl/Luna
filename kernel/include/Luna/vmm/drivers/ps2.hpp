@@ -56,6 +56,9 @@ namespace vm::ps2 {
 
         void handle_command(uint8_t cmd) {
             switch(cmd) {
+                case 0x20 ... 0x3F: // Read from RAM
+                    push_obf(ram[cmd & 0x1F]);
+                    break;
                 case 0x60 ... 0x7F: // Write to RAM
                     multibyte_cmd = cmd;
                     multibyte_n = 1;
@@ -69,7 +72,10 @@ namespace vm::ps2 {
                 case 0xAA: // Test PS/2 controller
                     push_obf(0x55); // Test passed
                     break;
-                case 0xAB:
+                case 0xAB: // Test first PS/2 port
+                    push_obf(0); // Test Passed
+                    break;
+                case 0xA9: // Test second PS/2 port
                     push_obf(0); // Test Passed
                     break;
                 case 0xAD: // Disable first PS/2 port
@@ -124,7 +130,19 @@ namespace vm::ps2 {
 
                     push_obf(0xFA);
                     break;
+                case 0xF2:
+                    push_obf(0x83); // MF2 keyboard
+                    push_obf(0xAB);
+
+                    push_obf(0xFA);
+                    break;
                 case 0xF0: // Set Scancode Set
+                    port.multibyte_cmd = cmd;
+                    port.multibyte_n = 1;  
+
+                    push_obf(0xFA);
+                    break;
+                case 0xED:
                     port.multibyte_cmd = cmd;
                     port.multibyte_n = 1;  
 
@@ -148,6 +166,10 @@ namespace vm::ps2 {
                     port.scancode_set = v;
                     push_obf(0xFA);
                 }
+            } else if(port.multibyte_cmd == 0xED) {
+                pop_ibf(); // LED states
+
+                push_obf(0xFA);
             } else {
                 print("ps/2: Unknown multibyte port cmd: {:#x}\n", port.multibyte_cmd);
                 PANIC("Unknown cmd");
