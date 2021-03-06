@@ -129,8 +129,18 @@ namespace vm::nvme {
             auto reg = addr - mmio_base;
 
             if(reg == regs::cc && size == 4) {
-                if((cc & regs::cc_en) && !(value & regs::cc_en)) // On to Off
+                if((cc & regs::cc_en) && !(value & regs::cc_en)) { // On to Off
                     csts &= ~regs::csts_rdy;
+
+                    auto admin = queues[0];
+                    queues.clear();
+
+                    // ASQ, ACQ, and AQA are preserved
+                    queues[0].sq_base = admin.sq_base;
+                    queues[0].cq_base = admin.cq_base;
+                    queues[0].sqs = admin.sqs;
+                    queues[0].cqs = admin.cqs;
+                }
                 
                 if(!(cc & regs::cc_en) && (value & regs::cc_en)) // Off to On
                     csts |= regs::csts_rdy;
@@ -192,6 +202,18 @@ namespace vm::nvme {
                 return (1 << 16) | (4 << 8) | 0; // 1.4.0
             else if(reg == regs::csts && size == 4)
                 return csts;
+            else if(reg == regs::cc && size == 4) 
+                return cc;
+            else if(reg == regs::aqa)
+                return (((queues[0].cqs + 1) & 0xFFF) << 16) | ((queues[0].sqs + 1) & 0xFFF);
+            else if(reg == regs::asq)
+                return queues[0].sq_base;
+            else if(reg == (regs::asq + 4) && size == 4)
+                return queues[0].sq_base >> 32;
+            else if(reg == regs::acq)
+                return queues[0].cq_base;
+            else if(reg == (regs::acq + 4) && size == 4)
+                return queues[0].cq_base >> 32;
             else {
                 print("nvme: Unknown MMIO read from {:#x}, size: {}\n", reg, size);
                 PANIC("Unknown reg");
@@ -281,7 +303,7 @@ namespace vm::nvme {
                 }
             } else if(opcode == 5) { // Create IO Completion Queue
                 ASSERT(cmd.cmd_data[1] & (1 << 0)); // Physically Contiguous
-                ASSERT(!(cmd.cmd_data[1] & (1 << 1))); // No IRQs
+                //ASSERT(!(cmd.cmd_data[1] & (1 << 1))); // No IRQs
 
                 auto qid = cmd.cmd_data[0] & 0xFFFF;
                 auto size = (cmd.cmd_data[0] >> 16) + 1;
@@ -331,14 +353,14 @@ namespace vm::nvme {
                     file->read((lba + count) * 512, 512, buf);
 
                     vm->cpus[0].dma_write(dst, {buf, 512});
+                    count++;
+
                     if((count % 8) == 0) { // 8 Sectors in 1 page
                         vm->cpus[0].dma_read(prp_list + (prp_i * 8), {(uint8_t*)&dst, 8});
                         prp_i++;
                     } else {
                         dst += 512;
                     }
-
-                    count++;
                 }
 
                 delete[] buf;
