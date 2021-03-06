@@ -42,11 +42,11 @@ vm::RegisterState::Segment& get_sreg(vm::RegisterState& regs, vm::emulate::sreg 
 
 
 
-uint64_t read_r64(vm::RegisterState& regs, vm::emulate::r64 r, uint8_t s) {
+uint64_t vm::emulate::read_r64(vm::RegisterState& regs, vm::emulate::r64 r, uint8_t s) {
     return get_r64(regs, r) & get_mask(s);
 }
 
-void write_r64(vm::RegisterState& regs, vm::emulate::r64 r, uint64_t v, uint8_t s) {
+void vm::emulate::write_r64(vm::RegisterState& regs, vm::emulate::r64 r, uint64_t v, uint8_t s) {
     auto* reg = &get_r64(regs, r);
 
     switch (s) {

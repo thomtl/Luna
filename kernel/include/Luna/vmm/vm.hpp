@@ -46,7 +46,7 @@ namespace vm {
 
     constexpr size_t max_x86_instruction_size = 15;
     struct VmExit {
-        enum class Reason { Unknown, Hlt, Vmcall, MMUViolation, PIO, MSR, CPUID, RSM };
+        enum class Reason { Unknown, Hlt, Vmcall, MMUViolation, PIO, MSR, CPUID, RSM, CrMov };
         static constexpr const char* reason_to_string(const Reason& reason) {
             switch (reason) {
                 case Reason::Unknown: return "Unknown";
@@ -57,6 +57,7 @@ namespace vm {
                 case Reason::MSR: return "MSR";
                 case Reason::CPUID: return "CPUID";
                 case Reason::RSM: return "RSM";
+                case Reason::CrMov: return "Move {to, from} CR";
                 default: return "Unknown";
             }
         }
@@ -88,6 +89,11 @@ namespace vm {
             struct {
                 bool write;
             } msr;
+            
+            struct {
+                uint8_t cr, gpr;
+                bool write;
+            } cr;
         };
     };
 

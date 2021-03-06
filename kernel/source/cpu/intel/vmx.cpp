@@ -12,6 +12,8 @@
 #include <Luna/mm/pmm.hpp>
 #include <Luna/mm/vmm.hpp>
 
+#include <Luna/vmm/emulate.hpp>
+
 extern "C" {
     uint64_t vmx_vmlaunch(vmx::GprState* gprs); // These functions return rflags after vmlaunch or vmresume
     uint64_t vmx_vmresume(vmx::GprState* gprs);
@@ -187,7 +189,8 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
                      | (uint32_t)ProcBasedControls::SecondaryControlsEnable \
                      | (uint32_t)ProcBasedControls::VMExitOnCr8Store \
                      | (uint32_t)ProcBasedControls::VMExitOnRdpmc \
-                     | (uint32_t)ProcBasedControls::TSCOffsetting;
+                     | (uint32_t)ProcBasedControls::TSCOffsetting \
+                     | (uint32_t)ProcBasedControls::VMExitOnInvlpg;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls));
     }
@@ -200,6 +203,8 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     }
     
     write(exception_bitmap, (1 << 1) | (1 << 6) | (1 << 14) | (1 << 17) | (1 << 18));
+
+    write(cr0_mask, ~0);
 
     {
         uint32_t min = (uint32_t)VMExitControls::LongMode | (uint32_t)VMExitControls::LoadIA32EFER;
@@ -393,6 +398,35 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
             exit.instruction_len = 1;
             exit.instruction[0] = 0xF4;
+
+            next_instruction();
+
+            return true;
+        } else if(basic_reason == VMExitReasons::MovToCr) {
+            exit.reason = vm::VmExit::Reason::CrMov;
+
+            exit.instruction_len = read(vm_exit_instruction_len);
+
+            auto grip = read(guest_cs_base) + read(guest_rip);
+            vcpu->mem_read(grip, {exit.instruction});
+
+            if(exit.instruction[0] == 0x0F && exit.instruction[1] == 0x20) {
+                // Mov cr0-cr7, {r32, r64}
+
+                auto modrm = vm::emulate::parse_modrm(exit.instruction[2]);
+                exit.cr.cr = modrm.reg;
+                exit.cr.gpr = modrm.rm;
+                exit.cr.write = false;
+            } else if(exit.instruction[0] == 0x0F && exit.instruction[1] == 0x22) {
+                // Mov cr0-cr7, {r32, r64}
+
+                auto modrm = vm::emulate::parse_modrm(exit.instruction[2]);
+                exit.cr.cr = modrm.reg;
+                exit.cr.gpr = modrm.rm;
+                exit.cr.write = true;
+            } else {
+                PANIC("Unknown move to cr instruction");
+            }
 
             next_instruction();
 

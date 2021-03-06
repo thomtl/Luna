@@ -319,6 +319,41 @@ bool vm::VCPU::run() {
                 vcpu->inject_int(vm::AbstractVm::InjectType::Exception, 6); // Inject a UD
             break;
         }
+
+        case VmExit::Reason::Hlt: {
+            print("vm: HLT\n");
+            return false;
+        }
+
+        case VmExit::Reason::CrMov: {
+            get_regs(regs);
+
+            uint64_t value = 0;
+
+            if(exit.cr.write)
+                value = vm::emulate::read_r64(regs, (vm::emulate::r64)exit.cr.gpr, 8);
+            
+            if(exit.cr.cr == 0) {
+                if(exit.cr.write)
+                    regs.cr0 = value;
+                else
+                    PANIC("TODO");
+            } else if(exit.cr.cr == 3) {
+                if(exit.cr.write) {
+                    regs.cr3 = value;
+                    guest_tlb.invalidate();
+                } else
+                    value = regs.cr3;
+            } else {
+                PANIC("TODO");
+            }
+
+            if(!exit.cr.write)
+                vm::emulate::write_r64(regs, (vm::emulate::r64)exit.cr.gpr, value, 8);
+
+            set_regs(regs);
+            break;
+        }
         
         default:
             print("vcpu: Exit due to {:s}\n", exit.reason_to_string(exit.reason));

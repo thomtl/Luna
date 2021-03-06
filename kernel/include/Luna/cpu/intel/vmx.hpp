@@ -87,6 +87,7 @@ namespace vmx {
         CPUID = 10,
         Hlt = 12,
         Vmcall = 18,
+        MovToCr = 28,
         PIO = 30,
         Rdmsr = 31,
         Wrmsr = 32,
