@@ -44,17 +44,19 @@ namespace vm::gpu::bga {
             pci_space.header.prog_if = 0;
 
             this->edid = edid::generate_edid({.native_x = max_x, .native_y = max_y});
+
+            fb = {(uint8_t*)hmm::alloc(lfb_size, 0x1000), lfb_size};
         }
 
         void register_mmio_driver(Vm* vm) { ASSERT(this->vm == vm); }
 
         void mmio_write(uintptr_t addr, uint64_t value, [[maybe_unused]] uint8_t size) {
-            if(addr >= bar0 && addr < (bar0 + lfb_size)) {
+            /*if(addr >= bar0 && addr < (bar0 + lfb_size)) {
                 auto off = addr - bar0;
                 if(off <= (curr_mode.x * curr_mode.y * (curr_mode.bpp / 8))) {
                     window->get_fb()[off / 4] = value;
                 }
-            } else if(addr == (bar2 + 0x400)) {
+            } else*/ if(addr == (bar2 + 0x400)) {
                 // Some kind of sync register?
             } else if(addr == bar2 + regs::xres) {
                 ASSERT(value <= max_x);
@@ -68,7 +70,7 @@ namespace vm::gpu::bga {
             } else if(addr == bar2 + regs::enable) {
                 mode.enabled = value & 1;
                 if(curr_mode.enabled == false && mode.enabled == true) {
-                    window = new gui::FbWindow{{(int32_t)mode.x, (int32_t)mode.y}, "VM Screen"};
+                    window = new gui::FbWindow{{(int32_t)mode.x, (int32_t)mode.y}, fb.data(), "VM Screen"};
 
                     gui::get_desktop().add_window(window);
                     gui::get_desktop().update();
@@ -83,12 +85,12 @@ namespace vm::gpu::bga {
         }
 
         uint64_t mmio_read(uintptr_t addr, [[maybe_unused]] uint8_t size) {
-            if(addr >= bar0 && addr < (bar0 + lfb_size)) {
+            /*if(addr >= bar0 && addr < (bar0 + lfb_size)) {
                 auto off = addr - bar0;
                 if(off <= (curr_mode.x * curr_mode.y * (curr_mode.bpp / 8))) {
                     return window->get_fb()[off / 4];
                 }
-            } else if(addr >= bar2 && addr < (bar2 + edid_size) && size == 1) {
+            } else*/ if(addr >= bar2 && addr < (bar2 + edid_size) && size == 1) {
                 auto i = addr - bar2;
                 if(i < 128) // We only have the base EDID block
                     return ((uint8_t*)&edid)[i];
@@ -123,7 +125,11 @@ namespace vm::gpu::bga {
                 vm->mmio_map[this->bar2] = {nullptr, 0};
             }
 
-            vm->mmio_map[bar0] = {this, lfb_size};
+            //vm->mmio_map[bar0] = {this, lfb_size};
+            auto& kvmm = vmm::kernel_vmm::get_instance();
+            for(size_t i = 0; i < lfb_size; i += 0x1000)
+                vm->mm->map(kvmm.get_phys((uintptr_t)fb.data() + i), bar0 + i, paging::mapPagePresent | paging::mapPageWrite);
+            
             this->bar0 = bar0;
 
             vm->mmio_map[bar2] = {this, mmio_size};
@@ -134,6 +140,7 @@ namespace vm::gpu::bga {
 
         vm::Vm* vm;
         gui::FbWindow* window;
+        std::span<uint8_t> fb;
 
         bool mmio_enabled = false;
         uint32_t bar0, bar2;

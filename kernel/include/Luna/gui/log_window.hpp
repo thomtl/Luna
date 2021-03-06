@@ -39,7 +39,12 @@ namespace gui {
         }
 
         void putc(const char c) {
-            buf.push_back(c);
+            if(c == '\t') {
+                putc(' ');
+                buf.push_back(' ');
+            } else {
+                buf.push_back(c);
+            }
         
             curr_x++;
             if(curr_x == (uint32_t)size_chars.x || c == '\n') {
