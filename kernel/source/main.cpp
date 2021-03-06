@@ -48,6 +48,9 @@
 #include <Luna/vmm/drivers/irqs/8259.hpp>
 
 #include <Luna/vmm/drivers/gpu/bga.hpp>
+#include <Luna/vmm/drivers/gpu/vga.hpp>
+
+#include <Luna/net/luna_debug.hpp>
 
 #include <Luna/gui/gui.hpp>
 #include <Luna/gui/log_window.hpp>
@@ -135,7 +138,7 @@ void kernel_main(const stivale2_struct* info) {
 
 
     constexpr uintptr_t himem_start = 0x10'0000;
-    constexpr size_t himem_size = 16 * 1024 * 1024; // 16MiB
+    constexpr size_t himem_size = 32 * 1024 * 1024; // 16MiB
 
     vm::Vm vm{1};
     {
@@ -192,9 +195,6 @@ void kernel_main(const stivale2_struct* info) {
         file->close();
     }
 
-    auto* e9_dev = new vm::e9::Driver{&vm};
-    (void)e9_dev;
-
     auto* cmos_dev = new vm::cmos::Driver{&vm};
 
     {
@@ -236,8 +236,12 @@ void kernel_main(const stivale2_struct* info) {
 
     auto* log_window = new gui::LogWindow{"VM Log"};
     gui::get_desktop().add_window(log_window);
+
     auto* uart_dev = new vm::uart::Driver{&vm, 0x3F8, log_window};
     (void)uart_dev;
+
+    auto* e9_dev = new vm::e9::Driver{&vm, log_window};
+    (void)e9_dev;
 
     auto* ps2_dev = new vm::ps2::Driver{&vm};
     (void)ps2_dev;
