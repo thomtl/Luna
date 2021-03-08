@@ -81,13 +81,14 @@ svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
 
     vmcb->icept_hlt = 1;
     vmcb->icept_cpuid = 1;
+    vmcb->icept_invlpg = 1;
     vmcb->icept_rdpmc = 1;
     vmcb->icept_invd = 1;
     vmcb->icept_stgi = 1;
     vmcb->icept_clgi = 1;
     vmcb->icept_skinit = 1;
     vmcb->icept_xsetbv = 1;
-    vmcb->icept_wbinvd = 1;
+    //vmcb->icept_wbinvd = 1;
     vmcb->icept_rdpru = 1;
     vmcb->icept_rsm = 1;
 
@@ -222,6 +223,18 @@ bool svm::Vm::run(vm::VmExit& exit) {
             exit.instruction_len = 2;
             exit.instruction[0] = 0x0F;
             exit.instruction[1] = 0xA2;
+
+            next_instruction();
+
+            return true;
+        }
+
+        case 0x73: { // RSM
+            exit.reason = vm::VmExit::Reason::RSM;
+
+            exit.instruction_len = 2;
+            exit.instruction[0] = 0x0F;
+            exit.instruction[1] = 0xAA;
 
             next_instruction();
 
