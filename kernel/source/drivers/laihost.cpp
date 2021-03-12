@@ -72,4 +72,10 @@ extern "C" {
     void laihost_sleep(uint64_t ms) {
         hpet::poll_msleep(ms);
     }
+
+    int laihost_sync_wait(lai_sync_state* state, unsigned int, int64_t) { // TODO: Use threads to actually implement this and wake, some stupid hardware relies on the timeout too instead of just unlocking its stuff
+        state->val &= ~3;
+        return 0;
+    }
+
 }
