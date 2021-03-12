@@ -60,9 +60,9 @@ void identify_drive(ata::Device& device) {
     device.lba48 = (xfer[167] & (1 << 2)) && (xfer[173] & (1 << 2));
 
     if(!device.driver.atapi) {
-        device.n_sectors = *(uint64_t*)(xfer.data() + 200);
+        device.n_sectors = *(uint64_t*)(xfer.data() + 460);
         if(device.n_sectors == 0)
-            device.n_sectors = *(uint64_t*)(xfer.data() + 120);
+            device.n_sectors = *(uint32_t*)(xfer.data() + 120);
 
         auto sector_size = *(uint16_t*)(xfer.data() + (106 * 2));
         if(sector_size & (1 << 14) && !(sector_size & (1 << 15))) { // Word contains valid info
