@@ -620,19 +620,8 @@ bool xhci::HCI::reset_port(Port& port) {
 
         ASSERT(timeout(20, [&]{ return (reg.portsc & portsc::port_power) != 0; }));
     }
-        
-    reg.portsc = portsc::port_power | portsc::status_change_bits;
 
-    bool ccs = (reg.portsc & portsc::connect_status);
-    if(!ccs) {
-        // Reset failed, if paired port try USB2
-        if(port.has_pair) {
-            port.active = false;
-            ports[port.other_port].active = true;
-        }
-
-        return false;
-    }
+    reg.portsc = portsc::port_power | portsc::status_change_bits;    
 
     auto reset_bit = (port.proto->major == 3) ? portsc::warm_reset : portsc::reset;
     auto reset_change_bit = portsc::reset_change;//(port.proto->major == 3) ? portsc::warm_port_reset_change : portsc::reset_change;
