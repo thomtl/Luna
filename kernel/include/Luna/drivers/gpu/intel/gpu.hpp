@@ -19,8 +19,13 @@ namespace intel_gpu {
         bool set_mode(const gpu::Mode& mode);
         uint8_t* get_lfb() const;
 
+        bool is_connected() const {
+            return connector != nullptr;
+        }
+
         private:
         LilGpu ctx;
+        LilConnector* connector;
         LilConnectorInfo ctx_info;
 
         pci::Device* dev;
