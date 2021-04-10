@@ -834,3 +834,8 @@ vm::Vm::Vm(uint8_t n_cpus) {
     for(uint8_t i = 0; i < n_cpus; i++)
         cpus.emplace_back(this, i);
 }
+
+void vm::Vm::set_irq(uint8_t irq, bool level) {
+    for(auto& listener : irq_listeners)
+        listener->irq_set(irq, level);
+}

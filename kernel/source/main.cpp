@@ -283,7 +283,7 @@ void kernel_main(const stivale2_struct* info) {
     (void)lpc_dev;
 
     auto* pic_dev = new vm::irqs::pic::Driver{&vm};
-    (void)pic_dev;
+    vm.irq_listeners.push_back(pic_dev);
     
     ASSERT(vm.cpus[0].run());
 

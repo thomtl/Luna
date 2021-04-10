@@ -22,10 +22,12 @@ namespace vm::nvme {
                              
 
     namespace regs {
-        constexpr size_t cap_low = 0;
-        constexpr size_t cap_high = 4;
+        constexpr size_t cap_low = 0x0;
+        constexpr size_t cap_high = 0x4;
 
-        constexpr size_t version = 8;
+        constexpr size_t version = 0x8;
+        constexpr size_t intms = 0xC;
+        constexpr size_t intmc = 0x10;
 
         constexpr size_t cc = 0x14;
         constexpr uint32_t cc_en = (1 << 0);
@@ -117,6 +119,8 @@ namespace vm::nvme {
             pci_space.header.subclass = 8; // NVMe
             pci_space.header.prog_if = 2; // NVMe IO Controller
 
+            pci_space.header.irq_pin = 1;
+
             if(func > 0)
                 pci_space.header.header_type = 0x80;
 
@@ -153,6 +157,12 @@ namespace vm::nvme {
                 cq_entry_size = 1 << ((value >> 20) & 0xF);
 
                 cc = value;
+            } else if(reg == regs::intms && size == 4) {
+                irq_mask |= value; // Write 1 = set write 0 = no effect
+                check_irq();
+            } else if(reg == regs::intmc && size == 4) {
+                irq_mask &= ~value; // Write 1 = clear, 0 = no effect
+                check_irq();
             } else if(reg == regs::aqa && size == 4) {
                 queues[0].cqs = ((value >> 16) & 0xFFF) + 1;
                 queues[0].sqs = (value & 0xFFF) + 1;
@@ -183,8 +193,12 @@ namespace vm::nvme {
 
                 if(!completion)
                     kick_queue(qid, value);
-                else
+                else {
                     queues[qid].cq_head = value;
+
+                    if(queues[qid].cq_head == queues[qid].cq_tail && queues[qid].send_irqs)
+                        update_irqs(qid, false);
+                }
             } else {
                 print("nvme: Unknown MMIO write {:#x} <- {:#x} ({})\n", reg, value, size);
                 PANIC("Unknown reg");
@@ -303,7 +317,7 @@ namespace vm::nvme {
                 }
             } else if(opcode == 5) { // Create IO Completion Queue
                 ASSERT(cmd.cmd_data[1] & (1 << 0)); // Physically Contiguous
-                //ASSERT(!(cmd.cmd_data[1] & (1 << 1))); // No IRQs
+                bool send_irqs = (cmd.cmd_data[1] >> 1) & 1;
 
                 auto qid = cmd.cmd_data[0] & 0xFFFF;
                 auto size = (cmd.cmd_data[0] >> 16) + 1;
@@ -316,6 +330,7 @@ namespace vm::nvme {
                     Queue queue{};
                     queue.cq_base = cmd.prp0;
                     queue.cqs = size;
+                    queue.send_irqs = send_irqs;
 
                     queues[qid] = queue;
 
@@ -383,6 +398,9 @@ namespace vm::nvme {
 
             if(queue.cq_tail == 0) // Just wrapped around
                 queue.phase = !queue.phase;
+
+            if(queue.cq_tail != queue.cq_head && queue.send_irqs)
+                update_irqs(qid, true);
         }
 
         bool handle_admin_identify(const SubmissionEntry& cmd) {
@@ -423,10 +441,30 @@ namespace vm::nvme {
             return true;
         }
 
+        void check_irq() {
+            uint32_t v = irq_status & ~irq_mask;
+
+            if(v)
+                pci_set_irq_line(true);
+            else
+                pci_set_irq_line(false);
+        }   
+
+        void update_irqs(uint16_t qid, bool status) { // TODO: MSI-X/MSI
+            ASSERT(qid < 32);
+
+            if(status)
+                irq_status |= (1 << qid);
+            else
+                irq_status &= ~(1 << qid);
+            
+            check_irq();
+        }
+
         bool mmio_enabled = false;
         uintptr_t mmio_base;
 
-        uint32_t cc, csts;
+        uint32_t cc, csts, irq_mask = 0, irq_status = 0;
 
         struct Queue {
             uintptr_t cq_base, sq_base;
@@ -435,7 +473,7 @@ namespace vm::nvme {
             uint16_t cq_head, cq_tail;
             uint16_t sq_head, sq_tail;
 
-            bool phase = true;
+            bool phase = true, send_irqs = false;
         };
         std::unordered_map<uint16_t, Queue> queues;
 

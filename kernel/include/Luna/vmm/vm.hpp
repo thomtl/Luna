@@ -226,10 +226,14 @@ namespace vm {
 
     struct Vm {
         Vm(uint8_t n_cpus);
+
+        void set_irq(uint8_t irq, bool level);
+
         std::unordered_map<uint16_t, AbstractPIODriver*> pio_map;
         std::unordered_map<uintptr_t, std::pair<AbstractMMIODriver*, size_t>> mmio_map;
 
         std::vector<VCPU> cpus;
+        std::vector<AbstractIRQListener*> irq_listeners;
         AbstractMM* mm;
     };
 
