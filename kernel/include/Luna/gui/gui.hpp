@@ -20,6 +20,11 @@ namespace gui {
         constexpr Colour(uint32_t v): raw{v} {}
         constexpr Colour(uint8_t r, uint8_t g, uint8_t b): b{b}, g{g}, r{r}, a{255} {}
         constexpr Colour(uint8_t r, uint8_t g, uint8_t b, uint8_t a): b{b}, g{g}, r{r}, a{a} {}
+
+        constexpr Colour operator+(const Colour& b) const {
+            return {(uint8_t)(r + b.r), (uint8_t)(g + b.g), (uint8_t)(this->b + b.b), a};
+        }
+
         uint32_t raw;
         struct {
             uint8_t b, g, r, a;

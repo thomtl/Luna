@@ -53,3 +53,24 @@ extern "C" void* memcpy(void* dst, const void* src, size_t n) {
     
     return dst;
 }
+
+extern "C" bool isdigit(char c) {
+    return (c >= '0') && (c <= '9');
+}
+
+extern "C" int64_t atoi(const char* c) {
+    int64_t value = 0;
+    int sign = 1;
+    if(*c == '+' || *c == '-') {
+        if(*c == '-') sign = -1;
+        c++;
+    }
+
+    while(isdigit(*c)) {
+        value *= 10;
+        value += (int)(*c - '0');
+        c++;
+    }
+
+    return value * sign;
+}
