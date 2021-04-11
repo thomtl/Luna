@@ -110,7 +110,7 @@ namespace vm {
         virtual uint8_t get_levels() const = 0;
     };
 
-    enum class VmCap { FullPIOAccess, SMMEntryCallback, SMMLeaveCallback };
+    enum class VmCap { FullPIOAccess, SMMEntryCallback, SMMLeaveCallback, HypercallCallback };
     namespace VmRegs {
         enum {
             General = (1 << 0),
@@ -168,9 +168,10 @@ namespace vm {
     struct VCPU {
         VCPU(Vm* vm, uint8_t id);
 
+        void exit();
         
         void set(VmCap cap, bool value);
-        void set(VmCap cap, void (*fn)(void*), void* userptr);
+        void set(VmCap cap, void (*fn)(VCPU*, void*), void* userptr);
         
         void get_regs(vm::RegisterState& regs, uint64_t flags = VmRegs::General | VmRegs::Segment | VmRegs::Control) const;
         void set_regs(const vm::RegisterState& regs, uint64_t flags = VmRegs::General | VmRegs::Segment | VmRegs::Control);
@@ -211,7 +212,7 @@ namespace vm {
         uint64_t tsc;
         uint64_t smbase;
 
-        bool is_in_smm;
+        bool is_in_smm, should_exit;
 
         uint64_t cr0_constraint = 0, cr4_constraint = 0, efer_constraint = 0;
 
@@ -220,8 +221,9 @@ namespace vm {
 
         irqs::lapic::Driver lapic;
 
-        void (*smm_entry_callback)(void*); void* smm_entry_userptr;
-        void (*smm_leave_callback)(void*); void* smm_leave_userptr;
+        void (*smm_entry_callback)(VCPU*, void*); void* smm_entry_userptr;
+        void (*smm_leave_callback)(VCPU*, void*); void* smm_leave_userptr;
+        void (*hypercall_callback)(VCPU*, void*); void* hypercall_userptr;
     };
 
     struct Vm {

@@ -79,23 +79,33 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
 
     smbase = 0x3'0000;
 }
+
+void vm::VCPU::exit() {
+    should_exit = true;
+}
         
 void vm::VCPU::get_regs(vm::RegisterState& regs, uint64_t flags) const { vcpu->get_regs(regs, flags); }
 void vm::VCPU::set_regs(const vm::RegisterState& regs, uint64_t flags) { vcpu->set_regs(regs, flags); }
 void vm::VCPU::set(VmCap cap, bool value) { vcpu->set(cap, value); }
-void vm::VCPU::set(VmCap cap, void (*fn)(void*), void* userptr) { 
+void vm::VCPU::set(VmCap cap, void (*fn)(VCPU*, void*), void* userptr) { 
     if(cap == VmCap::SMMEntryCallback) {
         smm_entry_callback = fn;
         smm_entry_userptr = userptr;
     } else if(cap == VmCap::SMMLeaveCallback) {
         smm_leave_callback = fn;
         smm_leave_userptr = userptr;
+    } else if(cap == VmCap::HypercallCallback) {
+        hypercall_callback = fn;
+        hypercall_userptr = userptr;
     } else
         PANIC("Unknown cap");
 }
 
 bool vm::VCPU::run() {
     while(true) {
+        if(should_exit)
+            return true;
+        
         vm::RegisterState regs{};
         vm::VmExit exit{};
 
@@ -103,9 +113,12 @@ bool vm::VCPU::run() {
             return false;
 
         switch (exit.reason) {
-        case VmExit::Reason::Vmcall: { // For now a VMMCALL is just an exit
-            return true;
-        }
+        case VmExit::Reason::Vmcall:
+            if(hypercall_callback)
+                hypercall_callback(this, hypercall_userptr);
+            else // If no handler, exit
+                return true;
+            break;
 
         case VmExit::Reason::MMUViolation: {
             get_regs(regs);
@@ -581,7 +594,7 @@ void vm::VCPU::enter_smm() {
 
     set_regs(regs);
 
-    smm_entry_callback(smm_entry_userptr);
+    smm_entry_callback(this, smm_entry_userptr);
 
     is_in_smm = true;
 }
@@ -704,7 +717,7 @@ void vm::VCPU::handle_rsm() {
 
     set_regs(rregs);
 
-    smm_leave_callback(smm_leave_userptr);
+    smm_leave_callback(this, smm_leave_userptr);
 
     is_in_smm = false;
 }
