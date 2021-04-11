@@ -84,13 +84,16 @@ vfs::File* echfs::Filesystem::open(const char* path) {
 
             curr_id = entry.starting_block; // Directory-ID for dirs
         } else {
-            auto res = search(name, curr_id, ObjectType::File);
-            if(res == ~0ull)
-                return nullptr; // Does not exist
+            if(strlen(name) != 0) { // If name == 0, its a dir and we already found the entry
+                auto res = search(name, curr_id, ObjectType::File);
+                if(res == ~0ull) {
+                    return nullptr; // Does not exist
+                }
 
-            ASSERT(read_dirent(res, entry));
+                ASSERT(read_dirent(res, entry));
 
-            curr_id = res;
+                curr_id = res;
+            }
             break;
         }
     }
@@ -121,14 +124,28 @@ uint64_t echfs::Filesystem::next_fat_entry(uint64_t fat_entry) {
 
 
 echfs::File::File(Filesystem* fs, const DirectoryEntry& entry, size_t i): root_dir_index{i}, entry{entry}, fs{fs} {
-    fat_chain.push_back(entry.starting_block);
+    if(entry.type == ObjectType::File) {
+        fat_chain.push_back(entry.starting_block);
 
-    size_t j = 1;
-    for(; fat_chain[j - 1] != end_of_chain; j++)
-        fat_chain.push_back(fs->next_fat_entry(fat_chain[j - 1]));
+        size_t j = 1;
+        for(; fat_chain[j - 1] != end_of_chain; j++)
+            fat_chain.push_back(fs->next_fat_entry(fat_chain[j - 1]));
+    }
+}
+
+vfs::FileType echfs::File::get_type() {
+    if(entry.type == ObjectType::Directory)
+        return vfs::FileType::Directory;
+    else if(entry.type == ObjectType::File)
+        return vfs::FileType::File;
+
+    PANIC("Unknown Filetype");
 }
 
 size_t echfs::File::read(size_t offset, size_t count, uint8_t* data) {
+    if(entry.type != ObjectType::File)
+        return 0;
+    
     if((offset + count) >= entry.file_size)
         count = entry.file_size - offset;
 
@@ -158,6 +175,9 @@ size_t echfs::File::write(size_t offset, size_t count, uint8_t* data) {
 }
 
 size_t echfs::File::get_size() {
+    if(entry.type != ObjectType::File)
+        return 0;
+    
     return entry.file_size;
 }
 

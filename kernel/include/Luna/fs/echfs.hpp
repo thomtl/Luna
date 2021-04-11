@@ -47,6 +47,8 @@ namespace echfs {
 
     struct File : public vfs::File {
         File(Filesystem* fs, const DirectoryEntry& entry, size_t i);
+
+        vfs::FileType get_type();
         size_t read(size_t offset, size_t count, uint8_t* data);
         size_t write(size_t offset, size_t count, uint8_t* data);
         size_t get_size();
