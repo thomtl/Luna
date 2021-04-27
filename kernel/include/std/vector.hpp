@@ -99,6 +99,46 @@ namespace std
         const_reference operator[](size_t index) const { return _elements[index]; }
         reference operator[](size_t index) { return _elements[index]; }
 
+
+        iterator erase(const_iterator pos) {
+            auto iter = &_elements[pos - _elements];
+            iter->~T();
+
+            auto move_storage = [&](iterator dest, iterator from, size_t n) {
+                if(dest < from) {
+                    T* _dest = dest;
+                    T* _from = from;
+                    for(size_t i = 0; i < n; i++)
+                        *_dest++ = std::move(*_from++);
+                } else if(dest > from) {
+                    T* _dest = dest + n - 1;
+                    T* _from = from + n - 1;
+                    for(size_t i = n; i > 0; i--)
+                        *_dest-- = std::move(*_from--);
+                }
+            };
+
+            move_storage(iter, iter + 1, _size - (iter - _elements));
+            _size--;
+            return iter;
+        }
+
+        iterator find(const T& v) {
+            for(auto iter = begin(); iter != end(); ++iter)
+                if(*iter == v)
+                    return iter;
+
+            return end();
+        }
+
+        const_iterator find(const T& v) const {
+            for(auto iter = begin(); iter != end(); ++iter)
+                if(*iter == v)
+                    return iter;
+
+            return end();
+        }
+
         private:
         void ensure_capacity(size_t c) {
             if(c <= _capacity)
