@@ -24,6 +24,8 @@ namespace hmm {
 
             auto value_size = align_up(length, align);
             _entry_size = value_size > sizeof(Entry) ? value_size : sizeof(Entry); // Make sure there is at least space for the freelist
+            _entry_size = align_up(_entry_size, 8); // Make sure the freelist is at least aligned
+            
             _n_entries = slab_size / _entry_size;
             _free_entries = _n_entries;
 
