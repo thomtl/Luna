@@ -18,6 +18,7 @@ main_sources = files(
     'source/cpu/pio.cpp',
     'source/cpu/regs.cpp',
     'source/cpu/smp.cpp',
+    'source/cpu/threads.cpp',
 
     'source/drivers/gpu/intel/gpu.cpp',
     'source/drivers/gpu/intel/lil_imports.cpp',
@@ -90,7 +91,8 @@ cpp_includes = include_directories('include')
 nasm_sources = files(
     'source/cpu/amd/svm_low.asm',
     'source/cpu/intel/vmx_low.asm',
-    'source/cpu/irqs.asm')
+    'source/cpu/irqs.asm',
+    'source/cpu/threading.asm')
 
 nasm = find_program('nasm')
 nasm_gen = generator(nasm, output: '@BASENAME@.o', arguments: ['-f', 'elf64', '-g', '-F', 'dwarf', '@INPUT@', '-o', '@OUTPUT@'])

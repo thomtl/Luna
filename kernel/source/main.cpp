@@ -9,7 +9,8 @@
 #include <Luna/cpu/regs.hpp>
 #include <Luna/cpu/idt.hpp>
 #include <Luna/cpu/smp.hpp>
-#include <Luna/cpu/intel/vmx.hpp>
+
+#include <Luna/cpu/threads.hpp>
 
 #include <Luna/mm/pmm.hpp>
 #include <Luna/mm/vmm.hpp>
@@ -67,6 +68,7 @@ static CpuData& allocate_cpu_data() {
 }
 
 void kernel_main_ap(stivale2_smp_info* info);
+void create_vm();
 
 void kernel_main(const stivale2_struct* info) {
     log::select_logger(log::LoggerType::Early);
@@ -136,7 +138,73 @@ void kernel_main(const stivale2_struct* info) {
 
     gui::init();
 
+    spawn([]{
+        create_vm();
 
+        while(1)
+            ;
+    });
+
+    threading::start_on_cpu();
+    __builtin_unreachable();
+}
+
+void kernel_main_ap(stivale2_smp_info* info){
+    (void)info; // info is a physical address
+
+    cpu::early_init();
+    msr::write(msr::ia32_pat, msr::pat::default_pat);
+    vmm::kernel_vmm::get_instance().set();
+
+    auto& cpu_data = allocate_cpu_data();
+    
+    cpu_data.gdt_table.init();
+    cpu_data.tss_sel = cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table));
+    cpu_data.set();
+
+    cpu::init();
+
+    cpu_data.lapic.init();
+
+    simd::init();
+
+    idt::load();
+
+    vm::init();
+
+    threading::start_on_cpu();
+    __builtin_unreachable();
+}
+
+constexpr size_t bsp_stack_size = 0x4000;
+uint8_t bsp_stack[bsp_stack_size];
+
+stivale2_header_tag_framebuffer fb_tab {
+    .tag = {.identifier = STIVALE2_HEADER_TAG_FRAMEBUFFER_ID, .next = 0},
+    .framebuffer_width = 0,
+    .framebuffer_height = 0,
+    .framebuffer_bpp = 32
+};
+
+stivale2_header_tag_smp smp_tag = {
+    .tag = {.identifier = STIVALE2_HEADER_TAG_SMP_ID, .next = (uint64_t)&fb_tab},
+    .flags = 1, // Use x2APIC
+};
+
+stivale2_tag la57_tag = {
+    .identifier = STIVALE2_HEADER_TAG_5LV_PAGING_ID,
+    .next = (uint64_t)&smp_tag
+};
+
+[[gnu::section(".stivale2hdr")]]
+stivale2_header header = {
+    .entry_point = (uint64_t)kernel_main,
+    .stack = (uint64_t)(bsp_stack + bsp_stack_size),
+    .flags = 0, // No KASLR
+    .tags = (uint64_t)&la57_tag
+};
+
+void create_vm() {
     constexpr uintptr_t himem_start = 0x10'0000;
     constexpr size_t himem_size = 32 * 1024 * 1024; // 16MiB
 
@@ -286,64 +354,4 @@ void kernel_main(const stivale2_struct* info) {
     (void)pic_dev;
     
     ASSERT(vm.cpus[0].run());
-
-    print("luna: Done with kernel_main\n");
-    while(true)
-        ;
 }
-
-void kernel_main_ap(stivale2_smp_info* info){
-    (void)info; // info is a physical address
-
-    cpu::early_init();
-    msr::write(msr::ia32_pat, msr::pat::default_pat);
-    vmm::kernel_vmm::get_instance().set();
-
-    auto& cpu_data = allocate_cpu_data();
-    
-    cpu_data.gdt_table.init();
-    cpu_data.tss_sel = cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table));
-    cpu_data.set();
-
-    cpu::init();
-
-    cpu_data.lapic.init();
-
-    simd::init();
-
-    idt::load();
-
-    vm::init();
-
-    asm("sti");
-    while(1)
-        ;
-}
-
-constexpr size_t bsp_stack_size = 0x4000;
-uint8_t bsp_stack[bsp_stack_size];
-
-stivale2_header_tag_framebuffer fb_tab {
-    .tag = {.identifier = STIVALE2_HEADER_TAG_FRAMEBUFFER_ID, .next = 0},
-    .framebuffer_width = 0,
-    .framebuffer_height = 0,
-    .framebuffer_bpp = 32
-};
-
-stivale2_header_tag_smp smp_tag = {
-    .tag = {.identifier = STIVALE2_HEADER_TAG_SMP_ID, .next = (uint64_t)&fb_tab},
-    .flags = 1, // Use x2APIC
-};
-
-stivale2_tag la57_tag = {
-    .identifier = STIVALE2_HEADER_TAG_5LV_PAGING_ID,
-    .next = (uint64_t)&smp_tag
-};
-
-[[gnu::section(".stivale2hdr")]]
-stivale2_header header = {
-    .entry_point = (uint64_t)kernel_main,
-    .stack = (uint64_t)(bsp_stack + bsp_stack_size),
-    .flags = 0, // No KASLR
-    .tags = (uint64_t)&la57_tag
-};

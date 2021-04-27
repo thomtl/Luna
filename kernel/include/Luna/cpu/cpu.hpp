@@ -3,6 +3,8 @@
 #include <Luna/common.hpp>
 #include <Luna/cpu/gdt.hpp>
 #include <Luna/cpu/lapic.hpp>
+#include <Luna/cpu/threads.hpp>
+#include <Luna/cpu/stack.hpp>
 
 #include <Luna/cpu/amd/asid.hpp>
 
@@ -39,6 +41,9 @@ struct CpuData {
     lapic::Lapic lapic;
 
     uint16_t tss_sel;
+
+    threading::Thread* current_thread;
+    std::lazy_initializer<cpu::Stack> thread_kill_stack; // Initialized in threading init code
 
     struct {
         uint16_t family;
