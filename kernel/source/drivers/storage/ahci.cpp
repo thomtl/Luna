@@ -18,9 +18,9 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
 
     print("ahci: Version {}.{}.{}\n", regs->ghcr.vs >> 16, (regs->ghcr.vs >> 8) & 0xFF, regs->ghcr.vs & 0xFF);
 
-    regs->ghcr.ghc |= (1 << 31); // Enable aHCI
+    regs->ghcr.ghc |= (1u << 31); // Enable aHCI
 
-    a64 = (regs->ghcr.cap & (1 << 31)) != 0;
+    a64 = (regs->ghcr.cap & (1u << 31)) != 0;
 
     // Add the usable iommu region, don't use 0x0 to avoid confusion with NULL, and limit to 32bits if those addresses are not supported
     if(a64)

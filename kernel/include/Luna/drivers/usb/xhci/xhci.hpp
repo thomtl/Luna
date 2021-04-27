@@ -80,7 +80,7 @@ namespace xhci {
         constexpr uint32_t wake_on_disconnect = (1 << 26);
         constexpr uint32_t wake_on_overcurrent = (1 << 27);
         constexpr uint32_t removeable = (1 << 30);
-        constexpr uint32_t warm_reset = (1 << 31);
+        constexpr uint32_t warm_reset = (1u << 31);
 
         constexpr uint32_t status_change_bits = connect_status_change | port_enabled_change | overcurrent_change | reset_change | link_status_change;
 

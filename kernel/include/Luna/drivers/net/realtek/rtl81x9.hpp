@@ -134,13 +134,13 @@ namespace rtl81x9 {
     };
 
     namespace tx_flags {
-        constexpr uint32_t own = (1 << 31);
+        constexpr uint32_t own = (1u << 31);
         constexpr uint32_t eor = (1 << 30);
         constexpr uint32_t fs = (1 << 29);
         constexpr uint32_t ls = (1 << 28);
 
         constexpr uint32_t ip_cs = (1 << 29);
-        constexpr uint32_t udp_cs = (1 << 31);
+        constexpr uint32_t udp_cs = (1u << 31);
     } // namespace tx_flags
     
     constexpr size_t n_descriptor_sets = 256;

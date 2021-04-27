@@ -550,7 +550,7 @@ void vt_d::RemappingEngine::handle_primary_fault() {
                 print("      Page Entry: {}{}{}, PA: {:#x}\n", ent.r ? "R" : "", ent.w ? "W" : "", ent.x ? "X" : "", ent.frame << 12);
             }
 
-            reg[1] = (1 << 31); // Clear fault
+            reg[1] = (1u << 31); // Clear fault
         }
     }
 
@@ -576,9 +576,9 @@ void vt_d::RemappingEngine::clear_faults() {
     for(size_t i = 0; i < n_fault_recording_regs; i++) {
         uint64_t* reg = (uint64_t*)&fault_recording_regs[i];
 
-        if(reg[1] & (1 << 31)) {
+        if(reg[1] & (1u << 31)) {
             print("vt-d: Fault detected from BIOS\n");
-            reg[1] = (1 << 31); // Clear fault
+            reg[1] = (1u << 31); // Clear fault
         }
     }    
 }

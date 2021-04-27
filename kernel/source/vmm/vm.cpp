@@ -61,7 +61,7 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     regs.rip = 0xFFF0;
     regs.rflags = (1 << 1);
 
-    regs.cr0 = (cr0_constraint & ~((1 << 0) | (1 << 31))); // Clear PE and PG;
+    regs.cr0 = (cr0_constraint & ~((1 << 0) | (1u << 31))); // Clear PE and PG;
     regs.cr4 = cr4_constraint;
 
     regs.cr3 = 0;
@@ -251,7 +251,7 @@ bool vm::VCPU::run() {
             } else if(leaf == 1) {
                 passthrough();
 
-                regs.rcx |= (1 << 31); // Set Hypervisor Present bit
+                regs.rcx |= (1u << 31); // Set Hypervisor Present bit
 
                 os_support_bit(regs.rdx, 9, 24);
                 os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
@@ -578,7 +578,7 @@ void vm::VCPU::enter_smm() {
 
     regs.rflags = (1 << 1);
     regs.rip = 0x8000;
-    regs.cr0 &= ~((1 << 0) | (1 << 2) | (1 << 3) | (1 << 31));
+    regs.cr0 &= ~((1 << 0) | (1 << 2) | (1 << 3) | (1u << 31));
     regs.cr4 = cr4_constraint;
     regs.efer = efer_constraint;
 
@@ -614,7 +614,7 @@ void vm::VCPU::handle_rsm() {
     rregs.cs = {.selector = 0, .base = 0, .limit = 0, .attrib = {.type = 0xB, .s = 1, .present = 1, .g = 1}}; // 32bit CS is required to clear LMA
 
     if(rregs.cr0 & (1 << 0))
-        rregs.cr0 &= ~((1 << 0) | (1 << 31)); // Clear cr0.PE and cr0.PG
+        rregs.cr0 &= ~((1 << 0) | (1u << 31)); // Clear cr0.PE and cr0.PG
 
     rregs.cr4 &= ~(1 << 5); // Clear cr4.PAE
     rregs.efer = efer_constraint;
@@ -755,7 +755,7 @@ vm::PageWalkInfo vm::VCPU::walk_guest_paging(uintptr_t gva) {
     vm::RegisterState regs{};
     get_regs(regs, VmRegs::Control); // We only really care about cr0, cr3, cr4, and efer here
 
-    if(!(regs.cr0 & (1 << 31)))
+    if(!(regs.cr0 & (1u << 31)))
         return {.found = true, .is_write = true, .is_user = true, .is_execute = true, .gpa = gva};
 
     // Paging is enabled, we can assume cr0.PE is true too, now figure out the various paging modes

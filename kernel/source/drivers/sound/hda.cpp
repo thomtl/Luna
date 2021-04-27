@@ -232,7 +232,7 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
 
     regs->gctl |= (1 << 8); // Accept unsolicited responses
 
-    regs->intctl = (1 << 31) | (1 << 30); // Global IRQ enable + Controller IRQ enable
+    regs->intctl = (1u << 31) | (1 << 30); // Global IRQ enable + Controller IRQ enable
 
 
     auto detected_codecs = regs->statests;

@@ -528,7 +528,7 @@ void vmx::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool e
     info |= vector;
     info |= (type_val << 8);
     info |= (error_code << 11);
-    info |= (1 << 31); // Valid
+    info |= (1u << 31); // Valid
 
     if(error_code)
         write(vm_entry_exception_error_code, error);
@@ -683,7 +683,7 @@ void vmx::Vm::set_regs(const vm::RegisterState& regs, uint64_t flags) {
         write(guest_cr3, regs.cr3);
 
         uint64_t efer = regs.efer;
-        if(regs.cr0 & (1 << 31) && regs.efer & (1 << 8)) {
+        if(regs.cr0 & (1u << 31) && regs.efer & (1 << 8)) {
             efer |= (1 << 10); // If cr0.PG and IA32_EFER.LME then IA32_EFER.LMA should be set
 
             write(guest_tr_access_right, (read(guest_tr_access_right) & ~0xF) | 11); // Set TSS type to TSS64-busy, otherwise we get an invalid guest state error
