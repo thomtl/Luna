@@ -87,6 +87,6 @@ struct TicketLock {
     }
 
     private:
-    uint64_t serving;
-    uint64_t next_ticket;
+    volatile uint64_t serving;
+    volatile uint64_t next_ticket;
 };

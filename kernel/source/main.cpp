@@ -57,13 +57,13 @@
 
 #include <std/mutex.hpp>
 
-std::minimal_vector<CpuData, 1> per_cpu_data{};
+static std::minimal_vector<CpuData, 1> per_cpu_data{};
+static TicketLock cpu_data_lock{};
 
 static CpuData& allocate_cpu_data() {
-    static TicketLock lock{};
-    std::lock_guard guard{lock};
+    std::lock_guard guard{cpu_data_lock};
 
-    return per_cpu_data.push_back({});
+    return per_cpu_data.emplace_back();
 }
 
 void kernel_main_ap(stivale2_smp_info* info);

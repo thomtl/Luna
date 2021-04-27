@@ -13,6 +13,7 @@ namespace log
 	};
 
 	extern Logger* global_logger;
+	extern TicketLock global_lock;
 
 	enum class LoggerType { Early, Late };
 	void select_logger(LoggerType type);
@@ -21,8 +22,7 @@ namespace log
 
 template<typename... Args>
 void print(const char* fmt, Args&&... args){
-	static TicketLock printer_lock{};
-	std::lock_guard guard{printer_lock};
+	std::lock_guard guard{log::global_lock};
 
 	format::format_to(*log::global_logger, fmt, std::forward<Args>(args)...);
 }
