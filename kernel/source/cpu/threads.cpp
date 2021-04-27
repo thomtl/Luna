@@ -38,7 +38,7 @@ static threading::Thread* next_thread() {
     }
 
     // Create a No-op thread, should eventually balance out, where there are enough No-op threads out there to balance all CPUs
-    return spawn_unlocked([](void*) { while(1) { hpet::poll_nsleep(200); yield(); } }, nullptr);
+    return spawn_unlocked([](void*) { while(1) { yield(); } }, nullptr);
 }
 
 threading::Thread* this_thread() {
