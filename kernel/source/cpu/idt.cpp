@@ -3,6 +3,8 @@
 
 #include <Luna/cpu/regs.hpp>
 
+#include <Luna/misc/debug.hpp>
+
 static idt::handler handlers[idt::n_table_entries] = {};
 static idt::entry table[idt::n_table_entries] = {};
 static idt::pointer table_pointer{};
@@ -116,6 +118,8 @@ extern "C" void isr_handler(idt::regs* regs) {
         print("GS: {:#x}\n", msr::read(msr::gs_base));
 
         print("CPU: {:#x}\n", get_cpu().lapic_id);
+
+        debug::trace_stack(r.rbp);
 
         while(1)
             ;

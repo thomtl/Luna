@@ -76,6 +76,7 @@ main_sources = files(
     'source/vmm/emulate.cpp',
     'source/vmm/vm.cpp',
 
+    'source/misc/debug.cpp',
     'source/misc/log.cpp',
     'source/misc/font.cpp',
     'source/misc/misc.cpp',

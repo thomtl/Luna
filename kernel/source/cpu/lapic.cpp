@@ -18,7 +18,6 @@ void lapic::Lapic::write(uint32_t reg, uint32_t v) {
         *(volatile uint32_t*)(mmio_base + reg) = v;
 }
 
-#include <Luna/misc/log.hpp>
 
 void lapic::Lapic::init() {
     uint32_t a, b, c, d;
