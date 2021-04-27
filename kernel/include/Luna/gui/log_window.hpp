@@ -6,7 +6,7 @@
 
 namespace gui {
     struct Log : public Widget {
-        Log(Vec2i pos, Vec2i size_chars): offset{0}, curr_x{0}, curr_y{0}, pos{pos}, size_chars{size_chars} { }
+        Log(Vec2i pos, Vec2i size_chars): offset{0}, curr_x{0}, curr_y{0}, pos{pos}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
 
         void redraw(Desktop& desktop, const Vec2i& parent_pos) {
             auto eff_pos = parent_pos + pos;
@@ -28,8 +28,58 @@ namespace gui {
                             off++;
                             break;
                         }
+                    } else if(buf[off] == 0x1B) { // ANSI Escape
+                        off++;
+                        ASSERT(buf[off++] == '[');
+                        auto is_param = [](char c) -> bool { return (c >= 0x30) && (c <= 0x3F); };
+                        auto is_inter = [](char c) -> bool { return (c >= 0x20) && (c <= 0x2F); };
+                        auto is_final = [](char c) -> bool { return (c >= 0x40) && (c <= 0x7E); };
+                        
+                        std::vector<int64_t> params;
+                        while(is_param(buf[off])) {
+                            params.push_back(atoi(buf.data() + off));
+                            while(isdigit(buf[off]))
+                                off++;
+
+                            if(buf[off] == ';') // Seperator
+                                off++;
+                        }
+
+                        while(is_inter(buf[off++]))
+                            ;
+
+                        char op = buf[off - 1];
+                        ASSERT(is_final(op));
+                        if(op == 'm') {
+                            for(auto p : params) {
+                                if(p == 0) {
+                                    fg = Colour{255, 255, 255};
+                                    bg = Colour{0, 0, 0};
+                                    colour_intensity = Colour{0, 0, 0};
+                                } else if(p == 1) {
+                                    colour_intensity = Colour{10, 10, 10};
+                                } else if(p >= 30 && p <= 37) {
+                                    constexpr Colour list[] = {
+                                        {0, 0, 0},
+                                        {170, 0, 0},
+                                        {0, 170, 0},
+                                        {170, 85, 0},
+                                        {0, 0, 170},
+                                        {170, 0, 170},
+                                        {0, 170, 170},
+                                        {170, 170, 170}
+                                    };
+
+                                    fg = list[p - 30];
+                                } else {
+                                    print("gui::log: Unknown ANSI m param: {}\n", p);
+                                }
+                            }
+                        } else {
+                            print("gui::log:Unknown ANSI Escape op {:c}\n", op);
+                        }
                     } else {
-                        desktop.put_char(eff_pos + Vec2i{(int32_t)(8 * x), (int32_t)(16 * y)}, buf[off], Colour(255, 255, 255), Colour(0, 0, 0));
+                        desktop.put_char(eff_pos + Vec2i{(int32_t)(8 * x), (int32_t)(16 * y)}, buf[off], fg + colour_intensity, bg);
                         off++;
                     }
                 }
@@ -68,6 +118,8 @@ namespace gui {
         size_t offset;
         size_t curr_x, curr_y;
         Vec2i pos, size_chars;
+
+        Colour fg, bg, colour_intensity;
     };
 
     struct LogWindow : public Widget, public log::Logger {

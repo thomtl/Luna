@@ -340,8 +340,8 @@ void create_vm() {
 
     auto* dram_dev = new vm::q35::dram::Driver{&vm, pci_host_bridge, pci_mmio_access};
 
-    vm.cpus[0].set(vm::VmCap::SMMEntryCallback, [](void* dram) { ((vm::q35::dram::Driver*)dram)->smm_enter(); }, dram_dev);
-    vm.cpus[0].set(vm::VmCap::SMMLeaveCallback, [](void* dram) { ((vm::q35::dram::Driver*)dram)->smm_leave(); }, dram_dev);
+    vm.cpus[0].set(vm::VmCap::SMMEntryCallback, [](vm::VCPU*, void* dram) { ((vm::q35::dram::Driver*)dram)->smm_enter(); }, dram_dev);
+    vm.cpus[0].set(vm::VmCap::SMMLeaveCallback, [](vm::VCPU*, void* dram) { ((vm::q35::dram::Driver*)dram)->smm_leave(); }, dram_dev);
 
     auto* smi_dev = new vm::q35::smi::Driver{&vm};
 
@@ -351,7 +351,7 @@ void create_vm() {
     (void)lpc_dev;
 
     auto* pic_dev = new vm::irqs::pic::Driver{&vm};
-    (void)pic_dev;
+    vm.irq_listeners.push_back(pic_dev);
     
     ASSERT(vm.cpus[0].run());
 }

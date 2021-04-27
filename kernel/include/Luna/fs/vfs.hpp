@@ -4,9 +4,11 @@
 #include <std/unordered_map.hpp>
 
 namespace vfs {
+    enum class FileType { File, Directory };
     struct File {
         virtual ~File() {}
 
+        virtual FileType get_type() = 0;
         virtual size_t read(size_t offset, size_t count, uint8_t* data) = 0;
         virtual size_t write(size_t offset, size_t count, uint8_t* data) = 0;
         virtual size_t get_size() = 0;

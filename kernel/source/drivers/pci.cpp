@@ -266,7 +266,7 @@ void pci::init() {
 
     print("pci: Enumerated devices:\n");
     for(auto& device : devices) {
-        print("   - {}:{}:{}.{} - {:x}:{:x} {}.{}.{}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(11), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(9));
+        print("   - {:x}:{:x}:{:x}.{:x} - {:x}:{:x} {:x}.{:x}.{:x}", device.seg, (uint64_t)device.bus, (uint64_t)device.slot, (uint64_t)device.func, device.read<uint16_t>(0), device.read<uint16_t>(2), (uint64_t)device.read<uint8_t>(11), (uint64_t)device.read<uint8_t>(10), (uint64_t)device.read<uint8_t>(9));
 
         if(device.power.supported)
             print(" Power{{{}{}{}{}}}", (device.power.supported_states & (1 << 0)) ? "D0, " : "", (device.power.supported_states & (1 << 1)) ? "D1, " : "", (device.power.supported_states & (1 << 2)) ? "D2, " : "", (device.power.supported_states & (1 << 3)) ? "D3" : "");
@@ -293,7 +293,7 @@ void pci::handoff_bios() {
             continue;
 
         if(device.driver->bios_handoff)
-        device.driver->bios_handoff(device);
+            device.driver->bios_handoff(device);
     }
 }
 

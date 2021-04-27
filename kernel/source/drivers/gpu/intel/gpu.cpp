@@ -24,24 +24,34 @@ intel_gpu::Gpu::Gpu(pci::Device* dev): dev{dev}, mm{dev} {
 
     lil_init_gpu(&ctx, dev);
 
-    auto& connector = ctx.connectors[0];
-    ctx_info = connector.get_connector_info(&ctx, &connector);
+    for(size_t i = 0; i < ctx.num_connectors; i++) {
+        auto& connector = ctx.connectors[i];
+        if(!connector.is_connected(&ctx, &connector))
+            continue;
 
-    for(size_t i = 0; i < 4; i++) {
-        auto& mode = modes[i];
-        mode.width = ctx_info.modes[i].hactive;
-        mode.height = ctx_info.modes[i].vactive;
+        ctx_info = connector.get_connector_info(&ctx, &connector);
 
-        mode.bpp = 32;
-        mode.pitch = mode.width * (mode.bpp / 8);
-        mode.pitch = align_up(mode.pitch, 64);
+        for(size_t i = 0; i < 4; i++) {
+            auto& mode = modes[i];
+            mode.width = ctx_info.modes[i].hactive;
+            mode.height = ctx_info.modes[i].vactive;
+
+            mode.bpp = 32;
+            mode.pitch = mode.width * (mode.bpp / 8);
+            mode.pitch = align_up(mode.pitch, 64);
+        }
+    
+        this->connector = &connector;
+        return;
     }
 
-    if(!connector.is_connected(&ctx, &connector))
-        PANIC("Connector 0 is not connected");
+    // Wasn't able to find connector sadly
 }
 
 bool intel_gpu::Gpu::set_mode(const gpu::Mode& mode) {
+    if(!connector)
+        return false;
+
     size_t i = 0;
     bool found = false;
     for(; i < 4; i++) {
@@ -54,8 +64,7 @@ bool intel_gpu::Gpu::set_mode(const gpu::Mode& mode) {
     if(!found)
         return false;
     
-    auto& connector = ctx.connectors[0];
-    auto& crtc = *connector.crtc;
+    auto& crtc = *connector->crtc;
     auto& plane = crtc.planes[0];
 
     crtc.current_mode = ctx_info.modes[i];
@@ -107,6 +116,9 @@ uint8_t* intel_gpu::Gpu::get_lfb() const {
 
 static void init(pci::Device& dev) {
     auto* igpu = new intel_gpu::Gpu{&dev};
+    if(!igpu->is_connected())
+        return;
+    
     gpu::get_gpu().register_gpu(igpu);
     gpu::get_gpu().make_gpu_main(igpu);
     gpu::get_gpu().set_mode(igpu->get_modes()[0]);

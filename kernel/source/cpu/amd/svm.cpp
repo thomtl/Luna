@@ -143,7 +143,7 @@ void svm::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool e
     v |= vector; // Vector
     v |= (type_val << 8); // Type
     v |= (error_code << 11);
-    v |= (1 << 31); // Valid
+    v |= (1ull << 31); // Valid
 
     if(error_code) 
         v |= ((uint64_t)error << 32);
@@ -196,7 +196,8 @@ bool svm::Vm::run(vm::VmExit& exit) {
             auto grip = vmcb->cs.base + vmcb->rip;
 
             if(int_no == 6) { // #UD
-                auto* instruction = (uint8_t*)(mm->get_phys(grip) + phys_mem_map); // TODO: Make sure we don't cross a page boundary
+                uint8_t instruction[15];
+                vcpu->mem_read(grip, {instruction});
 
                 // Make sure `VMCALL` from intel also works
                 if(instruction[0] == 0x0F && instruction[1] == 0x01 && instruction[2] == 0xC1) {

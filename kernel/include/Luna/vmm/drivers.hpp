@@ -21,4 +21,10 @@ namespace vm {
         virtual void mmio_write(uintptr_t addr, uint64_t value, uint8_t size) = 0;
         virtual uint64_t mmio_read(uintptr_t addr, uint8_t size) = 0;
     };
+
+    struct AbstractIRQListener {
+        virtual ~AbstractIRQListener() {}
+
+        virtual void irq_set(uint8_t vector, bool level) = 0;
+    };
 } // namespace vm

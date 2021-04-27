@@ -31,6 +31,18 @@ namespace vm::pci {
             }
         }
 
+        void pci_set_irq_line(bool active) {
+            if(pci_space.header.command & (1 << 10)) // IRQ Disable
+                return;
+            
+            if(active) // Set IRQ status
+                pci_space.header.status |= (1 << 3);
+            else
+                pci_space.header.status &= ~(1 << 3);
+
+            vm->set_irq(pci_space.header.irq_line, active);
+        }
+
         ConfigSpace pci_space;
         protected:
         // Handlers
