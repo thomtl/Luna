@@ -100,7 +100,8 @@ extra_warning_flags = ['-Wreorder', '-Wdeprecated-copy-dtor', '-Wno-unknown-prag
 
 flags_c_common = ['-m64', '-march=x86-64', '-fno-PIC', '-Wall', '-Wextra', '-ffreestanding', '-mno-red-zone', '-fstrict-volatile-bitfields',
                   '-nostdlib', '-mcmodel=kernel', '-fno-omit-frame-pointer', '-g', '-O2',
-                  '-mno-mmx', '-mno-sse', '-mno-sse2', '-mno-sse3', '-mno-sse4', '-mno-sse4.1', '-mno-sse4.2', '-mno-sse4a']
+                  '-mno-mmx', '-mno-sse', '-mno-sse2', '-mno-sse3', '-mno-sse4', '-mno-sse4.1', '-mno-sse4.2', '-mno-sse4a',
+                  '-fstack-protector-all']
 
 cpp_flags = []
 cpp_flags += flags_c_common
