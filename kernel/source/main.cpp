@@ -300,6 +300,7 @@ void kernel_main_ap(stivale2_smp_info* info){
     vmm::kernel_vmm::get_instance().set();
 
     auto& cpu_data = allocate_cpu_data();
+    
     cpu_data.gdt_table.init();
     cpu_data.tss_sel = cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table));
     cpu_data.set();
