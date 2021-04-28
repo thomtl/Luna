@@ -38,4 +38,55 @@ namespace std
 
     template<size_t L, size_t A = alignof(int)>
     using aligned_storage_t = typename aligned_storage<L, A>::type;
+
+    template< class T >
+    struct decay {
+    private:
+        typedef typename std::remove_reference<T>::type U;
+    public:
+        typedef typename std::conditional< 
+            std::is_array<U>::value,
+            typename std::remove_extent<U>::type*,
+            typename std::conditional< 
+                std::is_function<U>::value,
+                typename std::add_pointer<U>::type,
+                typename std::remove_cv<U>::type
+            >::type
+        >::type type;
+    };
+ 
+    template <class...>
+    struct common_type {};
+
+    template <class T>
+    struct common_type<T> : common_type<T, T> {};
+
+    namespace detail {
+        template <class T1, class T2>
+        using cond_t = decltype(false ? std::declval<T1>() : std::declval<T2>());
+ 
+        template <class T1, class T2, class=void>
+        struct common_type_2_impl {};
+ 
+        template <class T1, class T2>
+        struct common_type_2_impl<T1, T2, void_t<cond_t<T1, T2>>> {
+            using type = typename std::decay<cond_t<T1, T2>>::type;
+        };
+
+        template <class AlwaysVoid, class T1, class T2, class...R>
+        struct common_type_multi_impl {};
+ 
+        template <class T1, class T2, class...R>
+        struct common_type_multi_impl<void_t<typename common_type<T1, T2>::type>, T1, T2, R...> : common_type<typename common_type<T1, T2>::type, R...> {};
+    } // namespace detail
+
+    template <class T1, class T2>
+    struct common_type<T1, T2> : detail::common_type_2_impl<typename std::decay<T1>::type, typename std::decay<T2>::type> {};
+ 
+    template <class T1, class T2, class... R>
+    struct common_type<T1, T2, R...>
+        : detail::common_type_multi_impl<void, T1, T2, R...> {};
+    
+    template< class... T >
+    using common_type_t = typename common_type<T...>::type;
 } // namespace std

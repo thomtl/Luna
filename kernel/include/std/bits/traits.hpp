@@ -1,7 +1,12 @@
 #pragma once
 
+#include <stddef.h>
+
 namespace std
 {
+    template<typename...>
+    using void_t = void;
+
     template<typename T, T v>
     struct integral_constant {
         static constexpr T value = v;
@@ -47,6 +52,21 @@ namespace std
     template<typename T> struct is_reference<T&> : std::true_type {};
     template<typename T> struct is_reference<T&&> : std::true_type {};
 
+    template<class T>
+    struct is_array : std::false_type {};
+ 
+    template<class T>
+    struct is_array<T[]> : std::true_type {};
+ 
+    template<class T, size_t N>
+    struct is_array<T[N]> : std::true_type {};
+
+    template<class T>
+    inline constexpr bool is_array_v = is_array<T>::value;
+
+    template<typename T>
+    inline constexpr bool is_reference_v = is_reference<T>::value;
+
     template<typename T>
     struct is_function : std::integral_constant<bool, !std::is_const<const T>::value && !std::is_reference<T>::value> {};
 
@@ -66,6 +86,12 @@ namespace std
 
         template<typename T>
         auto try_add_rvalue_reference(...) -> std::type_identity<T>;
+
+        template <typename T>
+        auto try_add_lvalue_reference(int) -> std::type_identity<T&>;
+
+        template <typename T>
+        auto try_add_lvalue_reference(...) -> std::type_identity<T>;
     } // namespace detail
 
     template<typename T>
@@ -73,4 +99,41 @@ namespace std
 
     template<typename T>
     using add_rvalue_reference_t = typename add_rvalue_reference<T>::type;
+
+    template <typename T>
+    struct add_lvalue_reference : decltype(detail::try_add_lvalue_reference<T>(0)) {};
+
+    template<typename T>
+    using add_lvalue_reference_t = typename add_lvalue_reference<T>::type;
+
+    template<bool B, typename T, typename F>
+    struct conditional { typedef T type; };
+
+    template<typename T, typename F>
+    struct conditional<false, T, F> { typedef F type; };
+
+    template<bool B, typename T, typename F>
+    using conditional_t = typename conditional<B,T,F>::type;
+
+    template<class T>
+    struct remove_extent { typedef T type; };
+ 
+    template<class T>
+    struct remove_extent<T[]> { typedef T type; };
+ 
+    template<class T, size_t N>
+    struct remove_extent<T[N]> { typedef T type; };
+
+    template<class T>
+    using remove_extent_t = typename remove_extent<T>::type;
+
+    namespace detail {
+        template <class T>
+        auto try_add_pointer(int) -> std::type_identity<typename std::remove_reference<T>::type*>;
+        template <class T>
+        auto try_add_pointer(...) -> std::type_identity<T>;
+    } // namespace detail
+ 
+    template <class T>
+    struct add_pointer : decltype(detail::try_add_pointer<T>(0)) {};
 } // namespace std

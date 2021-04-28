@@ -4,26 +4,11 @@
 
 #include <std/type_traits.hpp>
 #include <std/bits/declval.hpp>
+#include <std/bits/move.hpp>
 #include <std/functional.hpp>
 
 namespace std
 {
-    template<typename T>
-    constexpr typename std::remove_reference<T>::type&& move(T&& t) noexcept {
-        return static_cast<typename std::remove_reference_t<T>&&>(t);
-    }
-
-    template<typename T>
-    constexpr T&& forward(typename std::remove_reference<T>::type& t) noexcept {
-        return static_cast<T&&>(t);
-    }
-
-    template<typename T>
-    constexpr T&& forward(typename std::remove_reference<T>::type&& t) noexcept {
-        static_assert(!std::is_lvalue_reference<T>::value);
-        return static_cast<T&&>(t);
-    }
-
     template<typename T>
     constexpr void swap(T& a, T& b) {
         T tmp{move(a)};

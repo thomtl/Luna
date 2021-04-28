@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Luna/common.hpp>
+#include <std/bits/move.hpp>
 
 namespace std
 {
@@ -32,6 +33,25 @@ namespace std
     struct hash<uint64_t> {
         size_t operator()(const uint32_t v) const {
             return v;
+        }
+    };
+
+    template<typename T = void>
+    struct less;
+
+    template<typename T>
+    struct less {
+        constexpr bool operator()(const T& lhs, const T& rhs) const {
+            return lhs < rhs;
+        }
+    };
+
+    template<>
+    struct less<void> {
+        template<typename T, typename U>
+        constexpr auto operator()(T&& lhs, U&& rhs) const noexcept(noexcept(std::forward<T>(lhs) < std::forward<U>(rhs))) 
+                    -> decltype(std::forward<T>(lhs) < std::forward<U>(rhs)) {
+            return std::forward<T>(lhs) < std::forward<U>(rhs);
         }
     };
 } // namespace std
