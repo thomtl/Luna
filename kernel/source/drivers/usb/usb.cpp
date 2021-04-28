@@ -245,6 +245,6 @@ usb::Endpoint& usb::Device::setup_ep(const EndpointData& data) {
     PANIC("Unable to setup EP");
 }
 
-void usb::Endpoint::xfer(std::span<uint8_t> xfer) {
-    ASSERT(device->hci.ep_bulk_xfer(device->hci.userptr, (2 * data.desc.ep_num) + data.desc.dir, xfer));
+std::unique_ptr<Promise<bool>> usb::Endpoint::xfer(std::span<uint8_t> xfer) {
+    return device->hci.ep_bulk_xfer(device->hci.userptr, (2 * data.desc.ep_num) + data.desc.dir, xfer);
 }

@@ -364,7 +364,7 @@ void xhci::HCI::enumerate_ports() {
             return port.hci->send_ep0_control(port, xfer.packet, xfer.write, xfer.len, xfer.buf);
         };
 
-        driver.ep_bulk_xfer = +[](void* userptr, uint8_t epid, std::span<uint8_t> data) -> bool {
+        driver.ep_bulk_xfer = +[](void* userptr, uint8_t epid, std::span<uint8_t> data) -> std::unique_ptr<Promise<bool>> {
             auto& port = *(Port*)userptr;
             return port.hci->send_ep_bulk(port, epid, data);
         };
@@ -445,7 +445,9 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
     return true;
 }
 
-bool xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, uint8_t epid, std::span<uint8_t> data) {
+std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, uint8_t epid, std::span<uint8_t> data) {
+    auto ret = std::make_unique<Promise<bool>>();
+
     auto& ring = *port.ep_rings[epid].second;
     auto& ep = port.ep_rings[epid].first;
     bool write = !ep.desc.dir;
@@ -471,19 +473,26 @@ bool xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, uint8_t epid, std::span<uint
     }
 
     auto i = ring.enqueue(xfer);
-    auto res = ring.run(i, epid);
-    if(auto code = res.code; code != trb_codes::success && code != trb_codes::short_packet) {
-        print("xhci: Failed to do EP Bulk Transfer, code: {}\n", code);
-        return false;
-    }
 
-    if(!write)
-        memcpy(data.data(), dma.host_base, data.size_bytes());
+    spawn([this, i, &ring, epid, write, allocated, dma, data, promise = ret.get()] {
+        auto res = ring.run_await(i, epid);
+        if(auto code = res.code; code != trb_codes::success && code != trb_codes::short_packet) {
+            print("xhci: Failed to do EP Bulk Transfer, code: {}\n", code);
+            promise->set_value(false);
+        } else {
+            if(!write)
+                memcpy((void*)data.data(), dma.host_base, data.size_bytes());
 
-    if(allocated)
-        mm.free(dma);
+            if(allocated)
+                mm.free(dma);
 
-    return true;
+            promise->set_value(true);
+        }
+
+        kill_self();
+    });
+
+    return ret;
 }
 
 bool xhci::HCI::setup_ep(xhci::HCI::Port& port, const usb::EndpointData& ep) {

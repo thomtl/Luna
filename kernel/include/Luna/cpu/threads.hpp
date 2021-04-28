@@ -96,3 +96,18 @@ struct Promise {
     std::aligned_storage_t<sizeof(T), alignof(T)> object;
     threading::Event event;
 };
+
+template<>
+struct Promise<void> {
+    void await() {
+        ::await(&event);
+        event.reset();
+    }
+
+    void complete() {
+        event.trigger();
+    }
+
+    private:
+    threading::Event event;
+};

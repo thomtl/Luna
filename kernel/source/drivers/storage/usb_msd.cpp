@@ -97,15 +97,15 @@ void init(usb::Device& device) {
         cbw.cmd_len = cmd.packet_len;
         memset(cbw.scsi_cmd, 0, 16);
         memcpy(cbw.scsi_cmd, cmd.packet, cmd.packet_len);
-        device.out->xfer(cbw.span());
+        device.out->xfer(cbw.span())->await();
 
         if(cmd.write)
-            device.out->xfer(xfer);
+            device.out->xfer(xfer)->await();
         else
-            device.in->xfer(xfer);
+            device.in->xfer(xfer)->await();
 
         CSW csw{};
-        device.in->xfer(csw.span());
+        device.in->xfer(csw.span())->await();
 
         ASSERT(csw.sig == csw_sig);
 

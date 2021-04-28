@@ -4,6 +4,9 @@
 #include <std/vector.hpp>
 #include <Luna/drivers/usb/usb_spec.hpp>
 
+#include <Luna/cpu/threads.hpp>
+#include <std/memory.hpp>
+
 namespace usb {
     struct ControlXfer {
         spec::DeviceRequestPacket packet;
@@ -60,14 +63,14 @@ namespace usb {
         void* userptr;
         bool (*setup_ep)(void* userptr, const EndpointData& ep);
         bool (*ep0_control_xfer)(void* userptr, const ControlXfer& xfer);
-        bool (*ep_bulk_xfer)(void* userptr, uint8_t epid, std::span<uint8_t> data);
+        std::unique_ptr<Promise<bool>> (*ep_bulk_xfer)(void* userptr, uint8_t epid, std::span<uint8_t> data);
     };
 
     struct Endpoint {
         EndpointData data;
         Device* device;
 
-        void xfer(std::span<uint8_t> data);
+        std::unique_ptr<Promise<bool>> xfer(std::span<uint8_t> data);
     };
 
     struct Device {

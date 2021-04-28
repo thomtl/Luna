@@ -153,7 +153,7 @@ uint8_t Device::get_status() {
 
 
 void Device::send(std::span<uint8_t> data) {
-    out->xfer(data);
+    ASSERT(out->xfer(data)->await());
 }
 
 void Device::recv(std::span<uint8_t> data) {

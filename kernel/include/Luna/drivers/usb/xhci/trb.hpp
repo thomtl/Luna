@@ -381,16 +381,27 @@ namespace xhci {
             return completion[i].trb;
         }
 
+        TRBXferCompletionEvt run_await(size_t i, uint32_t db_val) {
+            completion[i].done = false;
+
+            *doorbell = db_val;
+            completion[i].promise.await();
+
+            return completion[i].trb;
+        }
+
         void complete(size_t i, TRBXferCompletionEvt& evt) {
             ASSERT(completion[i].done == false);
 
             completion[i].trb = evt;
             completion[i].done = true;
+            completion[i].promise.set_value(true);
         }
 
         private:
         struct Completion {
             volatile bool done;
+            Promise<bool> promise;
             TRBXferCompletionEvt trb;
         };
         std::vector<Completion> completion;

@@ -116,6 +116,8 @@ void kernel_main(const stivale2_struct* info) {
 
     cpu_data.lapic.init();
 
+    vm::init();
+
     acpi::init(boot_info);
     ioapic::init();
     hpet::init();
@@ -126,24 +128,25 @@ void kernel_main(const stivale2_struct* info) {
     pci::init();
     asm("sti");
 
-    pci::handoff_bios();
-    iommu::init();
-    pci::init_drivers();
-    
-    usb::init_devices();
+    spawn([] {
+        pci::handoff_bios();
+        iommu::init();
+        pci::init_drivers();
 
-    vm::init();
+        usb::init_devices();
+        //vbe::init();
+        gui::init();
 
-    //vbe::init();
+        kill_self();
+    });
 
-    gui::init();
-
-    spawn([]{
+    /*spawn([]{
+        kill_self();
         create_vm();
 
         while(1)
             ;
-    });
+    });*/
 
     threading::start_on_cpu();
     __builtin_unreachable();

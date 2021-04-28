@@ -170,7 +170,7 @@ namespace xhci {
 
         bool setup_ep(Port& port, const usb::EndpointData& ep);
         bool send_ep0_control(Port& port, const usb::spec::DeviceRequestPacket& packet, bool write, size_t len, uint8_t* buf);
-        bool send_ep_bulk(Port& port, uint8_t epid, std::span<uint8_t> data);
+        std::unique_ptr<Promise<bool>> send_ep_bulk(Port& port, uint8_t epid, std::span<uint8_t> data);
 
         void enumerate_ports();
 
