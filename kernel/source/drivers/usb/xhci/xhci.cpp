@@ -369,6 +369,11 @@ void xhci::HCI::enumerate_ports() {
             return port.hci->send_ep_bulk(port, epid, data);
         };
 
+        driver.ep_irq_xfer = +[](void* userptr, uint8_t epid, std::span<uint8_t> data) -> std::unique_ptr<Promise<bool>> {
+            auto& port = *(Port*)userptr;
+            return port.hci->send_ep_irq(port, epid, data);
+        };
+
         usb::register_device(driver);
     }
 }
@@ -446,6 +451,56 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
 }
 
 std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, uint8_t epid, std::span<uint8_t> data) {
+    auto ret = std::make_unique<Promise<bool>>();
+
+    auto& ring = *port.ep_rings[epid].second;
+    auto& ep = port.ep_rings[epid].first;
+    bool write = !ep.desc.dir;
+
+    TRBNormal xfer{};
+    xfer.type = trb_types::normal;
+    xfer.ioc = 1;
+    xfer.len = data.size_bytes();
+
+    iovmm::Iovmm::Allocation dma{};
+    bool allocated = false;
+    if(data.size_bytes() <= 8 && write) { // Eligible for Immediate Data
+        xfer.immediate_data = 1;
+        memcpy((uint8_t*)&xfer.data_buf, data.data(), data.size_bytes());
+    } else {
+        dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+        allocated = true;
+
+        if(write)
+            memcpy(dma.host_base, data.data(), data.size_bytes());
+
+        xfer.data_buf = dma.guest_base;
+    }
+
+    auto i = ring.enqueue(xfer);
+
+    spawn([this, i, &ring, epid, write, allocated, dma, data, promise = ret.get()] {
+        auto res = ring.run_await(i, epid);
+        if(auto code = res.code; code != trb_codes::success && code != trb_codes::short_packet) {
+            print("xhci: Failed to do EP Bulk Transfer, code: {}\n", code);
+            promise->set_value(false);
+        } else {
+            if(!write)
+                memcpy((void*)data.data(), dma.host_base, data.size_bytes());
+
+            if(allocated)
+                mm.free(dma);
+
+            promise->set_value(true);
+        }
+
+        kill_self();
+    });
+
+    return ret;
+}
+
+std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_irq(Port& port, uint8_t epid, std::span<uint8_t> data) {
     auto ret = std::make_unique<Promise<bool>>();
 
     auto& ring = *port.ep_rings[epid].second;

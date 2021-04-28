@@ -246,5 +246,10 @@ usb::Endpoint& usb::Device::setup_ep(const EndpointData& data) {
 }
 
 std::unique_ptr<Promise<bool>> usb::Endpoint::xfer(std::span<uint8_t> xfer) {
-    return device->hci.ep_bulk_xfer(device->hci.userptr, (2 * data.desc.ep_num) + data.desc.dir, xfer);
+    if(data.desc.ep_type == spec::ep_type::bulk)
+        return device->hci.ep_bulk_xfer(device->hci.userptr, (2 * data.desc.ep_num) + data.desc.dir, xfer);
+    else if(data.desc.ep_type == spec::ep_type::irq)
+        return device->hci.ep_irq_xfer(device->hci.userptr, (2 * data.desc.ep_num) + data.desc.dir, xfer);
+    else
+        PANIC("Unknown EP type");
 }

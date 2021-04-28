@@ -64,6 +64,7 @@ namespace usb {
         bool (*setup_ep)(void* userptr, const EndpointData& ep);
         bool (*ep0_control_xfer)(void* userptr, const ControlXfer& xfer);
         std::unique_ptr<Promise<bool>> (*ep_bulk_xfer)(void* userptr, uint8_t epid, std::span<uint8_t> data);
+        std::unique_ptr<Promise<bool>> (*ep_irq_xfer)(void* userptr, uint8_t epid, std::span<uint8_t> data);
     };
 
     struct Endpoint {
