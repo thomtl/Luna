@@ -127,6 +127,7 @@ static void init(pci::Device& dev) {
 
 static std::pair<uint16_t, uint16_t> known_intel_gpus[] = {
     {0x8086, 0x0166}, // Intel 3rd Gen Core GPU (Ivy Bridge)
+    {0x8086, 0x5917}, // Intel 8th Gen Core GPU (Coffee Lake)
 };
 
 static pci::Driver driver = {
