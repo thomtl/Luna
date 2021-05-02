@@ -2,6 +2,7 @@
 
 #include <Luna/common.hpp>
 #include <Luna/cpu/stack.hpp>
+#include <std/vector.hpp>
 
 namespace threading {
     struct Event {
@@ -109,5 +110,28 @@ struct Promise<void> {
     }
 
     private:
+    threading::Event event;
+};
+
+template<typename T>
+struct EventQueue {
+    void push(const T& v) {
+        queue.push_back(v);
+        event.trigger();
+    }
+
+    template<typename F>
+    void handle(F f) {
+        ::await(&event);
+        event.reset();
+
+        for(auto& v : queue)
+            f(v);
+
+        queue.clear();
+    }
+
+    //private:
+    std::vector<T> queue;
     threading::Event event;
 };
