@@ -217,6 +217,8 @@ bool svm::Vm::run(vm::VmExit& exit) {
             print("svm: Interrupt V: {:#x}, gRIP: {:#x}\n", int_no, grip);
             return false;
         }
+        case 0x60: // External Interrupt
+            break;
 
         case 0x72: { // CPUID
             exit.reason = vm::VmExit::Reason::CPUID;
