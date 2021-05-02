@@ -179,7 +179,7 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     };
 
     {
-        uint32_t min = (uint32_t)PinBasedControls::NMI;// | (uint32_t)PinBasedControls::ExtInt
+        uint32_t min = (uint32_t)PinBasedControls::NMI | (uint32_t)PinBasedControls::ExtInt;
         uint32_t opt = 0;
         write(pin_based_vm_exec_controls, adjust_controls(min, opt, msr::ia32_vmx_pinbased_ctls));
     }
@@ -294,11 +294,12 @@ bool vmx::Vm::run(vm::VmExit& exit) {
     write(host_fs_base, msr::read(msr::fs_base));
     write(host_gs_base, msr::read(msr::gs_base));
 
+    vmclear();
+
     bool launched = false;
     while(true) {
         asm("cli");
 
-        vmclear();
         vmptrld();
 
         write(tsc_offset, -cpu::rdtsc() + vcpu->tsc);
@@ -383,6 +384,8 @@ bool vmx::Vm::run(vm::VmExit& exit) {
                 print("VT-x: Interruption: Type: {}, Vector: {}\n", type, vector);
                 return false;
             }
+        } else if(basic_reason == VMExitReasons::ExtInt) {
+            
         } else if(basic_reason == VMExitReasons::CPUID) {
             exit.reason = vm::VmExit::Reason::CPUID;
 
