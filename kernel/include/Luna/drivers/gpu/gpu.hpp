@@ -34,8 +34,6 @@ namespace gpu
         size_t x, y, w, h;
     };
 
-    
-
     struct GpuManager {
         void register_gpu(AbstractGpu* gpu);
         void make_gpu_main(AbstractGpu* gpu);
@@ -44,6 +42,7 @@ namespace gpu
         Mode get_mode() const;
 
         uint8_t* get_fb();
+        void clear_backbuffer();
         void flush();
         void flush(const Rect& rect);
         private:

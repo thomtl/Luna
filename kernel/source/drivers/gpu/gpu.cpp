@@ -40,6 +40,10 @@ uint8_t* gpu::GpuManager::get_fb() {
     return backbuffer;
 }
 
+void gpu::GpuManager::clear_backbuffer() {
+    memset(backbuffer, 0, curr_mode.height * curr_mode.pitch);
+}
+
 void gpu::GpuManager::flush() {
     memcpy(main_gpu->get_lfb(), backbuffer, curr_mode.height * curr_mode.pitch);
 }

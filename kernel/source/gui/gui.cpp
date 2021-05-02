@@ -31,6 +31,8 @@ void gui::init() {
 
     auto* bar = new TopBar{gpu.get_mode()};
     desktop->add_window(bar);
+
+    desktop->update();
 }
 
 Desktop& gui::get_desktop() {

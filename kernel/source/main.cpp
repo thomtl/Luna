@@ -133,11 +133,14 @@ void kernel_main(const stivale2_struct* info) {
         iommu::init();
         pci::init_drivers();
 
-        usb::init_devices();
-        //vbe::init();
         gui::init();
 
-        kill_self();
+        usb::init_devices();
+        //vbe::init();
+
+        create_vm();
+        while(1)
+            ;
     });
 
     /*spawn([]{

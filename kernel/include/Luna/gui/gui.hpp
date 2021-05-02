@@ -51,6 +51,8 @@ namespace gui {
         void add_window(Widget* widget) { widgets.push_back(widget); }
 
         void update() {
+            gpu::get_gpu().clear_backbuffer();
+
             for(auto* widget : widgets)
                 widget->redraw(*this, {0, 0});
 
@@ -59,7 +61,8 @@ namespace gui {
 
         [[gnu::always_inline]]
         inline void put_pixel(const Vec2i& c, Colour colour) {
-            fb[c.x + c.y * pitch] = colour.raw;
+            if(colour.a > 0)
+                fb[c.x + c.y * pitch] = colour.raw;
         }
 
         [[gnu::always_inline]]
