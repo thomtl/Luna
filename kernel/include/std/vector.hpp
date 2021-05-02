@@ -99,6 +99,10 @@ namespace std
         const_reference operator[](size_t index) const { return _elements[index]; }
         reference operator[](size_t index) { return _elements[index]; }
 
+        void pop_front() {
+            erase(begin());
+        }
+
 
         iterator erase(const_iterator pos) {
             auto iter = &_elements[pos - _elements];

@@ -16,15 +16,18 @@ constexpr uintptr_t align_up(uintptr_t n, uintptr_t a) {
     return align_down(n + a - 1, a);
 }
 
-constexpr uint64_t min(uint64_t a, uint64_t b) {
+template<typename T>
+constexpr T min(T a, std::type_identity_t<T> b) {
     return (a < b) ? a : b;
 }
 
-constexpr uint64_t max(uint64_t a, uint64_t b) {
+template<typename T>
+constexpr T max(T a, std::type_identity_t<T> b) {
     return (a > b) ? a : b;
 }
 
-constexpr uint64_t clamp(uint64_t v, uint64_t minimum, uint64_t maximum) {
+template<typename T>
+constexpr T clamp(T v, std::type_identity_t<T> minimum, std::type_identity_t<T> maximum) {
     return min(max(v, minimum), maximum);
 }
 
