@@ -52,7 +52,7 @@ struct Device {
 
 
 
-void init(usb::Device& device) {
+static void init(usb::Device& device) {
     auto* dev = new Device{};
     dev->usb_dev = &device;
     dev->tag = 1;

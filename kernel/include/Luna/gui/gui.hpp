@@ -15,6 +15,18 @@ namespace gui {
         Vec2 operator+(const Vec2& b) const {
             return {x + b.x, y + b.y};
         }
+
+        Vec2& operator+=(const Vec2& b) {
+            x += b.x;
+            y += b.y;
+
+            return *this;
+        }
+
+        void clamp(Vec2 min, Vec2 max) {
+            x = ::clamp(x, min.x, max.x);
+            y = ::clamp(y, min.y, max.y);
+        }
     };
     using Vec2i = Vec2<int32_t>;
 
@@ -33,6 +45,34 @@ namespace gui {
         };
     };
     static_assert(sizeof(Colour) == 4);
+
+    #define W Colour{255, 255, 255}
+    #define G Colour{127, 127, 127}
+    #define B Colour{0, 0, 0, 0}
+
+    constexpr int cursor_size = 16;
+    constexpr Colour cursor[cursor_size][cursor_size] = {
+        {W, B, B, B, B, B, B, B, B, B, B, B, B, B, B, W},
+        {B, W, B, B, B, B, B, B, B, B, B, B, B, B, W, B},
+        {B, B, W, B, B, B, B, B, B, B, B, B, B, W, B, B},
+        {B, B, B, W, B, B, B, B, B, B, B, B, W, B, B, B},
+        {B, B, B, B, W, B, B, B, B, B, B, W, B, B, B, B},
+        {B, B, B, B, B, W, B, B, B, B, W, B, B, B, B, B},
+        {B, B, B, B, B, B, W, B, B, W, B, B, B, B, B, B},
+        {B, B, B, B, B, B, B, W, W, B, B, B, B, B, B, B},
+        {B, B, B, B, B, B, B, W, W, B, B, B, B, B, B, B},
+        {B, B, B, B, B, B, W, B, B, W, B, B, B, B, B, B},
+        {B, B, B, B, B, W, B, B, B, B, W, B, B, B, B, B},
+        {B, B, B, B, W, B, B, B, B, B, B, W, B, B, B, B},
+        {B, B, B, W, B, B, B, B, B, B, B, B, W, B, B, B},
+        {B, B, W, B, B, B, B, B, B, B, B, B, B, W, B, B},
+        {B, W, B, B, B, B, B, B, B, B, B, B, B, B, W, B},
+        {W, B, B, B, B, B, B, B, B, B, B, B, B, B, B, W},
+    };
+
+    #undef W
+    #undef G
+    #undef B
 
     struct Desktop;
 
@@ -54,6 +94,23 @@ namespace gui {
             auto mode = gpu.get_mode();
             size = {mode.width, mode.height};
             pitch = mode.pitch / 4;
+
+            mouse.pos = {(int)size.x / 2, (int)size.y / 2};
+
+            spawn([this] {
+                while(true) {
+                    event_queue.handle([this](GuiEvent& event) {
+                        if(event.type == GuiEvent::Type::MouseUpdate) {
+                            mouse.pos += event.pos;
+                            mouse.pos.clamp({0, 0}, {(int)size.x - cursor_size, (int)size.y - cursor_size});
+
+                            update();
+                        } else {
+                            print("gui: Unknown Event Type: {}\n", (uint32_t)event.type);
+                        }
+                    });
+                }
+            });
         }
 
         void add_window(Widget* widget) { widgets.push_back(widget); }
@@ -63,6 +120,10 @@ namespace gui {
 
             for(auto* widget : widgets)
                 widget->redraw(*this, {0, 0});
+
+            for(int x = 0; x < cursor_size; x++)
+                for(int y = 0; y < cursor_size; y++)
+                    put_pixel(mouse.pos + Vec2i{x, y}, cursor[x][y]);
 
             gpu::get_gpu().flush();
         }
@@ -103,6 +164,10 @@ namespace gui {
         volatile uint32_t* fb;
         Vec2<size_t> size;
         size_t pitch;
+
+        struct {
+            Vec2i pos;
+        } mouse;
     };
 
     void init();
