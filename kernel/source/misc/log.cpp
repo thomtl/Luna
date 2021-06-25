@@ -7,7 +7,7 @@
 #include <Luna/drivers/vga.hpp>
 
 log::Logger* log::global_logger;
-TicketLock log::global_lock;
+IrqTicketLock log::global_lock;
 
 std::lazy_initializer<uart::Writer> early_logger;
 std::lazy_initializer<uart::Writer> late_logger;

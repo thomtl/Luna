@@ -13,7 +13,7 @@ namespace log
 	};
 
 	extern Logger* global_logger;
-	extern TicketLock global_lock;
+	extern IrqTicketLock global_lock;
 
 	enum class LoggerType { Early, Late };
 	void select_logger(LoggerType type);

@@ -99,3 +99,32 @@ struct TicketLock {
     volatile uint64_t serving;
     volatile uint64_t next_ticket;
 };
+
+struct IrqTicketLock {
+    constexpr IrqTicketLock(): saved_if{false}, _lock{} {}
+
+    void lock() {
+        uint64_t rflags = 0;
+        asm volatile("pushfq\r\npop %0" : "=r"(rflags));
+        bool tmp_if = (rflags >> 9) & 1;
+
+        asm("cli");
+        _lock.lock();
+
+        saved_if = tmp_if;
+    }
+
+    void unlock() {
+        bool tmp_if = saved_if;
+        _lock.unlock();
+
+        if(tmp_if)
+            asm("sti");
+        else
+            asm("cli");
+    }
+
+    bool saved_if;
+    private:
+    TicketLock _lock;
+};

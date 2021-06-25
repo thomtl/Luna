@@ -197,7 +197,7 @@ hmm::Allocator::Pool* hmm::Allocator::alloc_pool(){
 
 
 static std::lazy_initializer<hmm::Allocator> global_allocator;
-static TicketLock global_allocator_lock{};
+static IrqTicketLock global_allocator_lock{};
 
 void hmm::init() {
     std::lock_guard guard{global_allocator_lock};
