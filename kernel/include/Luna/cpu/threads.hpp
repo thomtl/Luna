@@ -5,11 +5,18 @@
 #include <std/vector.hpp>
 
 namespace threading {
+    void start_on_cpu();
+
+    void wakeup_cpu_unlocked();
+    void wakeup_cpu();
+
     struct Event {
         constexpr Event(): value(0) {}
 
         void trigger() {
             __atomic_store_n(&value, 1, __ATOMIC_SEQ_CST);
+
+            wakeup_cpu();
         }
 
         void reset() {
@@ -30,7 +37,7 @@ namespace threading {
         uint64_t rip, rflags;
     };
 
-    enum class ThreadState : uint64_t { Idle = 0, Running = 1, Blocked = 2 };
+    enum class ThreadState : uint64_t { Idle = 0, Running = 1, Blocked = 2, Ignore = 3 };
 
     struct Thread {
         Thread(): state(ThreadState::Idle), stack(0x4000), ctx(), current_event(nullptr) {}
@@ -44,8 +51,6 @@ namespace threading {
 
     extern "C" void thread_invoke(ThreadContext* new_ctx);
     extern "C" void do_yield(ThreadContext* old_ctx, ThreadState* state, ThreadContext* new_ctx, uint64_t new_state);
-
-    void start_on_cpu();
 
     void init_thread_context(Thread* thread, void (*f)(void*), void* arg);
     void add_thread(Thread* thread);
@@ -93,6 +98,10 @@ struct Promise {
         event.trigger();
     }
 
+    void reset() {
+        event.reset();
+    }
+
     private:
     std::aligned_storage_t<sizeof(T), alignof(T)> object;
     threading::Event event;
@@ -110,28 +119,5 @@ struct Promise<void> {
     }
 
     private:
-    threading::Event event;
-};
-
-template<typename T>
-struct EventQueue {
-    void push(const T& v) {
-        queue.push_back(v);
-        event.trigger();
-    }
-
-    template<typename F>
-    void handle(F f) {
-        ::await(&event);
-        event.reset();
-
-        for(auto& v : queue)
-            f(v);
-
-        queue.clear();
-    }
-
-    //private:
-    std::vector<T> queue;
     threading::Event event;
 };

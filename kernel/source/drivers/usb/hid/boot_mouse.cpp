@@ -4,6 +4,8 @@
 
 #include <Luna/gui/gui.hpp>
 
+#include <std/event_queue.hpp>
+
 struct [[gnu::packed]] BootReport {
     uint8_t buttons;
     int8_t x;
@@ -16,7 +18,7 @@ struct Device {
     usb::Device* usb_dev;
     usb::Endpoint* in;
 
-    EventQueue<gui::GuiEvent>* queue;
+    std::EventQueue<gui::GuiEvent>* queue;
 
     void set_idle();
 };

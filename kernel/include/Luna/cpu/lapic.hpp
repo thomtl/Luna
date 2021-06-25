@@ -36,13 +36,14 @@ namespace lapic
         public:
         Lapic() : x2apic{false}, mmio_base{0}, ticks_per_ms{0} {};
         void init();
+        void ipi(uint32_t id, uint8_t vector);
         void eoi();
 
         void start_timer(uint8_t vector, uint64_t ms, regs::LapicTimerModes mode, void (*poll)(uint64_t ms));
 
         private:
-        uint32_t read(uint32_t reg);
-        void write(uint32_t reg, uint32_t v);
+        uint64_t read(uint32_t reg);
+        void write(uint32_t reg, uint64_t v);
 
         bool x2apic;
         uintptr_t mmio_base;

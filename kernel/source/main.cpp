@@ -57,6 +57,7 @@
 #include <Luna/gui/log_window.hpp>
 
 #include <std/mutex.hpp>
+#include <std/event_queue.hpp>
 
 static std::minimal_vector<CpuData, 1> per_cpu_data{};
 static TicketLock cpu_data_lock{};

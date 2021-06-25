@@ -5,6 +5,8 @@
 #include <Luna/cpu/threads.hpp>
 #include <Luna/misc/log.hpp>
 
+#include <std/event_queue.hpp>
+
 extern uint8_t font_bitmap[];
 
 namespace gui {
@@ -154,12 +156,12 @@ namespace gui {
             }
         }
 
-        EventQueue<GuiEvent>& get_event_queue() {
+        std::EventQueue<GuiEvent>& get_event_queue() {
             return event_queue;
         }
 
         private:
-        EventQueue<GuiEvent> event_queue;
+        std::EventQueue<GuiEvent> event_queue;
         std::vector<Widget*> widgets;
         volatile uint32_t* fb;
         Vec2<size_t> size;

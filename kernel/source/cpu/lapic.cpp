@@ -4,14 +4,14 @@
 
 #include <Luna/mm/vmm.hpp>
 
-uint32_t lapic::Lapic::read(uint32_t reg) {
+uint64_t lapic::Lapic::read(uint32_t reg) {
     if(x2apic)
         return msr::read(msr::x2apic_base + (reg >> 4));
     else
         return *(volatile uint32_t*)(mmio_base + reg);
 }
 
-void lapic::Lapic::write(uint32_t reg, uint32_t v) {
+void lapic::Lapic::write(uint32_t reg, uint64_t v) {
     if(x2apic)
         return msr::write(msr::x2apic_base + (reg >> 4), v);
     else
@@ -48,6 +48,15 @@ void lapic::Lapic::init() {
     write(regs::spurious, 0xFF | (1 << 8)); // Spurious IRQ is 0xFF and enable the LAPIC
 
     ticks_per_ms = 0;
+}
+
+void lapic::Lapic::ipi(uint32_t id, uint8_t vector) {
+    if(x2apic) {
+        write(regs::icr_low, ((uint64_t)id << 32) | (1 << 14) | vector); // x2APIC has one 64bit reg
+    } else {
+        write(regs::icr_high, id << 24);
+        write(regs::icr_low, vector);
+    }
 }
 
 void lapic::Lapic::eoi() {

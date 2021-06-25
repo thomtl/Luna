@@ -95,7 +95,8 @@ struct {
 extern "C" void isr_handler(idt::regs* regs) {
     auto int_number = regs->int_num & 0xFF;
 
-    if(int_number < 32) {
+    auto& handler = handlers[int_number];
+    if(int_number < 32 && !handler.f) {
         auto& exception = exceptions[int_number];
         print("Unhandled Exception #{} ({}) has occurred\n", exception.mnemonic, exception.message);
 
@@ -125,12 +126,12 @@ extern "C" void isr_handler(idt::regs* regs) {
             ;
     }
 
-    if(handlers[int_number].f)
-        handlers[int_number].f(int_number, regs, handlers[int_number].userptr);
+    if(handler.f)
+        handler.f(int_number, regs, handler.userptr);
 
-    if(handlers[int_number].is_irq)
+    if(handler.is_irq)
         get_cpu().lapic.eoi();
 
-    if(!handlers[int_number].should_iret && !handlers[int_number].is_irq)
+    if(!handler.should_iret && !handler.is_irq)
         asm("cli; hlt");
 }
