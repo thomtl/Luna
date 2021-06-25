@@ -380,6 +380,8 @@ void xhci::HCI::enumerate_ports() {
 
 bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacket& packet, bool write, size_t len, uint8_t* buf) {
     hpet::poll_msleep(5); // For some reason this sleep is needed to make it work on USB 1.1 devices????
+
+    std::lock_guard guard{port.lock};
     
     uint8_t type = 0;
     if(len > 0 && write) type = 2; // OUT Data Stage
@@ -418,7 +420,10 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
 
             data.immediate_data = 1;
         } else {
-            dma = mm.alloc(len, write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+            {
+                std::lock_guard guard{lock};
+                dma = mm.alloc(len, write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+            }
             allocated = true;
             if(write)
                 memcpy(dma.host_base, buf, len);
@@ -444,14 +449,18 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
     if(!write && len > 0)
         memcpy(buf, dma.host_base, len);
 
-    if(allocated)
+    if(allocated) {
+        std::lock_guard guard{lock};
         mm.free(dma);
+    }
 
     return true;
 }
 
 std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, uint8_t epid, std::span<uint8_t> data) {
     auto ret = std::make_unique<Promise<bool>>();
+
+    std::lock_guard guard{port.lock};
 
     auto& ring = *port.ep_rings[epid].second;
     auto& ep = port.ep_rings[epid].first;
@@ -468,7 +477,10 @@ std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, ui
         xfer.immediate_data = 1;
         memcpy((uint8_t*)&xfer.data_buf, data.data(), data.size_bytes());
     } else {
-        dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+        {
+            std::lock_guard guard{lock};
+            dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+        }
         allocated = true;
 
         if(write)
@@ -488,8 +500,10 @@ std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, ui
             if(!write)
                 memcpy((void*)data.data(), dma.host_base, data.size_bytes());
 
-            if(allocated)
+            if(allocated) {
+                std::lock_guard guard{lock};
                 mm.free(dma);
+            }
 
             promise->set_value(true);
         }
@@ -503,6 +517,8 @@ std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, ui
 std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_irq(Port& port, uint8_t epid, std::span<uint8_t> data) {
     auto ret = std::make_unique<Promise<bool>>();
 
+    std::lock_guard guard{port.lock};
+
     auto& ring = *port.ep_rings[epid].second;
     auto& ep = port.ep_rings[epid].first;
     bool write = !ep.desc.dir;
@@ -518,7 +534,10 @@ std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_irq(Port& port, uint8_t epid, 
         xfer.immediate_data = 1;
         memcpy((uint8_t*)&xfer.data_buf, data.data(), data.size_bytes());
     } else {
-        dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+        {
+            std::lock_guard guard{lock};
+            dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+        }
         allocated = true;
 
         if(write)
@@ -532,14 +551,16 @@ std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_irq(Port& port, uint8_t epid, 
     spawn([this, i, &ring, epid, write, allocated, dma, data, promise = ret.get()] {
         auto res = ring.run_await(i, epid);
         if(auto code = res.code; code != trb_codes::success && code != trb_codes::short_packet) {
-            print("xhci: Failed to do EP Bulk Transfer, code: {}\n", code);
+            print("xhci: Failed to do EP IRQ Transfer, code: {}\n", code);
             promise->set_value(false);
         } else {
             if(!write)
                 memcpy((void*)data.data(), dma.host_base, data.size_bytes());
 
-            if(allocated)
+            if(allocated) {
+                std::lock_guard guard{lock};
                 mm.free(dma);
+            }
 
             promise->set_value(true);
         }
@@ -629,10 +650,14 @@ bool xhci::HCI::setup_ep(xhci::HCI::Port& port, const usb::EndpointData& ep) {
         set_max_esit();
     }
     
-    auto* ring = new TransferRing{mm, 256, &db[port.slot_id]};
-    ctx.tr_dequeue = ring->get_guest_base() | ring->get_cycle();
+    {
+        std::lock_guard guard{lock};
+        auto* ring = new TransferRing{mm, 256, &db[port.slot_id]};
 
-    port.ep_rings[n] = {ep, ring};
+        ctx.tr_dequeue = ring->get_guest_base() | ring->get_cycle();
+
+        port.ep_rings[n] = {ep, ring};
+    }
 
     TRBCmdConfigureEP cmd{};
     cmd.type = trb_types::configure_ep_cmd;
@@ -730,6 +755,8 @@ void xhci::HCI::handle_irq() {
     }
 
     if(run->interrupters[0].erst_dequeue & (1 << 3)) {
+        //std::lock_guard guard{lock};
+
         auto* trb = evt_ring->peek_dequeue();
         while(trb->cycle == evt_ring->get_cycle()) {
             auto type = trb->type;

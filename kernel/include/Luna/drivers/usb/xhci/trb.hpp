@@ -341,10 +341,10 @@ namespace xhci {
         template<TRB T>
         TRBCmdCompletionEvt issue(const T& item) {
             auto i = enqueue(item);
-            completion[i].done = false;
+            __atomic_store_n(&completion[i].done, false, __ATOMIC_SEQ_CST);
 
             *doorbell = 0;
-            while(!completion[i].done)
+            while(!__atomic_load_n(&completion[i].done, __ATOMIC_SEQ_CST))
                 asm("pause");
 
             return completion[i].trb;
@@ -354,7 +354,7 @@ namespace xhci {
             ASSERT(completion[i].done == false);
 
             completion[i].trb = evt;
-            completion[i].done = true;
+            __atomic_store_n(&completion[i].done, true, __ATOMIC_SEQ_CST);
         }
 
         private:
@@ -383,6 +383,7 @@ namespace xhci {
 
         TRBXferCompletionEvt run_await(size_t i, uint32_t db_val) {
             completion[i].done = false;
+            completion[i].promise.reset();
 
             *doorbell = db_val;
             completion[i].promise.await();

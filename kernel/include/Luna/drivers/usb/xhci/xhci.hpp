@@ -150,6 +150,7 @@ namespace xhci {
         private:
         struct Port {
             HCI* hci;
+            TicketLock lock;
 
             Protocol* proto;
             bool has_pair, active;
@@ -190,6 +191,7 @@ namespace xhci {
 
         pci::Device* device;
         iovmm::Iovmm mm;
+        TicketLock lock;
 
         iovmm::Iovmm::Allocation dcbaap_alloc;
         volatile uint64_t* dcbaap;
