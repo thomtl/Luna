@@ -191,7 +191,7 @@ namespace xhci {
 
         pci::Device* device;
         iovmm::Iovmm mm;
-        TicketLock lock;
+        IrqTicketLock lock;
 
         iovmm::Iovmm::Allocation dcbaap_alloc;
         volatile uint64_t* dcbaap;

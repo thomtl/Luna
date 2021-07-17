@@ -21,7 +21,7 @@ namespace storage_dev {
         bool write(size_t offset, size_t count, uint8_t* data);
 
         private:
-        TicketLock lock;
+        IrqTicketLock lock;
     };
 
     void register_device(const DriverDevice& driver);

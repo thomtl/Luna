@@ -441,7 +441,7 @@ namespace vt_d {
         size_t segment;
         std::vector<std::pair<SourceID, SourceID>> source_id_ranges;
 
-        TicketLock lock;
+        IrqTicketLock lock;
 
         friend struct IOMMU;
     };

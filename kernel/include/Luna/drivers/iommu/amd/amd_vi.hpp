@@ -490,7 +490,7 @@ namespace amd_vi {
         IVHDInfo ivhd;
         pci::Device* pci_dev;
 
-        TicketLock lock;
+        IrqTicketLock lock;
 
         friend struct IOMMU;
     };

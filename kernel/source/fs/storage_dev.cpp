@@ -125,7 +125,7 @@ bool storage_dev::Device::write(size_t offset, size_t count, uint8_t* data) {
 }
 
 static std::linked_list<storage_dev::Device*> devices;
-static TicketLock lock{};
+static IrqTicketLock lock{};
 
 void storage_dev::register_device(const DriverDevice& driver) {
     std::lock_guard guard{lock};

@@ -6,7 +6,7 @@
 
 static std::span<uint8_t> bitmap;
 static size_t bitmap_size;
-static TicketLock pmm_lock{};
+static IrqTicketLock pmm_lock{};
 
 void pmm::init(stivale2::Parser& parser) {
     size_t memory_size = 0, highest_page = 0;
