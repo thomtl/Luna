@@ -8,6 +8,7 @@
 #include <Luna/cpu/tss.hpp>
 
 #include <Luna/misc/log.hpp>
+#include <Luna/misc/debug.hpp>
 
 #include <Luna/mm/pmm.hpp>
 #include <Luna/mm/vmm.hpp>

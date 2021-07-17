@@ -1,43 +1,32 @@
 bits 64
 section .text
 
-global do_yield
-do_yield: ; RDI = Curr Ctx, RSI = Curr state ptr, RDX = New Ctx, RCX = New State
-    mov qword [rdi + 8 * 0], rbx
-    mov qword [rdi + 8 * 1], rbp
-    mov qword [rdi + 8 * 3], r12
-    mov qword [rdi + 8 * 4], r13
-    mov qword [rdi + 8 * 5], r14
-    mov qword [rdi + 8 * 6], r15
-
-    pushf
-    pop qword [rdi + 8 * 9]
-
-    pop r8
-    mov qword [rdi + 8 * 8], r8
-    mov qword [rdi + 8 * 2], rsp
-
-    mov qword [rsi], rcx ; This thread is Idle now
-
-    mov rdi, rdx
-    jmp thread_invoke
-
 global thread_invoke
 thread_invoke:
-    mov rbx, qword [rdi + 8 * 0] ; Restore caller saved regs
-    mov rbp, qword [rdi + 8 * 1]
-    mov r12, qword [rdi + 8 * 3]
-    mov r13, qword [rdi + 8 * 4]
-    mov r14, qword [rdi + 8 * 5]
-    mov r15, qword [rdi + 8 * 6]
+    mov rax, qword [rdi + 0 * 8]
+    mov rbx, qword [rdi + 1 * 8]
+    mov rcx, qword [rdi + 2 * 8]
+    mov rdx, qword [rdi + 3 * 8]
+    mov rsi, qword [rdi + 4 * 8]
+    mov rbp, qword [rdi + 6 * 8]
 
-    mov rsp, qword [rdi + 8 * 2] ; RSP
-    mov rcx,  qword [rdi + 8 * 8] ; RIP
+    mov r8, qword [rdi + 7 * 8]
+    mov r9, qword [rdi + 8 * 8]
+    mov r10, qword [rdi + 9 * 8]
+    mov r11, qword [rdi + 10 * 8]
+    mov r12, qword [rdi + 11 * 8]
+    mov r13, qword [rdi + 12 * 8]
+    mov r14, qword [rdi + 13 * 8]
+    mov r15, qword [rdi + 14 * 8]
 
-    push qword [rdi + 8 * 9] ; We are now on the new stack so this should be fine
-    popf
+    mov rsp, qword [rdi + 15 * 8]
 
-    mov rdi, qword [rdi + 8 * 7] ; Needed for passing an argument to the function
+    push 0x10 ; SS
+    push qword [rdi + 15 * 8] ; RSP
+    push qword [rdi + 17 * 8] ; RFLAGS
+    push 0x8 ; CS
+    push qword [rdi + 16 * 8] ; RIP
 
-    jmp rcx
-    
+    mov rdi, qword [rdi + 5 * 8]
+
+    iretq

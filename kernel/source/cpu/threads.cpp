@@ -1,74 +1,21 @@
 #include <Luna/cpu/threads.hpp>
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/cpu/idt.hpp>
+
+#include <Luna/cpu/regs.hpp>
+
+#include <Luna/drivers/hpet.hpp>
 
 #include <Luna/misc/log.hpp>
 
 #include <std/mutex.hpp>
 #include <std/vector.hpp>
 
-#include <Luna/cpu/idt.hpp>
-#include <lai/helpers/pm.h>
-
-struct ThreadIrqState {
-    constexpr ThreadIrqState(): saved_if{false} {}
-    void lock() {
-        uint64_t rflags = 0;
-        asm volatile("pushfq\r\npop %0" : "=r"(rflags));
-        saved_if = (rflags >> 9) & 1;
-
-        asm("cli");
-    }
-
-    void unlock() {
-        if(saved_if)
-            asm("sti");
-        else
-            asm("cli");
-    }
-
-    private:
-    bool saved_if;
-};
-
 static IrqTicketLock scheduler_lock{};
 static std::vector<threading::Thread*> threads;
-static std::vector<uint8_t> waiting_cpus;
 static size_t index = 0;
 
-static threading::Thread* spawn_unlocked_ignored(void (*f)(void*), void* arg) {
-    auto* thread = new threading::Thread();
-
-    threading::init_thread_context(thread, f, arg);
-    thread->state = threading::ThreadState::Ignore;
-    threads.push_back(thread);
-
-    return thread;
-}
-
-static threading::Thread* create_idle_thread() {
-    auto* thread = spawn_unlocked_ignored([](void*) {
-        // No work available, wait for an IPI that notifies us
-        auto id = get_cpu().lapic_id;
-
-        scheduler_lock.lock();
-        waiting_cpus[id / 8] |= (1 << (id % 8));
-        scheduler_lock.unlock();
-
-        // There might be a race where after hlt takes an IRQ, one can happen between hlt and cli, i don't think this is
-        // a problem, but let it be known
-        asm("sti; hlt; cli");
-
-        scheduler_lock.lock();
-        waiting_cpus[id / 8] &= ~(1 << (id % 8));      
-        scheduler_lock.unlock();
-        
-        kill_self();
-    }, nullptr);
-
-    thread->ctx.rflags &= ~(1 << 9); // Make sure the idle thread runs with IRQs disabled, to not allow IRQs from here, to then to occur, preventing scheduler deadlocks
-    scheduler_lock.saved_if = false; // Make sure we stay CLI'ed until the context switch
-    return thread;
-}
+static void idle();
 
 static threading::Thread* next_thread() {
     for(size_t i = 0; i < threads.size(); i++) {
@@ -90,32 +37,7 @@ threading::Thread* this_thread() {
     return get_cpu().current_thread;
 }
 
-#include <Luna/cpu/regs.hpp>
-
-void yield() {
-    ThreadIrqState thread_irq_state{};
-    std::lock_guard guard{thread_irq_state}; // We need to keep rflags.IF seperate from the other thread state since we have other contraints on it
-
-    scheduler_lock.lock();
-    auto* old = this_thread();
-
-    auto& current_thread = get_cpu().current_thread;
-    current_thread = next_thread();
-    if(!current_thread) { // No new thread? No biggie, we came from a thread, just return there
-        scheduler_lock.unlock();
-        return;
-    }
-
-    current_thread->state = threading::ThreadState::Running;
-    scheduler_lock.unlock();
-
-    threading::do_yield(&old->ctx, &old->state, &current_thread->ctx, (uint64_t)threading::ThreadState::Idle);
-}
-
 void await(threading::Event* event) {   
-    ThreadIrqState thread_irq_state{};
-    std::lock_guard guard{thread_irq_state}; // We need to keep rflags.IF seperate from the other thread state since we have other contraints on it
-
     scheduler_lock.lock();
 
     /*
@@ -131,15 +53,12 @@ void await(threading::Event* event) {
 
     auto* old = this_thread();
     old->current_event = event;
+    old->state = threading::ThreadState::Blocked;
 
-    auto& current_thread = get_cpu().current_thread;
-    current_thread = next_thread();
-    if(!current_thread)
-        current_thread = create_idle_thread(); // We ofcourse cannot return to the previous thread, so we'll have to idle
-    current_thread->state = threading::ThreadState::Running;
+    scheduler_lock.saved_if = false;
     scheduler_lock.unlock();
 
-    threading::do_yield(&old->ctx, &old->state, &current_thread->ctx, (uint64_t)threading::ThreadState::Blocked);
+    asm("int $254\r\nsti"); // "yield"
 }
 
 void kill_self() {
@@ -153,27 +72,38 @@ void kill_self() {
 
     auto& current_thread = get_cpu().current_thread;
     current_thread = next_thread();
-    if(!current_thread)
-        current_thread = create_idle_thread(); // We ofcourse cannot return to the previous thread, so we'll have to idle
-    current_thread->state = threading::ThreadState::Running;
+
+    bool should_idle = false;
+    if(current_thread) { // If we were able to get a new thread
+        current_thread->state = threading::ThreadState::Running;
+    } else {
+        should_idle = true; // If we weren't able to find a new thread we should idle
+    }
+
+    auto kill_stack = get_cpu().thread_kill_stack->top();
+
     scheduler_lock.unlock();
 
     // We need to run an epilogue on a different stack to avoid a UAF bug where the stack gets reused before we're done jumping to a new thread
     // And because stacks are cleared on initialization it jumps to NULL
-    auto kill_epilogue = +[](threading::Thread* self, threading::Thread* next) {
+    auto kill_epilogue = +[](threading::Thread* self, threading::Thread* next, bool should_idle) {
         delete self;
-        thread_invoke(&next->ctx);
 
-        __builtin_unreachable();
+        if(should_idle)
+            idle();
+        else
+            thread_invoke(&(next->ctx));
+
+        __builtin_trap();
     };
 
     asm volatile(
             "mov %[new_stack], %%rsp\n"
             "xor %%rbp, %%rbp\n"
             "call *%[epilogue]" 
-            : : "D"(self), "S"(current_thread), [new_stack] "r"(get_cpu().thread_kill_stack->top()), [epilogue] "r"(kill_epilogue) : "memory");
+            : : "D"(self), "S"(current_thread), "d"(should_idle), [new_stack] "r"(kill_stack), [epilogue] "r"(kill_epilogue) : "memory");
 
-    __builtin_unreachable();
+    __builtin_trap();
 }
 
 void threading::init_thread_context(Thread* thread, void (*f)(void*), void* arg) {
@@ -187,8 +117,6 @@ void threading::add_thread(Thread* thread) {
     std::lock_guard guard{scheduler_lock};
 
     threads.push_back(thread);
-
-    wakeup_cpu_unlocked();
 }
 
 threading::Thread* spawn(void (*f)(void*), void* arg) {
@@ -200,46 +128,111 @@ threading::Thread* spawn(void (*f)(void*), void* arg) {
     return thread;
 }
 
-void threading::start_on_cpu() {
-    waiting_cpus.resize(get_cpu().lapic_id / 8 + 1); // TODO: This isn't very elegant, just get the number of cpus
-    
-    idt::set_handler(254, idt::handler{.f = [](uint8_t, idt::regs*, void*) {
-        // Not much to do tbh
-    }, .is_irq = true, .should_iret = true, .userptr = nullptr});
+static void idle() {
+    auto idle_epilogue = +[] {
+        // It is possible that another IRQ arrives that won't reschedule us
+        // TODO: In that case should we force reschedule?
+        while(1)
+            asm("sti\r\nhlt");
 
-    auto& cpu = get_cpu();
-    cpu.thread_kill_stack.init((size_t)0x1000);
+        __builtin_trap();
+    };
 
-    auto& current_thread = cpu.current_thread;
+    asm volatile(
+            "mov %[new_stack], %%rsp\n"
+            "xor %%rbp, %%rbp\n"
+            "call *%[func]" 
+            : : [new_stack] "r"(get_cpu().thread_kill_stack->top()), [func] "r"(idle_epilogue) : "memory");
 
-    scheduler_lock.lock();
-    current_thread = next_thread();
-    if(!current_thread)
-        current_thread = create_idle_thread(); // There's no thread for us available, so we'll just have to wait
-    ASSERT(current_thread);
-    current_thread->state = threading::ThreadState::Running;
-    scheduler_lock.unlock();
-    
-    thread_invoke(&current_thread->ctx);
+    __builtin_trap();
 }
 
-
-void threading::wakeup_cpu_unlocked() {
-    // Notify a waiting cpu that there's a new thread
-    for(size_t i = 0; i < waiting_cpus.size(); i++) {
-        if(waiting_cpus[i] != 0) {
-            for(size_t j = 0; j < 8; j++) {
-                if(waiting_cpus[i] & (1 << j)) {
-                    get_cpu().lapic.ipi(8 * i + j, 254);
-                    return;
-                }
-            }
-        }
+static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
+    scheduler_lock.lock();
+    auto& cpu = get_cpu();
+    auto* old_thread = cpu.current_thread;
+    
+    if(old_thread) { // old_thread might be null
+        old_thread->ctx.save(regs);
+        if(old_thread->state == threading::ThreadState::Running)
+            old_thread->state = threading::ThreadState::Idle;
     }
 
+    auto* next = next_thread();
+    if(!next) {
+        scheduler_lock.unlock();
+
+        cpu.current_thread = nullptr;
+        cpu.lapic.eoi();
+        idle();
+
+        __builtin_trap();
+    }
+
+    next->state = threading::ThreadState::Running;
+    next->ctx.restore(regs);
+    cpu.current_thread = next;
+
+    scheduler_lock.unlock();
 }
 
-void threading::wakeup_cpu() {
-    std::lock_guard guard{scheduler_lock};
-    wakeup_cpu_unlocked();
+void threading::start_on_cpu() {
+    auto& cpu = get_cpu();
+
+    idt::set_handler(quantum_irq_vector, idt::handler{.f = quantum_irq_handler, .is_irq = true, .should_iret = true, .userptr = nullptr});
+    cpu.lapic.start_timer(quantum_irq_vector, quantum_time, lapic::regs::LapicTimerModes::Periodic, hpet::poll_msleep);
+    
+    cpu.thread_kill_stack.init((size_t)0x1000);
+    cpu.current_thread = nullptr;
+
+    asm("sti\r\nhlt"); // Wait for quantum irq to pick us up
+    // TODO: Can't we just do a software int
+    __builtin_trap();
+}
+
+
+void threading::ThreadContext::save(const idt::regs* regs) {
+    rax = regs->rax;
+    rbx = regs->rbx;
+    rcx = regs->rcx;
+    rdx = regs->rdx;
+    rsi = regs->rsi;
+    rdi = regs->rdi;
+    rbp = regs->rbp;
+
+    r8 = regs->r8;
+    r9 = regs->r9;
+    r10 = regs->r10;
+    r11 = regs->r11;
+    r12 = regs->r12;
+    r13 = regs->r13;
+    r14 = regs->r14;
+    r15 = regs->r15;
+
+    rsp = regs->rsp;
+    rip = regs->rip;
+    rflags = regs->rflags;
+}
+
+void threading::ThreadContext::restore(idt::regs* regs) const {
+    regs->rax = rax;
+    regs->rbx = rbx;
+    regs->rcx = rcx;
+    regs->rdx = rdx;
+    regs->rsi = rsi;
+    regs->rdi = rdi;
+    regs->rbp = rbp;
+
+    regs->r8 = r8;
+    regs->r9 = r9;
+    regs->r10 = r10;
+    regs->r11 = r11;
+    regs->r12 = r12;
+    regs->r13 = r13;
+    regs->r14 = r14;
+    regs->r15 = r15;
+
+    regs->rsp = rsp;
+    regs->rip = rip;
+    regs->rflags = rflags;
 }

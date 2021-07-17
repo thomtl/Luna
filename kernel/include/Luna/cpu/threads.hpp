@@ -2,21 +2,23 @@
 
 #include <Luna/common.hpp>
 #include <Luna/cpu/stack.hpp>
+
 #include <std/vector.hpp>
+
+namespace idt
+{
+    struct regs; // Forward decl
+} // namespace idt
+
 
 namespace threading {
     void start_on_cpu();
-
-    void wakeup_cpu_unlocked();
-    void wakeup_cpu();
 
     struct Event {
         constexpr Event(): value(0) {}
 
         void trigger() {
             __atomic_store_n(&value, 1, __ATOMIC_SEQ_CST);
-
-            wakeup_cpu();
         }
 
         void reset() {
@@ -31,13 +33,18 @@ namespace threading {
         uint64_t value;
     };
 
-    // THIS STRUCT IS ACCESSED FROM ASSEMBLY, DO NOT CHANGE
-    struct ThreadContext {
-        uint64_t rbx, rbp, rsp, r12, r13, r14, r15, rdi;
-        uint64_t rip, rflags;
+    // ACCESSED FROM ASSEMBLY, DO NOT CHANGE WITHOUT CHANGING THREADING.ASM
+    struct [[gnu::packed]] ThreadContext {
+        void save(const idt::regs* regs);
+        void restore(idt::regs* regs) const;
+
+        uint64_t rax, rbx, rcx, rdx, rsi, rdi, rbp, r8, r9, r10, r11, r12, r13, r14, r15;
+        uint64_t rsp, rip, rflags;
     };
 
     enum class ThreadState : uint64_t { Idle = 0, Running = 1, Blocked = 2, Ignore = 3 };
+    constexpr uint8_t quantum_irq_vector = 254;
+    constexpr size_t quantum_time = 100; // ms
 
     struct Thread {
         Thread(): state(ThreadState::Idle), stack(0x4000), ctx(), current_event(nullptr) {}
@@ -50,7 +57,6 @@ namespace threading {
     };
 
     extern "C" void thread_invoke(ThreadContext* new_ctx);
-    extern "C" void do_yield(ThreadContext* old_ctx, ThreadState* state, ThreadContext* new_ctx, uint64_t new_state);
 
     void init_thread_context(Thread* thread, void (*f)(void*), void* arg);
     void add_thread(Thread* thread);
@@ -58,7 +64,6 @@ namespace threading {
 
 threading::Thread* this_thread();
 
-void yield();
 void await(threading::Event* event);
 void kill_self();
 

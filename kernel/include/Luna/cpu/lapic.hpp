@@ -27,7 +27,7 @@ namespace lapic
 
         constexpr uint64_t timer_initial_count = 0x380;
         constexpr uint64_t timer_current_count = 0x390;
-        constexpr uint64_t timer_divider = 0x380;
+        constexpr uint64_t timer_divider = 0x3E0;
 
         enum class LapicTimerModes : uint8_t { OneShot = 0, Periodic, TscDeadline };
     } // namespace regs
