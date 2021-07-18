@@ -91,9 +91,25 @@ namespace vm::q35::lpc {
         }
 
         uint32_t pci_handle_read(uint16_t reg, uint8_t size) {
-            print("q35::lpc: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
+            uint32_t ret = 0;
+            switch (size) {
+                case 1: ret = pci_space.data8[reg]; break;
+                case 2: ret = pci_space.data16[reg / 2]; break;
+                case 4: ret = pci_space.data32[reg / 4]; break;
+                default: PANIC("Unknown PCI Access size");
+            }
 
-            return 0;
+            if(ranges_overlap(reg, size, acpi_cntl, 1)) {
+                ;
+            } else if(ranges_overlap(reg, size, pirq_a_base, pirq_a_len)) {
+                ; // Nothing special to do here
+            } else if(ranges_overlap(reg, size, pirq_b_base, pirq_b_len)) {
+                ; // Nothing special to do here
+            } else {
+                print("q35::lpc: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
+            }
+
+            return ret;
         }
 
         void pci_update_bars() {
