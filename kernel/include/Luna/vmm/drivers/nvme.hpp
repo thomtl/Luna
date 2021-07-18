@@ -433,6 +433,18 @@ namespace vm::nvme {
                 data.nn = 1; // 1 Namespace
 
                 vm->cpus[0].dma_write(cmd.prp0, {(uint8_t*)&data, sizeof(data)});
+            } else if(cns == 2) {
+                if(cmd.nsid == 0xFFFF'FFFF || cmd.nsid == 0xFFFF'FFFE)
+                    return false;
+                ASSERT(cmd.nsid == 0);
+
+                auto* nsid_list = new uint32_t[1024];
+                memset(nsid_list, 0, 1024 * sizeof(uint32_t));
+                nsid_list[0] = 1; // Only NS we support
+
+                vm->cpus[0].dma_write(cmd.prp0, {(uint8_t*)nsid_list, 1024 * sizeof(uint32_t)});
+
+                delete[] nsid_list;
             } else {
                 print("nvme: Identify Unknown CNS {}\n", cns);
                 PANIC("Unknown CNS");
