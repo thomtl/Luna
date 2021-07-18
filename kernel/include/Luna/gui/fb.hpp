@@ -10,7 +10,7 @@ namespace gui {
         void redraw(Desktop& desktop, const Vec2i& parent_pos) {
             for(int32_t y = 0; y < size.y; y++)
                 for(int32_t x = 0; x < size.x; x++)
-                    desktop.put_pixel(parent_pos + pos + Vec2i{x, y}, Colour{fb[x + y * size.y]});
+                    desktop.put_pixel(parent_pos + pos + Vec2i{x, y}, Colour{fb[x + y * size.y], 255});
         }
 
         private:

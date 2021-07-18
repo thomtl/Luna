@@ -34,6 +34,7 @@ namespace gui {
 
     union Colour {
         constexpr Colour(uint32_t v): raw{v} {}
+        constexpr Colour(uint32_t v, uint8_t a): raw{v | (a << 24)} {}
         constexpr Colour(uint8_t r, uint8_t g, uint8_t b): b{b}, g{g}, r{r}, a{255} {}
         constexpr Colour(uint8_t r, uint8_t g, uint8_t b, uint8_t a): b{b}, g{g}, r{r}, a{a} {}
 
