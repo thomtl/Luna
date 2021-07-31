@@ -8,7 +8,7 @@
 #include <Luna/vmm/drivers/pci/pci_driver.hpp>
 #include <Luna/vmm/drivers/gpu/edid.hpp>
 
-#include <Luna/gui/fb.hpp>
+#include <Luna/gui/fb_window.hpp>
 
 namespace vm::gpu::bga {
     constexpr size_t dispi = 0x500;
@@ -71,9 +71,15 @@ namespace vm::gpu::bga {
                 mode.enabled = value & 1;
                 if(curr_mode.enabled == false && mode.enabled == true) {
                     window = new gui::FbWindow{{(int32_t)mode.x, (int32_t)mode.y}, fb.data(), "VM Screen"};
-
                     gui::get_desktop().add_window(window);
-                    gui::get_desktop().update();
+
+                    // TODO: Improve this
+                    spawn([this] {
+                        while(1) {
+                            window->update();
+                            ::hpet::poll_msleep(20);
+                        }
+                    });
 
                     curr_mode = mode;
                 } else {

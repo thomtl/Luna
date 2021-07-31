@@ -1,19 +1,15 @@
 #pragma once
 
 #include <Luna/gui/gui.hpp>
-#include <Luna/gui/basic.hpp>
+#include <Luna/gui/framework.hpp>
 #include <Luna/misc/log.hpp>
 
 namespace gui {
-    struct Log : public Widget {
-        Log(Vec2i pos, Vec2i size_chars): offset{0}, curr_x{0}, curr_y{0}, pos{pos}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
+    struct LogWindow : public Window, public log::Logger {
+        LogWindow(Vec2i size_chars, const char* title): Window{{size_chars.x * 8 + 1, size_chars.y * 16}, title}, offset{0}, curr_x{0}, curr_y{0}, pos{pos}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
 
-        void redraw(Desktop& desktop, const Vec2i& parent_pos) {
-            auto eff_pos = parent_pos + pos;
-
-            for(int32_t y = 0; y < (size_chars.y * 16); y++)
-                for(int32_t x = 0; x < (size_chars.x * 8); x++)
-                    desktop.put_pixel(eff_pos + Vec2i{x, y}, Colour{0, 0, 0});
+        void update() const {
+            canvas.clear();
 
             size_t off = offset;
             for(int32_t y = 0; y < size_chars.y; y++) {
@@ -79,7 +75,7 @@ namespace gui {
                             print("gui::log:Unknown ANSI Escape op {:c}\n", op);
                         }
                     } else {
-                        desktop.put_char(eff_pos + Vec2i{(int32_t)(8 * x), (int32_t)(16 * y)}, buf[off], fg + colour_intensity, bg);
+                        canvas.put_char(Vec2i{(int32_t)(8 * x) + 1, (int32_t)(16 * y)}, buf[off], fg + colour_intensity, bg);
                         off++;
                     }
                 }
@@ -88,7 +84,7 @@ namespace gui {
             stop: ;
         }
 
-        void putc(const char c) {
+        void putc(const char c) const {
             if(c == '\t') {
                 putc(' ');
                 buf.push_back(' ');
@@ -113,34 +109,16 @@ namespace gui {
             }     
         }
 
+        void flush() const {
+            update();
+        }
+
         private:
-        std::vector<char> buf;
-        size_t offset;
-        size_t curr_x, curr_y;
+        mutable std::vector<char> buf;
+        mutable size_t offset;
+        mutable size_t curr_x, curr_y;
         Vec2i pos, size_chars;
 
-        Colour fg, bg, colour_intensity;
-    };
-
-    struct LogWindow : public Widget, public log::Logger {
-        LogWindow(const char* title): window{{25, 30}, {400, 700}, title}, logger{{4, 8}, {49, 42}} {
-            window.add_widget(&logger);
-        }
-
-        void putc(const char c) const {
-            logger.putc(c);
-        }
-
-        void flush() const {
-            gui::get_desktop().update();
-        }
-
-        void redraw(Desktop& desktop, const Vec2i& parent_pos) {
-            window.redraw(desktop, parent_pos);
-        }
-
-        private:
-        mutable Window window;
-        mutable Log logger;
+        mutable Colour fg, bg, colour_intensity;
     };
 } // namespace gui

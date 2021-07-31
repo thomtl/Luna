@@ -309,7 +309,7 @@ void create_vm() {
     auto* a20_dev = new vm::fast_a20::Driver{&vm};
     (void)a20_dev;
 
-    auto* log_window = new gui::LogWindow{"VM Log"};
+    auto* log_window = new gui::LogWindow{{60, 40}, "VM Log"};
     gui::get_desktop().add_window(log_window);
 
     auto* uart_dev = new vm::uart::Driver{&vm, 0x3F8, log_window};

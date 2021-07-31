@@ -37,6 +37,7 @@ namespace gpu
     struct GpuManager {
         void register_gpu(AbstractGpu* gpu);
         void make_gpu_main(AbstractGpu* gpu);
+        AbstractGpu* get_main_gpu() { return main_gpu; }
 
         void set_mode(const gpu::Mode& mode);
         Mode get_mode() const;
@@ -45,6 +46,7 @@ namespace gpu
         void clear_backbuffer();
         void flush();
         void flush(const Rect& rect);
+
         private:
         std::vector<AbstractGpu*> gpus;
 

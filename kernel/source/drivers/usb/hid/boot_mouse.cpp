@@ -12,7 +12,12 @@ struct [[gnu::packed]] BootReport {
     int8_t y;
 };
 
+constexpr uint8_t get_report_cmd = 0x1;
+constexpr uint8_t get_idle_cmd = 0x2;
+constexpr uint8_t get_protocol_cmd = 0x3;
+constexpr uint8_t set_report_cmd = 0x9;
 constexpr uint8_t set_idle_cmd = 0xA;
+constexpr uint8_t set_protocol_cmd = 0xB;
 
 struct Device {
     usb::Device* usb_dev;
@@ -55,7 +60,7 @@ static void init(usb::Device& device) {
             std::span<uint8_t> data{(uint8_t*)&report, sizeof(report)};
 
             dev->in->xfer(data)->await();
-            dev->queue->push(gui::GuiEvent{.type = gui::GuiEvent::Type::MouseUpdate, .pos = {report.x, report.y}});
+            dev->queue->push(gui::GuiEvent{.type = gui::GuiEvent::Type::MouseUpdate, .pos = {report.x, report.y}, .left_button_down = (bool)(report.buttons & 1)});
         }
     });
 }

@@ -18,6 +18,10 @@ namespace gui {
             return {x + b.x, y + b.y};
         }
 
+        Vec2 operator-(const Vec2& b) const {
+            return {x - b.x, y - b.y};
+        }
+
         Vec2& operator+=(const Vec2& b) {
             x += b.x;
             y += b.y;
@@ -29,10 +33,24 @@ namespace gui {
             x = ::clamp(x, min.x, max.x);
             y = ::clamp(y, min.y, max.y);
         }
+
+        void lerp(Vec2 b, float a) {
+            x = x * (1 - a) + b.x * a;
+            y = y * (1 - a) + b.y * a;
+        }
+
+        bool collides_with(Vec2 pos, Vec2 size) {
+            return (x >= pos.x && x <= (pos.x + size.x)) && (y >= pos.y && y <= (pos.y + size.y));
+        }
     };
     using Vec2i = Vec2<int32_t>;
 
+    struct Rect {
+        Vec2i pos, size;
+    };
+
     union Colour {
+        constexpr Colour(): Colour{0, 0, 0} {}
         constexpr Colour(uint32_t v): raw{v} {}
         constexpr Colour(uint32_t v, uint8_t a): raw{v | (a << 24)} {}
         constexpr Colour(uint8_t r, uint8_t g, uint8_t b): b{b}, g{g}, r{r}, a{255} {}
@@ -49,92 +67,34 @@ namespace gui {
     };
     static_assert(sizeof(Colour) == 4);
 
-    #define W Colour{255, 255, 255}
-    #define G Colour{127, 127, 127}
-    #define B Colour{0, 0, 0, 0}
-
-    constexpr int cursor_size = 16;
-    constexpr Colour cursor[cursor_size][cursor_size] = {
-        {W, B, B, B, B, B, B, B, B, B, B, B, B, B, B, W},
-        {B, W, B, B, B, B, B, B, B, B, B, B, B, B, W, B},
-        {B, B, W, B, B, B, B, B, B, B, B, B, B, W, B, B},
-        {B, B, B, W, B, B, B, B, B, B, B, B, W, B, B, B},
-        {B, B, B, B, W, B, B, B, B, B, B, W, B, B, B, B},
-        {B, B, B, B, B, W, B, B, B, B, W, B, B, B, B, B},
-        {B, B, B, B, B, B, W, B, B, W, B, B, B, B, B, B},
-        {B, B, B, B, B, B, B, W, W, B, B, B, B, B, B, B},
-        {B, B, B, B, B, B, B, W, W, B, B, B, B, B, B, B},
-        {B, B, B, B, B, B, W, B, B, W, B, B, B, B, B, B},
-        {B, B, B, B, B, W, B, B, B, B, W, B, B, B, B, B},
-        {B, B, B, B, W, B, B, B, B, B, B, W, B, B, B, B},
-        {B, B, B, W, B, B, B, B, B, B, B, B, W, B, B, B},
-        {B, B, W, B, B, B, B, B, B, B, B, B, B, W, B, B},
-        {B, W, B, B, B, B, B, B, B, B, B, B, B, B, W, B},
-        {W, B, B, B, B, B, B, B, B, B, B, B, B, B, B, W},
-    };
-
-    #undef W
-    #undef G
-    #undef B
-
-    struct Desktop;
-
-    struct Widget {
-        virtual ~Widget() {}
-
-        virtual void redraw(Desktop& desktop, const Vec2i& pos) = 0;
-    };
-
-    struct GuiEvent {
-        enum class Type { MouseUpdate };
-        Type type;
-        Vec2i pos;
-    };
-
-    struct Desktop {
-        Desktop(gpu::GpuManager& gpu) {
-            fb = (volatile uint32_t*)gpu.get_fb();
-            auto mode = gpu.get_mode();
-            size = {mode.width, mode.height};
-            pitch = mode.pitch / 4;
-
-            mouse.pos = {(int)size.x / 2, (int)size.y / 2};
-
-            spawn([this] {
-                while(true) {
-                    event_queue.handle([this](GuiEvent& event) {
-                        if(event.type == GuiEvent::Type::MouseUpdate) {
-                            mouse.pos += event.pos;
-                            mouse.pos.clamp({0, 0}, {(int)size.x - cursor_size, (int)size.y - cursor_size});
-
-                            update();
-                        } else {
-                            print("gui: Unknown Event Type: {}\n", (uint32_t)event.type);
-                        }
-                    });
-                }
-            });
-        }
-
-        void add_window(Widget* widget) { widgets.push_back(widget); }
-
-        void update() {
-            gpu::get_gpu().clear_backbuffer();
-
-            for(auto* widget : widgets)
-                widget->redraw(*this, {0, 0});
-
-            for(int x = 0; x < cursor_size; x++)
-                for(int y = 0; y < cursor_size; y++)
-                    put_pixel(mouse.pos + Vec2i{x, y}, cursor[x][y]);
-
-            gpu::get_gpu().flush();
+    struct Canvas {
+        Canvas(Vec2i size): size{size} {
+            fb.resize(size.x * size.y);
         }
 
         [[gnu::always_inline]]
         inline void put_pixel(const Vec2i& c, Colour colour) {
             if(colour.a > 0)
-                fb[c.x + c.y * pitch] = colour.raw;
+                fb[c.x + c.y * size.x] = colour.raw;
+        }
+
+        [[gnu::always_inline]]
+        inline void blit(const Vec2i& pos, const Vec2i& size, const Colour* bitmap) {
+            Colour* line = &fb[pos.x + pos.y * this->size.x];
+            
+            for(int32_t i = 0; i < size.y; i++) {
+                //auto line_pos = pos + Vec2i{0, i};
+                //memcpy((void*)(fb + (line_pos.x + line_pos.y * pitch)), bitmap + i * size.y, size.x * sizeof(Colour));
+
+                for(int32_t j = 0; j < size.x; j++) {
+                    auto c = bitmap[i * size.x + j];
+                    if(c.a < 255)
+                        continue;
+                    line[j] = c;
+                }
+
+                line += this->size.x;
+            }
         }
 
         [[gnu::always_inline]]
@@ -142,7 +102,7 @@ namespace gui {
             constexpr uint8_t font_width = 8;
             constexpr uint8_t font_height = 16;
 
-            auto* line = fb + c.y * pitch + c.x;
+            auto* line = fb.data() + c.y * size.x + c.x;
 
             auto dc = (v >= 32) ? v : 127;
             for(uint8_t i = 0; i < font_height; i++) {
@@ -150,26 +110,73 @@ namespace gui {
                 auto bits = font_bitmap[(dc - 32) * font_height + i];
                 for(uint8_t j = 0; j < font_width; j++) {
                     auto bit = (1 << ((font_width - 1) - j));
-                    *dest = (bits & bit) ? (fg.a == 255 ? fg.raw : *dest) : (bg.a == 255 ? bg.raw : *dest);
+                    dest->raw = (bits & bit) ? (fg.a == 255 ? fg.raw : dest->raw) : (bg.a == 255 ? bg.raw : dest->raw);
                     dest++;
                 }
-                line += pitch;
+                line += size.x;
             }
         }
-
-        std::EventQueue<GuiEvent>& get_event_queue() {
-            return event_queue;
+        
+        void clear() {
+            memset(fb.data(), 0, fb.size() * sizeof(Colour));
         }
 
+        Vec2i size;
+        std::vector<Colour> fb;
+    };
+
+    struct Window {
+        Window(Vec2i size, const char* title): canvas{size}, title{title} {}
+        virtual ~Window() {}
+
+        const Canvas& get_rendering_info() { return canvas; }
+
+        mutable Canvas canvas;
+        const char* title;
+    };
+
+    struct GuiEvent {
+        enum class Type { MouseUpdate };
+        Type type;
+        Vec2i pos;
+        bool left_button_down;
+    };
+
+    struct Desktop {
+        Desktop(gpu::GpuManager& gpu);
+        void add_window(Window* window) {
+            static int size = 0;
+            windows.push_back({window, {5 + size, 40}});
+            size += window->canvas.size.x + 8;
+        }
+
+        std::EventQueue<GuiEvent>& get_event_queue() { return event_queue; }
+
         private:
+        gpu::GpuManager* gpu;
         std::EventQueue<GuiEvent> event_queue;
-        std::vector<Widget*> widgets;
+        Canvas fb_canvas;
+
+        struct CompositorWindow {
+            Window* window;
+            Vec2i pos;
+        };
+
+        std::vector<CompositorWindow> windows;
+
         volatile uint32_t* fb;
         Vec2<size_t> size;
         size_t pitch;
 
         struct {
-            Vec2i pos;
+            Vec2i screen_pos;
+            Vec2i target_pos;
+
+            bool left_button_down;
+            
+            bool is_dragging;
+            CompositorWindow* dragging_window;
+            Vec2i dragging_offset;
         } mouse;
     };
 

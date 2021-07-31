@@ -15,14 +15,19 @@ namespace std {
 
         template<typename F>
         void handle(F f) {
-            ::await(&event);
-            event.reset();
-
             std::lock_guard guard{lock};
             for(auto& v : queue)
                 f(v);
 
             queue.clear();
+        }
+
+        template<typename F>
+        void handle_await(F f) {
+            ::await(&event);
+            event.reset();
+
+            handle(f);
         }
 
         //private:
