@@ -123,10 +123,11 @@ void vmx::init() {
         PANIC("'vmxon' Failed");
 
     auto proc = msr::read(msr::ia32_vmx_procbased_ctls) >> 32;
-    auto proc2 = msr::read(msr::ia32_vmx_procbased_ctls2) >> 32;
 
     if((proc & (uint32_t)ProcBasedControls::SecondaryControlsEnable) == 0)
         PANIC("Secondary ProcBasedCtls are unsupported");
+
+    auto proc2 = msr::read(msr::ia32_vmx_procbased_ctls2) >> 32;
     
     if((proc2 & (uint32_t)ProcBasedControls2::EPTEnable) == 0)
         PANIC("EPT is unsupported");
