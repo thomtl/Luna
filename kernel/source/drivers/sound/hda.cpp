@@ -162,7 +162,7 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
         auto mask = (size >> 4) & 0xF;
         size_t index = 0;
         for(size_t i = 0; i < 3; i++)
-            if(mask & (1 << 2))
+            if(mask & (1 << i))
                 index = i;
 
         if(index == 0) return {index, 2};
