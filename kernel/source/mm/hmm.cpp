@@ -17,6 +17,8 @@ static uintptr_t allocate_page(){
     
     auto va = heap_loc;
     heap_loc += pmm::block_size;
+    if(heap_loc >= kernel_vbase)
+        PANIC("Heap exceeded maximum virtual size");
 
     vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite);
     memset((void*)va, 0, pmm::block_size);
