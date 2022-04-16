@@ -78,12 +78,15 @@ void cpu::init() {
         }
 
         if(cpuid(7, 0, a, b, c, d)) {
+            ASSERT(cpu_data.cpu.cache.clflush_size > 0); // Is it even possible to have clflushopt but not clflush?
             if(b & (1 << 23)) {
                 cpu_data.cpu.cache.flush = +[](uintptr_t ptr) {
                     asm volatile("clflushopt %0" : "+m"(*(volatile uint8_t*)ptr) : : "memory");
                 };
             }
         }
+
+        ASSERT(cpu_data.cpu.cache.flush);
     }
 }
 

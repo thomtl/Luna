@@ -68,7 +68,7 @@ void simd::init() {
                 constexpr uint32_t rfbm_low = rfbm & 0xFFFF'FFFF;
                 constexpr uint32_t rfbm_high = (rfbm >> 32) & 0xFFFF'FFFF;
 
-                asm volatile("xsaveopt64 %[Context]" : : [Context] "m"(*context), "a"(rfbm_low), "d"(rfbm_high) : "memory");
+                asm volatile("xsaveopt64 %[Context]" : [Context] "+m"(*context) : "a"(rfbm_low), "d"(rfbm_high) : "memory");
             };
         } else {
             data.store = [](uint8_t* context) {
@@ -77,7 +77,7 @@ void simd::init() {
                 constexpr uint32_t rfbm_low = rfbm & 0xFFFF'FFFF;
                 constexpr uint32_t rfbm_high = (rfbm >> 32) & 0xFFFF'FFFF;
 
-                asm volatile("xsaveq %[Context]" : : [Context] "m"(*context), "a"(rfbm_low), "d"(rfbm_high) : "memory");
+                asm volatile("xsaveq %[Context]" : [Context] "+m"(*context) : "a"(rfbm_low), "d"(rfbm_high) : "memory");
             };
         }
     } else if(d & (1 << 24)) { // FXSAVE
@@ -91,7 +91,7 @@ void simd::init() {
         };
 
         data.store = [](uint8_t* context) {
-            asm volatile("fxsaveq %[Context]" : : [Context] "m"(*context) : "memory");
+            asm volatile("fxsaveq %[Context]" : [Context] "+m"(*context) : : "memory");
         };
     } else
         PANIC("No known SIMD Save mechanism"); // FSAVE?? Seriously? What CPU are you running this on

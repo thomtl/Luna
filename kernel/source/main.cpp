@@ -99,13 +99,13 @@ void kernel_main(const stivale2_struct* info) {
         kernel_vmm.map(i, i + kernel_vbase, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
 
     for(size_t i = 0; i < 0xFFFF'FFFF; i += pmm::block_size)
-            kernel_vmm.map(i, i + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
+        kernel_vmm.map(i, i + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
 
     // Map Usable, Kernel, Modules, and Bootloader memory, MMIO and ACPI memory will be mapped by the drivers themselves
     for(const auto entry : boot_info.mmap())
         for(size_t i = entry.base; i < (entry.base + entry.length); i += pmm::block_size)
             kernel_vmm.map(i, i + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
-    msr::write(msr::ia32_pat, msr::pat::default_pat);
+    msr::write(msr::ia32_pat, msr::pat::default_pat); // Can't move this into cpu::early_init() because the current pagemap has a different PAT
     kernel_vmm.set();
     print("vmm: Set kernel page tables\n");
 

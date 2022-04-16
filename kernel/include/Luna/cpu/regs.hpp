@@ -136,6 +136,11 @@ namespace simd {
         Context();
         ~Context();
 
+        Context(const Context&) = delete;
+        Context(Context&&) = delete;
+        Context& operator=(const Context&) = delete;
+        Context& operator=(Context&&) = delete;
+
         void store();
         void load() const;
         FxState* data() { return (FxState*)_ctx; }
