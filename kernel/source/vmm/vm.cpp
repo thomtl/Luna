@@ -138,7 +138,7 @@ bool vm::VCPU::run() {
                 goto did_mmio;
             }
             
-            for(const auto [base, driver] : vm->mmio_map) {
+            for(const auto& [base, driver] : vm->mmio_map) {
                 if(exit.mmu.gpa >= base && exit.mmu.gpa <= (base + driver.second))  {
                     // Access is in an MMIO region
                     emulate_mmio(driver.first, exit.mmu.gpa, base, driver.second);

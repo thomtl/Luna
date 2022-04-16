@@ -190,7 +190,7 @@ gpu::Mode vbe::set_mode(std::pair<uint16_t, uint16_t> res, uint8_t bpp) {
     uint16_t mode_num = -1;
     gpu::Mode ret{};
     const auto [x_res, y_res] = res;
-    for(const auto [num, mode] : mode_list) {
+    for(const auto& [num, mode] : mode_list) {
         if(mode.width == x_res && mode.height == y_res && mode.bpp == bpp) {
             mode_num = num;
             

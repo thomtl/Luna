@@ -151,7 +151,7 @@ void usb::init_devices() {
 
             if(driver.match & match::vendor_product) {
                 bool found = false;
-                for(const auto [vid, pid] : driver.id_list) {
+                for(const auto& [vid, pid] : driver.id_list) {
                     if(dev.device_descriptor.vendor_id == vid && dev.device_descriptor.product_id == pid) {
                         found = true;
                         break;

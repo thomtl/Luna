@@ -246,7 +246,7 @@ void pci::init() {
 
             if(driver.match & match::vendor_device) {
                 bool found = false;
-                for(const auto [vid, did] : driver.id_list) {
+                for(const auto& [vid, did] : driver.id_list) {
                     if(dev.read<uint16_t>(0) == vid && dev.read<uint16_t>(2) == did) {
                         found = true;
                         break;

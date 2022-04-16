@@ -675,7 +675,7 @@ vt_d::RemappingEngine& vt_d::IOMMU::get_engine(uint16_t seg, SourceID source) {
             if(engine.all_devices_on_segment)
                 return engine; // If it includes all devices on segment we already found it
             
-            for(const auto [begin, end] : engine.source_id_ranges)
+            for(const auto& [begin, end] : engine.source_id_ranges)
                 if(source >= begin && source <= end)
                     return engine;
         }

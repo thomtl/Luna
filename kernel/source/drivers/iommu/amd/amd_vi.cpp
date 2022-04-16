@@ -656,7 +656,7 @@ amd_vi::IOMMU::IOMMU() {
 amd_vi::IOMMUEngine& amd_vi::IOMMU::engine_for_device(uint16_t seg, const DeviceID& id) {
     for(auto& engine : engines) {
         if(engine.segment == seg) {
-            for(const auto [begin, end] : engine.device_id_ranges)
+            for(const auto& [begin, end] : engine.device_id_ranges)
                 if(id >= begin && id <= end)
                     return engine;
         }
