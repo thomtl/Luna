@@ -330,6 +330,14 @@ void create_vm() {
 
     auto* vgabios = vfs::get_vfs().open("A:/luna/vgabios.bin");
     ASSERT(vgabios);
+
+    {
+        uint8_t signature[2] = {};
+        vgabios->read(0, 2, signature);
+
+        ASSERT(signature[0] == 0x55 && signature[1] == 0xAA);
+    }
+
     auto* bga_dev = new vm::gpu::bga::Driver{&vm, pci_host_bridge, vgabios, 1};
     (void)bga_dev;
 
