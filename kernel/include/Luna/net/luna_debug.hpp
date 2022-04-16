@@ -10,6 +10,9 @@ namespace net::luna_debug {
     struct Writer : public log::Logger {
         void putc(const char c) const {
             buf[i++] = c;
+
+            if(i == buf_size)
+                flush();
         }
 
 		void flush() const {
@@ -21,6 +24,8 @@ namespace net::luna_debug {
             std::span<uint8_t> packet{(uint8_t*)buf, i};
 
             udp::send(*net::get_default_if(), a, packet);
+
+            i = 0;
         }
 
         private:
