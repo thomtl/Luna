@@ -90,7 +90,7 @@ void npt::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     page.present = (flags & paging::mapPagePresent) ? 1 : 0;
     page.writeable = (flags & paging::mapPageWrite) ? 1 : 0;
     page.user = 1; // NPT accesses are always user, so always set that
-    page.no_execute = (flags & paging::mapPageExecute) ? 0 : 1;
+    //page.no_execute = (flags & paging::mapPageExecute) ? 0 : 1; // Seems like linux doesn't support NX pages in the NPT, and will error with a reserved bits set
     page.frame = (pa >> 12);
 
     svm::invlpga(asid, va);
@@ -103,7 +103,7 @@ void npt::context::protect(uintptr_t va, uint64_t flags) {
 
     page->present = (flags & paging::mapPagePresent) ? 1 : 0;
     page->writeable = (flags & paging::mapPageWrite) ? 1 : 0;
-    page->no_execute = (flags & paging::mapPageExecute) ? 0 : 1;
+    //page->no_execute = (flags & paging::mapPageExecute) ? 0 : 1;
 
     svm::invlpga(asid, va);
 }
@@ -116,7 +116,7 @@ uintptr_t npt::context::unmap(uintptr_t va) {
     uintptr_t ret = (entry->frame << 12);
     entry->present = 0;
     entry->writeable = 0;
-    entry->no_execute = 1;
+    //entry->no_execute = 1;
 
     entry->cache_disable = 0;
     entry->writethrough = 0;

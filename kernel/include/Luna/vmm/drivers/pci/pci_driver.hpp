@@ -149,7 +149,7 @@ namespace vm::pci {
 
                     option_rom_file->read(i, 0x1000, (uint8_t*)(hpa + phys_mem_map));
 
-                    vm->mm->map(hpa, gpa + i, paging::mapPagePresent);
+                    vm->mm->map(hpa, gpa + i, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
                 }
 
                 option_rom_state = true;
