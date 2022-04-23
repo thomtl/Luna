@@ -44,7 +44,7 @@ namespace threading {
 
     enum class ThreadState : uint64_t { Idle = 0, Running = 1, Blocked = 2, Ignore = 3 };
     constexpr uint8_t quantum_irq_vector = 254;
-    constexpr size_t quantum_time = 100; // ms
+    constexpr size_t quantum_time = 10; // ms
 
     struct Thread {
         Thread(): state(ThreadState::Idle), stack(0x4000), ctx(), cpu_pin({.is_pinned = false, .cpu_id = 0}), current_event(nullptr) {}
