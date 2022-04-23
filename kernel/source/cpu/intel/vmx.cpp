@@ -718,14 +718,20 @@ void vmx::Vm::vmclear() {
 void vmx::Vm::write(uint64_t field, uint64_t value) {
     bool success = false;
     asm volatile("vmwrite %[Value], %[Field]" : "=@cca"(success) : [Field] "r"(field), [Value] "rm"(value) : "memory");
-    ASSERT(success);
+    if(!success) {
+        print("vmx: vmwrite({:#x}, {:#x}) failed\n", field, value);
+        PANIC("vmwrite failed"); 
+    }
 }
 
 uint64_t vmx::Vm::read(uint64_t field) const {
     uint64_t ret = 0;
     bool success = false;
     asm volatile("vmread %[Field], %[Value]" : "=@cca"(success), [Value] "=rm"(ret) : [Field] "r"(field) : "memory");
-    ASSERT(success);
+    if(!success) {
+        print("vmx: vmread({:#x}) failed\n", field);
+        PANIC("vmread failed");
+    }
 
     return ret;
 }

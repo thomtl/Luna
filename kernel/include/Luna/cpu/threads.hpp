@@ -47,13 +47,20 @@ namespace threading {
     constexpr size_t quantum_time = 100; // ms
 
     struct Thread {
-        Thread(): state(ThreadState::Idle), stack(0x4000), ctx(), current_event(nullptr) {}
+        Thread(): state(ThreadState::Idle), stack(0x4000), ctx(), cpu_pin({.is_pinned = false, .cpu_id = 0}), current_event(nullptr) {}
         
         ThreadState state;
         cpu::Stack stack;
         ThreadContext ctx;
 
+        struct {
+            bool is_pinned;
+            uint32_t cpu_id;
+        } cpu_pin;
+
         Event* current_event;
+
+        void pin_to_this_cpu();
     };
 
     extern "C" void thread_invoke(ThreadContext* new_ctx);
@@ -94,11 +101,13 @@ struct Promise {
         ::await(&event);
         event.reset();
 
-        return (T&)(*(T*)object.data);
+        ASSERT(constructed);
+        return *reinterpret_cast<T*>(&object);
     }
 
     void set_value(const T& value) {
         new ((T*)object.data) T(value);
+        constructed = true;
 
         event.trigger();
     }
@@ -109,6 +118,7 @@ struct Promise {
 
     private:
     std::aligned_storage_t<sizeof(T), alignof(T)> object;
+    bool constructed = false;
     threading::Event event;
 };
 

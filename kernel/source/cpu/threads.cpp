@@ -20,13 +20,17 @@ static void idle();
 static threading::Thread* next_thread() {
     for(size_t i = 0; i < threads.size(); i++) {
         index = (index + 1) % threads.size();
+        auto& thread = threads[index];
+
+        if(thread->cpu_pin.is_pinned && thread->cpu_pin.cpu_id != get_cpu().lapic_id)
+            continue;
         
-        if(threads[index]->state == threading::ThreadState::Idle) {
-            return threads[index];
-        } else if(threads[index]->state == threading::ThreadState::Blocked) {
-            ASSERT(threads[index]->current_event);
-            if(threads[index]->current_event->is_triggered())
-                return threads[index];
+        if(thread->state == threading::ThreadState::Idle) {
+            return thread;
+        } else if(thread->state == threading::ThreadState::Blocked) {
+            ASSERT(thread->current_event);
+            if(thread->current_event->is_triggered())
+                return thread;
         }
     }
 
@@ -235,4 +239,8 @@ void threading::ThreadContext::restore(idt::regs* regs) const {
     regs->rsp = rsp;
     regs->rip = rip;
     regs->rflags = rflags;
+}
+
+void threading::Thread::pin_to_this_cpu()  {
+    cpu_pin = {.is_pinned = true, .cpu_id = get_cpu().lapic_id};
 }
