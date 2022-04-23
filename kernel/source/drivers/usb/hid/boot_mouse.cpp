@@ -60,7 +60,12 @@ static void init(usb::Device& device) {
             std::span<uint8_t> data{(uint8_t*)&report, sizeof(report)};
 
             dev->in->xfer(data)->await();
-            dev->queue->push(gui::GuiEvent{.type = gui::GuiEvent::Type::MouseUpdate, .pos = {report.x, report.y}, .left_button_down = (bool)(report.buttons & 1)});
+
+            gui::GuiEvent event{};
+            event.type = gui::GuiEvent::Type::MouseUpdate;
+            event.pos = {report.x, report.y};
+            event.left_button_down = report.buttons & 1;
+            dev->queue->push(event);
         }
     });
 }

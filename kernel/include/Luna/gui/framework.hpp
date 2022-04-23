@@ -9,30 +9,17 @@ namespace gui::draw {
     enum class TextAlign { None, Center };
     void text(Canvas& canvas, Vec2i pos, const char* text, Colour fg = Colour(255, 255, 255), Colour bg = Colour(0, 0, 0), TextAlign align = TextAlign::None);
 
-    /*struct Window : public Widget {
-        Window(Vec2i pos, Vec2i size, const char* title): pos{pos}, size{size} {
-            constexpr int32_t width = 2;
-            constexpr auto colour = Colour(200, 200, 200);
+    struct TextWriter : public log::Logger {
+        TextWriter(Canvas& canvas, Vec2i pos, Colour fg = Colour(255, 255, 255), Colour bg = Colour(0, 0, 0)): _canvas(&canvas), _pos{pos}, _fg{fg}, _bg{bg} {}
 
-            widgets.push_back(new Rect{{0, 0}, {size.x, width}, colour});
-            widgets.push_back(new Rect{{0, size.y - width}, {size.x, width}, colour});
-
-            // These don't need to draw over the previous ones, so offset them a bit
-            widgets.push_back(new Rect{{0, width}, {width, size.y - width}, colour});
-            widgets.push_back(new Rect{{size.x - width, width}, {width, size.y - width}, colour});
-
-            widgets.push_back(new Text{{size.x / 2, -7}, title, Colour{255, 255, 255}, Colour{0, 0, 0}, Text::Align::Center});
+        void putc(const char c) const {
+            _canvas->put_char(_pos, c, _fg, _bg);
+            _pos += Vec2i{8, 0}; // TODO
         }
-
-        void redraw(Desktop& desktop, const Vec2i& parent_pos) {
-            for(auto& widget : widgets)
-                widget->redraw(desktop, parent_pos + pos);
-        }
-
-        void add_widget(Widget* widget) { widgets.push_back(widget); }
-        std::vector<Widget*> widgets;
 
         private:
-        Vec2i pos, size;
-    };*/
+        Canvas* _canvas;
+        mutable Vec2i _pos;
+        Colour _fg, _bg;
+    };
 } // namespace gui

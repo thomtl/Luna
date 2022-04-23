@@ -169,8 +169,7 @@ namespace gui {
         size_t pitch;
 
         struct {
-            Vec2i screen_pos;
-            Vec2i target_pos;
+            Vec2i pos;
 
             bool left_button_down;
             

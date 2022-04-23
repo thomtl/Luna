@@ -38,7 +38,7 @@ Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, fb_canvas{Vec2i{(int32_t)gpu.
     size = {mode.width, mode.height};
     pitch = mode.pitch / 4;
 
-    mouse.screen_pos = mouse.target_pos = {(int)size.x / 2, (int)size.y / 2};
+    mouse.pos = {(int)size.x / 2, (int)size.y / 2};
     mouse.is_dragging = false;
 
     spawn([this] {
@@ -49,29 +49,28 @@ Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, fb_canvas{Vec2i{(int32_t)gpu.
         while(true) {
             event_queue.handle([this](auto& event) {
                 if(event.type == GuiEvent::Type::MouseUpdate) {
-                    mouse.target_pos += event.pos;
-                    mouse.target_pos.clamp({0, 0}, {(int)size.x - cursor_size, (int)size.y - cursor_size});
+                    mouse.pos += event.pos;
+                    mouse.pos.clamp({0, 0}, {(int)size.x - cursor_size, (int)size.y - cursor_size});
                     mouse.left_button_down = event.left_button_down;
                 } else {
                     print("gui: Unknown Event Type: {}\n", (uint32_t)event.type);
                 }
             });
             
-            fb_canvas.clear();
-
             if(mouse.is_dragging) {
                 if(!mouse.left_button_down) {
                     mouse.is_dragging = false;
                 } else {
-                    mouse.dragging_window->pos = mouse.screen_pos + mouse.dragging_offset;
+                    mouse.dragging_window->pos = mouse.pos + mouse.dragging_offset;
                     mouse.dragging_window->pos.clamp(Vec2i{decoration_side_width, decoration_top_width + 20}, Vec2i{(int)size.x, (int)size.y} - mouse.dragging_window->window->canvas.size - Vec2i{decoration_side_width, decoration_top_width});
                 }
             }
 
+            fb_canvas.clear();
+
             for(auto& window : windows) {
                 // Draw decorations
                 auto size = window.window->canvas.size;
-                auto* title = window.window->title;
 
                 using namespace draw;
 
@@ -82,11 +81,11 @@ Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, fb_canvas{Vec2i{(int32_t)gpu.
 
                 Rect top_bar{window.pos - Vec2i{decoration_side_width, decoration_top_width}, Vec2i{size.x + 2 * decoration_side_width, decoration_top_width}};
                 rect(fb_canvas, top_bar, decoration_colour); // Top bar
-                text(fb_canvas, window.pos - Vec2i{decoration_side_width, decoration_top_width - 1} + Vec2i{size.x / 2, 0}, title, Colour{0, 0, 0}, decoration_colour, TextAlign::Center);
+                text(fb_canvas, window.pos - Vec2i{decoration_side_width, decoration_top_width - 1} + Vec2i{size.x / 2, 0}, window.window->title, Colour{0, 0, 0}, decoration_colour, TextAlign::Center);
 
-                if(mouse.screen_pos.collides_with(top_bar.pos, top_bar.size) && mouse.left_button_down) {
+                if(mouse.pos.collides_with(top_bar.pos, top_bar.size) && mouse.left_button_down) {
                     mouse.dragging_window = &window;
-                    mouse.dragging_offset = window.pos - mouse.screen_pos;
+                    mouse.dragging_offset = window.pos - mouse.pos;
                     mouse.is_dragging = true;
                 }
             
@@ -95,8 +94,7 @@ Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, fb_canvas{Vec2i{(int32_t)gpu.
             }
 
             // Draw mouse
-            mouse.screen_pos.lerp(mouse.target_pos, 0.3f);
-            fb_canvas.blit(mouse.screen_pos, Vec2i{cursor_size, cursor_size}, cursor);
+            fb_canvas.blit(mouse.pos, Vec2i{cursor_size, cursor_size}, cursor);
 
             // Draw topbar
             draw::rect(fb_canvas, Vec2i{0, 0}, Vec2i{(int)size.x, 20}, Colour{203, 45, 62});
