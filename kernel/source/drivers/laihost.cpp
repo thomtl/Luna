@@ -5,7 +5,7 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/pci.hpp>
 
-#include <Luna/drivers/hpet.hpp>
+#include <Luna/drivers/timers/timers.hpp>
 
 #include <Luna/mm/vmm.hpp>
 #include <Luna/mm/hmm.hpp>
@@ -70,7 +70,7 @@ extern "C" {
     uint32_t laihost_pci_readd(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint32_t>(seg, bus, slot, func, offset); }
     
     void laihost_sleep(uint64_t ms) {
-        hpet::poll_msleep(ms);
+        timers::poll_msleep(ms);
     }
 
     int laihost_sync_wait(lai_sync_state* state, unsigned int, int64_t) { // TODO: Use threads to actually implement this and wake, some stupid hardware relies on the timeout too instead of just unlocking its stuff

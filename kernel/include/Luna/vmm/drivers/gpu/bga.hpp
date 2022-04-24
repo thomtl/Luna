@@ -73,17 +73,26 @@ namespace vm::gpu::bga {
                     window = new gui::FbWindow{{(int32_t)mode.x, (int32_t)mode.y}, fb.data(), "VM Screen"};
                     gui::get_desktop().add_window(window);
 
-                    // TODO: Improve this
+                    
                     spawn([this] {
+                        Promise<void> promise{};
+
+                        auto success = timers::start_timer(true, 20, [](void* promise) {
+                            ((Promise<void>*)promise)->complete();
+                        }, &promise);
+
+                        if(!success)
+                            PANIC("Failed to start timer");
+
                         while(1) {
+                            promise.await();
                             window->update();
-                            ::hpet::poll_msleep(20);
                         }
                     });
 
                     curr_mode = mode;
                 } else {
-                    PANIC("TODO");
+                    PANIC("TODO"); // kill thread somehow
                 }
             } else {
                 print("bga: Unhandled MMIO Write {:#x} <- {:#x}\n", addr, value);

@@ -1,4 +1,4 @@
-#include <Luna/drivers/hpet.hpp>
+#include <Luna/drivers/timers/hpet.hpp>
 #include <Luna/drivers/pci.hpp>
 #include <Luna/drivers/ioapic.hpp>
 
@@ -33,12 +33,12 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
 
     uint32_t gsi_mask = ~0;
     for(size_t i = 0; i < n_comparators; i++) {
-        auto& timer = timers[i];
-        timer.fsb = (regs->comparators[i].cmd >> 15) & 1;
-        timer.is_periodic = (regs->comparators[i].cmd >> 4) & 1;
+        auto& timer = comparators[i];
+        timer.supports_fsb = (regs->comparators[i].cmd >> 15) & 1;
+        timer.supports_periodic = (regs->comparators[i].cmd >> 4) & 1;
         timer.ioapic_route = (regs->comparators[i].cmd >> 32) & 0xFFFF'FFFF;
 
-        print("      Comparator {}: FSB: {}, Periodic: {}, Route Cap: {:#b}\n", i, timer.fsb, timer.is_periodic, timer.ioapic_route);
+        print("      Comparator {}: FSB: {}, Periodic: {}, Route Cap: {:#b}\n", i, timer.supports_fsb, timer.supports_fsb, timer.ioapic_route);
 
         gsi_mask &= timer.ioapic_route;
     }
@@ -47,36 +47,34 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
     uint32_t gsi = ~0;
     uint8_t gsi_vector;
 
-    // Setup IRQs
+    // Setup timers
     for(size_t i = 0; i < n_comparators; i++) {
-        auto& timer = timers[i];
+        auto& timer = comparators[i];
+        timer._device = this;
+        timer._i = i;
 
         regs->comparators[i].cmd &= ~((1 << 14) | (0x1F << 9) | (1 << 8) | (1 << 6) | (1 << 3) | (1 << 2) | (1 << 1)); // Clear Periodic, IRQ enable, Level enable
 
-        if(timer.fsb) {
+        if(timer.supports_fsb) {
             auto vector = idt::allocate_vector();
             timer.vector = vector;
 
-            idt::set_handler(vector, idt::handler{.f = [](uint8_t vector, idt::regs*, void* userptr){
-                auto& self = *(hpet::Device*)userptr;
+            idt::set_handler(vector, idt::handler{.f = [](uint8_t, idt::regs*, void* userptr){
+                auto& comparator = *(hpet::Comparator*)userptr;
+                auto& self = *comparator._device;
 
-                for(size_t i = 0; i < self.n_comparators; i++) {
-                    if(self.timers[i].vector == vector) {
-                        if(!self.timers[i].f)
-                            return;
+                if(!comparator.f)
+                    return;
 
-                        self.timers[i].f(self.timers[i].userptr);
+                comparator.f(comparator.userptr);
                         
-                        if(!self.timers[i].periodic) { // If One-shot make sure the IRQ doesn't happen again
-                            self.regs->comparators[i].cmd &= ~(1 << 2);
+                if(!comparator.is_periodic) { // If One-shot make sure the IRQ doesn't happen again
+                    self.regs->comparators[comparator._i].cmd &= ~(1 << 2);
 
-                            self.timers[i].userptr = nullptr;
-                            self.timers[i].f = nullptr;
-                        }
-                        return;
-                    }
+                    comparator.userptr = nullptr;
+                    comparator.f = nullptr;
                 }
-            }, .is_irq = true, .should_iret = true, .userptr = this});
+            }, .is_irq = true, .should_iret = true, .userptr = &timer});
 
             pci::msi::Address addr{};
             pci::msi::Data data{};
@@ -106,16 +104,16 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
 
                     for(size_t i = 0; i < self.n_comparators; i++) {
                         if(irq & (1 << i)) {
-                            if(!self.timers[i].f)
+                            if(!self.comparators[i].f)
                                 return;
 
-                            self.timers[i].f(self.timers[i].userptr);
+                            self.comparators[i].f(self.comparators[i].userptr);
                         
-                            if(!self.timers[i].periodic) { // If One-shot make sure the IRQ doesn't happen again
+                            if(!self.comparators[i].is_periodic) { // If One-shot make sure the IRQ doesn't happen again
                                 self.regs->comparators[i].cmd &= ~(1 << 2);
 
-                                self.timers[i].userptr = nullptr;
-                                self.timers[i].f = nullptr;
+                                self.comparators[i].userptr = nullptr;
+                                self.comparators[i].f = nullptr;
                             }
                             self.regs->irq_status = (1 << i); // Clear IRQ status
                         }
@@ -132,52 +130,11 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
 
             ASSERT(((regs->comparators[i].cmd >> 9) & 0x1F) == gsi); // If GSI was successfully set the read value should equal the written value
         }
+
+        timers::register_timer(&comparators[i]);
     }
 
     start_timer();
-}
-
-bool hpet::Device::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) {
-    stop_timer();
-
-    uint8_t timer_i = 0xFF;
-    for(size_t i = 0; i < n_comparators; i++) {
-        if(!timers[i].f) {
-            if(periodic && !timers[i].is_periodic)
-                continue;
-            timer_i = i;
-            break;
-        }
-    }
-
-    if(timer_i == 0xFF) {
-        start_timer();
-        return false;
-    }
-
-    auto& timer = timers[timer_i];
-
-    timer.f = f;
-    timer.userptr = userptr;
-    timer.periodic = periodic;
-
-    auto& reg = regs->comparators[timer_i];
-    reg.cmd &= ~((1 << 6) | (1 << 3) | (1 << 2));
-
-    auto delta = ms * (femto_per_milli / period);
-
-    if(periodic) {
-        reg.cmd |= (1 << 6) | (1 << 3) | (1 << 2);
-        reg.value = regs->main_counter + delta;
-        reg.value = delta;
-    } else {
-        reg.cmd |= (1 << 2); // Enable IRQ in One-shot mode
-        reg.value = regs->main_counter + delta;
-    }
-
-    start_timer();
-
-    return true;
 }
 
 void hpet::Device::poll_msleep(uint64_t ms) {
@@ -212,34 +169,59 @@ void hpet::init() {
     }
 }
 
-void hpet::poll_msleep(uint64_t ms) {
-    // For polling it doesn't really matter which one we pick, so just take the first one
-    ASSERT(devices.size() >= 1);
+timers::HardwareTimerCapabilities hpet::Comparator::get_capabilities() {
+    timers::HardwareTimerCapabilities cap{};
+    cap.can_be_periodic = supports_periodic;
+    cap.period = _device->period;
 
-    devices[0].poll_msleep(ms);
+    cap.has_irq = true;
+    cap.has_time_ns = true;
+    cap.has_poll_ms = true;
+    cap.has_poll_ns = true;
+
+    return cap;
 }
 
-void hpet::poll_nsleep(uint64_t ns) {
-    // For polling it doesn't really matter which one we pick, so just take the first one
-    ASSERT(devices.size() >= 1);
+bool hpet::Comparator::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) {
+    if(!supports_periodic && periodic)
+        return false;
 
-    devices[0].poll_nsleep(ns);
-}
+    if(this->f)
+        return false;
 
-uint64_t hpet::time_ns() {
-    // For polling it doesn't really matter which one we pick, so just take the first one
-    ASSERT(devices.size() >= 1);
+    _device->stop_timer();
 
-    return devices[0].time_ns();
-}
+    this->f = f;
+    this->userptr = userptr;
+    this->is_periodic = periodic;
 
-bool hpet::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) {
-    ASSERT(devices.size() >= 1);
+    auto& reg = _device->regs->comparators[this->_i];
+    reg.cmd &= ~((1 << 6) | (1 << 3) | (1 << 2));
 
-    for(auto& device : devices) {
-        if(device.start_timer(periodic, ms, f, userptr))
-            return true;
+    auto delta = ms * (femto_per_milli / _device->period);
+
+    if(periodic) {
+        reg.cmd |= (1 << 6) | (1 << 3) | (1 << 2);
+        reg.value = _device->regs->main_counter + delta;
+        reg.value = delta;
+    } else {
+        reg.cmd |= (1 << 2); // Enable IRQ in One-shot mode
+        reg.value = _device->regs->main_counter + delta;
     }
 
-    return false; // Was not able to find a free slot for a timer
+    _device->start_timer();
+
+    return true;
+}
+
+void hpet::Comparator::poll_msleep(size_t ms) {
+    _device->poll_msleep(ms);
+}
+
+void hpet::Comparator::poll_nsleep(size_t ns) {
+    _device->poll_nsleep(ns);
+}
+
+uint64_t hpet::Comparator::time_ns() {
+    return _device->time_ns();
 }

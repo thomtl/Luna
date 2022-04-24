@@ -7,7 +7,7 @@
 #include <Luna/misc/log.hpp>
 #include <Luna/vmm/drivers/q35/smi.hpp>
 
-#include <Luna/drivers/hpet.hpp>
+#include <Luna/drivers/timers/timers.hpp>
 
 
 namespace vm::q35::acpi {
@@ -20,7 +20,7 @@ namespace vm::q35::acpi {
     constexpr uint16_t apmc_en = (1 << 5);
 
     struct Driver : public vm::AbstractPIODriver {
-        Driver(vm::Vm* vm, vm::q35::smi::Driver* smi_dev): vm{vm}, smi_dev{smi_dev}, start_ns{::hpet::time_ns()} {}
+        Driver(vm::Vm* vm, vm::q35::smi::Driver* smi_dev): vm{vm}, smi_dev{smi_dev}, start_ns{::timers::time_ns()} {}
 
         void update(bool enabled, uint16_t base) {
             if(this->enabled)
@@ -57,7 +57,7 @@ namespace vm::q35::acpi {
             if(reg == smi_en)
                 ret = smi_enable;
             else if(reg == pm_tmr) {
-                auto time = ::hpet::time_ns() - start_ns;
+                auto time = timers::time_ns() - start_ns;
 
                 auto ticks = (time * 3579545) / 1'000'000'000;
 

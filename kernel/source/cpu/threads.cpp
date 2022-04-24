@@ -4,7 +4,7 @@
 
 #include <Luna/cpu/regs.hpp>
 
-#include <Luna/drivers/hpet.hpp>
+#include <Luna/drivers/timers/timers.hpp>
 
 #include <Luna/misc/log.hpp>
 
@@ -184,7 +184,7 @@ void threading::start_on_cpu() {
     auto& cpu = get_cpu();
 
     idt::set_handler(quantum_irq_vector, idt::handler{.f = quantum_irq_handler, .is_irq = true, .should_iret = true, .userptr = nullptr});
-    cpu.lapic.start_timer(quantum_irq_vector, quantum_time, lapic::regs::LapicTimerModes::Periodic, hpet::poll_msleep);
+    cpu.lapic.start_timer(quantum_irq_vector, quantum_time, lapic::regs::LapicTimerModes::Periodic, timers::poll_msleep);
     
     cpu.thread_kill_stack.init((size_t)0x1000);
     cpu.current_thread = nullptr;

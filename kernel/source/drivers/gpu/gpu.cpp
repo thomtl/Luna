@@ -1,5 +1,4 @@
 #include <Luna/drivers/gpu/gpu.hpp>
-#include <Luna/drivers/hpet.hpp>
 #include <std/string.hpp>
 
 static gpu::GpuManager manager;

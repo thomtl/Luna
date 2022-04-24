@@ -2,7 +2,7 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/mm/vmm.hpp>
 
-#include <Luna/drivers/hpet.hpp>
+#include <Luna/drivers/timers/timers.hpp>
 
 #include <Luna/misc/log.hpp>
 
@@ -473,7 +473,7 @@ bool pci::Device::set_power(uint8_t state) {
     control.power_state = state;
     write<uint16_t>(power.offset + pci::power::control, control.raw);
 
-    hpet::poll_msleep(delay);
+    timers::poll_msleep(delay);
 
     control.raw = read<uint16_t>(power.offset + pci::power::control);
 

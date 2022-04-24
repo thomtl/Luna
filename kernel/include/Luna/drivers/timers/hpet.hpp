@@ -2,6 +2,7 @@
 
 #include <Luna/common.hpp>
 #include <Luna/drivers/acpi.hpp>
+#include <Luna/drivers/timers/timers.hpp>
 
 namespace hpet {
     struct [[gnu::packed]] Regs {
@@ -21,13 +22,37 @@ namespace hpet {
         } comparators[32];
     };
 
+    struct Device;
+
+    struct Comparator : public timers::AbstractHardwareTimer {
+        timers::HardwareTimerCapabilities get_capabilities() override;
+        bool start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) override;
+        void poll_msleep(size_t ms) override;
+        void poll_nsleep(size_t ns) override;
+
+        uint64_t time_ns() override;
+
+        private:
+        Device* _device;
+        uint8_t _i;
+
+        bool supports_fsb, supports_periodic;
+        uint32_t ioapic_route;
+
+        uint8_t vector;
+        bool is_periodic;
+        void(*f)(void*);
+        void* userptr;
+
+        friend struct Device;
+    };
+
     struct Device {
         Device(acpi::Hpet* table);
 
         void poll_msleep(uint64_t ms);
         void poll_nsleep(uint64_t ns);
         uint64_t time_ns();
-        bool start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr);
 
         private:
         void stop_timer() { regs->cmd &= ~1; }
@@ -40,21 +65,10 @@ namespace hpet {
         uint8_t n_comparators;
         uint64_t period;
         
-        struct {
-            bool fsb, is_periodic;
-            uint32_t ioapic_route;
+        Comparator comparators[32];
 
-            uint8_t vector;
-            bool periodic;
-
-            void(*f)(void*);
-            void* userptr;
-        } timers[32];
+        friend struct Comparator;
     };
 
     void init();
-    void poll_msleep(uint64_t ms);
-    void poll_nsleep(uint64_t ns);
-    uint64_t time_ns();
-    bool start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr = nullptr);
 } // namespace hpet

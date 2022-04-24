@@ -2,7 +2,7 @@
 
 #include <Luna/cpu/idt.hpp>
 
-#include <Luna/drivers/hpet.hpp>
+#include <Luna/drivers/timers/timers.hpp>
 #include <Luna/misc/log.hpp>
 
 template<typename F>
@@ -12,7 +12,7 @@ bool timeout(uint64_t ms, F f) {
         if(ms == 0)
             return false;
 
-        hpet::poll_msleep(1);
+        timers::poll_msleep(1);
     }
 
     return true;
@@ -379,7 +379,7 @@ void xhci::HCI::enumerate_ports() {
 }
 
 bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacket& packet, bool write, size_t len, uint8_t* buf) {
-    hpet::poll_msleep(5); // For some reason this sleep is needed to make it work on USB 1.1 devices????
+    timers::poll_msleep(5); // For some reason this sleep is needed to make it work on USB 1.1 devices????
 
     std::lock_guard guard{port.lock};
     
@@ -692,14 +692,14 @@ void xhci::HCI::reset_controller() {
     op->usbcmd &= ~(usbcmd::run | usbcmd::irq_enable); // Stop controller
 
     if(quirks & quirkIntel)
-        hpet::poll_msleep(2); // Intel controllers need some time here
+        timers::poll_msleep(2); // Intel controllers need some time here
 
     ASSERT(timeout(20, [&]{ return (op->usbsts & usbsts::halted) != 0; }));
 
     op->usbcmd |= usbcmd::reset;
     while(op->usbcmd & usbcmd::reset || op->usbsts & usbsts::not_ready)
         asm("pause");
-    hpet::poll_msleep(10); // Recovery time
+    timers::poll_msleep(10); // Recovery time
 }
 
 bool xhci::HCI::reset_port(Port& port) {
@@ -717,7 +717,7 @@ bool xhci::HCI::reset_port(Port& port) {
     reg.portsc = portsc::port_power | reset_bit;
 
     if(timeout(500, [&]{ return (reg.portsc & reset_change_bit) != 0; })) {
-        hpet::poll_msleep(3); // Recovery time
+        timers::poll_msleep(3); // Recovery time
 
         if(reg.portsc & portsc::enabled) {
             reg.portsc = portsc::port_power | portsc::status_change_bits;

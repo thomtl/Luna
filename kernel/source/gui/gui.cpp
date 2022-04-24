@@ -1,6 +1,5 @@
 #include <Luna/gui/gui.hpp>
 #include <Luna/gui/framework.hpp>
-#include <Luna/drivers/hpet.hpp>
 
 using namespace gui;
 

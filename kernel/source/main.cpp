@@ -23,7 +23,7 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/ioapic.hpp>
 #include <Luna/drivers/pci.hpp>
-#include <Luna/drivers/hpet.hpp>
+#include <Luna/drivers/timers/hpet.hpp>
 
 #include <Luna/fs/vfs.hpp>
 
