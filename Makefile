@@ -5,9 +5,8 @@ all: run
 configure:
 	meson setup --cross-file=kernel/build/cross.ini build/kernel kernel
 
-	git clone https://github.com/limine-bootloader/limine build/limine
-	cd build/limine && git checkout 0c6baf3591b59dbe35f668103acdbbe15779e6b8
-	make -C build/limine limine-install
+	git clone https://github.com/limine-bootloader/limine build/limine --branch=v3.4.3-binary --depth=1
+	make -C build/limine limine-deploy
 
 	git clone https://git.seabios.org/seabios.git build/seabios
 	cd build/seabios && git checkout ef88eeaf052c8a7d28c5f85e790c5e45bcffa45e
@@ -18,7 +17,7 @@ configure:
 	parted -s luna.hdd mklabel msdos
 	parted -s luna.hdd mkpart primary 2048s 100%
 
-	./build/limine/limine-install ./build/limine/limine.bin luna.hdd
+	./build/limine/limine-deploy luna.hdd
 
 	
 kernel:
@@ -26,6 +25,8 @@ kernel:
 	
 	echfs-utils -m -p0 luna.hdd format 512
 	echfs-utils -m -p0 luna.hdd import misc/limine.cfg limine.cfg
+	echfs-utils -m -p0 luna.hdd import build/limine/limine.sys limine.sys
+
 	echfs-utils -m -p0 luna.hdd import build/kernel/luna.bin boot/luna.bin
 
 bios:
