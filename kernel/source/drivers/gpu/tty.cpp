@@ -55,29 +55,28 @@ void tty::Writer::putc(const char c) const {
         x = 0;
         y = screen_height;
     };
-
+    
     if(c == '\n') {
         x = 0;
         y++;
-
-        if(y >= screen_height) {
-            scroll();
-            y--;
-        }
     } else if(c == '\r') {
         x = 0;  
+    } else if(c == '\t') {
+        x += 4;     
     } else {
         print();
-
         x++;
-        if(x >= screen_width) {
-            y++;
-            x = 0;
-            if(y >= screen_height) {
-                scroll();
-                y--;
-            }
-        }
+    }
+
+    // Handle scrolling
+    if(x >= screen_width) {
+        y++;
+        x = 0;        
+    }
+
+    if(y >= screen_height) {
+        scroll();
+        y--;
     }
 }
 
