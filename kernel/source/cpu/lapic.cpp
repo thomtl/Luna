@@ -66,7 +66,7 @@ void lapic::Lapic::eoi() {
 void lapic::Lapic::start_timer(uint8_t vector, uint64_t ms, lapic::regs::LapicTimerModes mode, void (*poll)(uint64_t ms)) {
     if(ticks_per_ms == 0) {
         write(regs::timer_divider, 3);
-        write(regs::timer_initial_count, ~0);
+        write(regs::timer_initial_count, ~0u);
 
         write(regs::lvt_timer, read(regs::lvt_timer) & ~(1 << 16)); // Clear timer mask
         poll(10);
@@ -78,6 +78,6 @@ void lapic::Lapic::start_timer(uint8_t vector, uint64_t ms, lapic::regs::LapicTi
     write(regs::timer_divider, 3);
     write(regs::lvt_timer, (read(regs::lvt_timer) & ~(0b11 << 17)) | ((uint8_t)mode << 17));
     write(regs::lvt_timer, (read(regs::lvt_timer) & 0xFFFFFF00) | vector);
-    write(regs::timer_initial_count, ticks_per_ms * ms);
+    write(regs::timer_initial_count, (uint32_t)(ticks_per_ms * ms));
     write(regs::lvt_timer, read(regs::lvt_timer) & ~(1 << 16)); // Clear timer mask
 }
