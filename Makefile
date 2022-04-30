@@ -13,7 +13,7 @@ configure:
 	cp misc/seabios-config.ini build/seabios/.config
 	make -C build/seabios
 
-	dd if=/dev/zero of=luna.hdd bs=4M count=128
+	dd if=/dev/zero of=luna.hdd bs=4M count=16
 	parted -s luna.hdd mklabel msdos
 	parted -s luna.hdd mkpart primary 2048s 100%
 
