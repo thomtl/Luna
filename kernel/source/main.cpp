@@ -119,10 +119,10 @@ void kernel_main(const stivale2_struct* info) {
 
     vm::init();
 
-    acpi::init(boot_info);
+    acpi::init_tables(boot_info);
     ioapic::init();
     hpet::init();
-    acpi::init_sci();
+    acpi::init_system();
 
     smp::start_cpus(boot_info, kernel_main_ap);
 

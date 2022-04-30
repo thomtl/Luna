@@ -73,6 +73,10 @@ extern "C" {
         timers::poll_msleep(ms);
     }
 
+    uint64_t laihost_timer() {
+        return timers::time_ns() * 100; // 100ns increments
+    }
+
     int laihost_sync_wait(lai_sync_state* state, unsigned int, int64_t) { // TODO: Use threads to actually implement this and wake, some stupid hardware relies on the timeout too instead of just unlocking its stuff
         state->val &= ~3;
         return 0;

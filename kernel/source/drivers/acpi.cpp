@@ -84,7 +84,7 @@ acpi::SDTHeader* acpi::get_table(const char* sig, size_t index) {
 
 static void init_ec();
 
-void acpi::init(const stivale2::Parser& parser) {
+void acpi::init_tables(const stivale2::Parser& parser) {
     auto& vmm = vmm::kernel_vmm::get_instance();
 
     auto rsdp_phys = (uintptr_t)parser.acpi_rsdp();
@@ -119,16 +119,18 @@ void acpi::init(const stivale2::Parser& parser) {
         print("    - {}{}{}{}: Revision: {:d}, OEMID \"{}{}{}{}{}{}\", at {:#x}\n", h->sig[0], h->sig[1], h->sig[2], h->sig[3], (uint64_t)h->revision, h->oemid[0], h->oemid[1], h->oemid[2], h->oemid[3], h->oemid[4], h->oemid[5], pa);
     }
 
-    lai_set_acpi_revision(rsdp->revision);
-    lai_create_namespace();
-    init_ec();
+    
 }
 
 static void handle_sci([[maybe_unused]] uint8_t, [[maybe_unused]] idt::regs*, [[maybe_unused]] void*) {
     print("acpi: Unhandled SCI, Event: {:#x}\n", lai_get_sci_event());
 }
 
-void acpi::init_sci() {
+void acpi::init_system() {
+    lai_set_acpi_revision(revision);
+    lai_create_namespace();
+    init_ec();
+
     MadtParser madt{};
 
     auto* fadt = get_table<Fadt>();
@@ -146,7 +148,8 @@ void acpi::init_sci() {
     print("acpi: Enabled SCI on IRQ {:d}\n", sci_int);
 
     if(auto* osc = lai_resolve_path(nullptr, "_SB_._OSC"); osc) {
-        constexpr uint8_t uuid[16] = {0x08, 0x11, 0xB0, 0x6E, 0x4A, 0x27, 0x44, 0xF9, 0x8D, 0x60, 0x3C, 0xBB, 0xC2, 0x2E, 0x7B, 0x48};
+        UUID uuid{"0811b06e-4a27-44f9-8d60-3cbbc22e7b48"};
+
         uint32_t capabilities[2] = {0x0, 0x0}; // Request no features
         std::span<uint32_t> caps{capabilities};
 
@@ -194,7 +197,7 @@ static void init_ec() {
     }
 }
 
-bool acpi::eval_osc(lai_nsnode_t* node, bool query, uint32_t revision, const uint8_t uuid[16], std::span<uint32_t>& buffer) {
+bool acpi::eval_osc(lai_nsnode_t* node, bool query, uint32_t revision, const UUID& uuid, std::span<uint32_t>& buffer) {
     ASSERT(node);
     ASSERT(buffer.data());
 
@@ -204,7 +207,7 @@ bool acpi::eval_osc(lai_nsnode_t* node, bool query, uint32_t revision, const uin
     buffer[0] &= ~1;
     buffer[0] |= query; // Query or Request features
 
-    LAI_CLEANUP_VAR lai_variable_t r0 = {}; lai_create_buffer(&r0, 16); memcpy(lai_exec_buffer_access(&r0), uuid, 16);
+    LAI_CLEANUP_VAR lai_variable_t r0 = {}; lai_create_buffer(&r0, UUID::uuid_size); memcpy(lai_exec_buffer_access(&r0), uuid.span().data(), UUID::uuid_size);
     LAI_CLEANUP_VAR lai_variable_t r1 = {}; r1.type = LAI_INTEGER; r1.integer = revision;
     LAI_CLEANUP_VAR lai_variable_t r2 = {}; r2.type = LAI_INTEGER; r2.integer = buffer.size();
     LAI_CLEANUP_VAR lai_variable_t r3 = {}; lai_create_buffer(&r3, buffer.size_bytes()); memcpy(lai_exec_buffer_access(&r3), buffer.data(), buffer.size_bytes());
@@ -215,19 +218,20 @@ bool acpi::eval_osc(lai_nsnode_t* node, bool query, uint32_t revision, const uin
 
     ASSERT(lai_exec_buffer_size(&ret) == lai_exec_buffer_size(&r3));
     const auto* ret_buf = (uint32_t*)lai_exec_buffer_access(&ret);
-    
-    if(ret_buf[0] & (1 << 1)) {
-        print("acpi: Failed to evaluate _OSC, FW was unable to perform the request\n");
-        return false;
-    }
 
-    if(ret_buf[0] & (1 << 2)) {
-        print("acpi: Failed to evaluate _OSC, Unrecognized UUID\n");
-        return false;
-    }
+    if(ret_buf[0] & (0b111 << 1)) {
+        print("acpi: Failed to evaluate _OSC");
 
-    if(ret_buf[0] & (1 << 3)) {
-        print("acpi: Failed to evaluate _OSC, Unrecognized Revision\n");
+        if(ret_buf[0] & (1 << 2))
+            print(", Unrecognized UUID");
+
+        if(ret_buf[0] & (1 << 3))
+            print(", Unrecognized Revision");
+
+        if(ret_buf[0] & (1 << 1))
+            print(", FW was unable to perform the request");
+
+        print("\n");
         return false;
     }
 
