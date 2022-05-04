@@ -48,6 +48,7 @@ main_sources = files(
     'source/drivers/timers/hpet.cpp',
     'source/drivers/timers/timers.cpp',
 
+    'source/drivers/usb/ehci/ehci.cpp',
     'source/drivers/usb/hid/boot_mouse.cpp',
     'source/drivers/usb/serial/ch341.cpp',
     'source/drivers/usb/xhci/xhci.cpp',
