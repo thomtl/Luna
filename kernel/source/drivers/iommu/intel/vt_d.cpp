@@ -525,7 +525,7 @@ void vt_d::RemappingEngine::handle_primary_fault() {
             }
 
             const SourceID sid{.raw = (uint16_t)fault.source_id};
-            print("      SID: {}:{}.{}\n", sid.bus, sid.slot, sid.func);
+            print("      SID: {:x}:{:x}.{:x}\n", sid.bus, sid.slot, sid.func);
 
             print("      Privilege: {:s}\n", fault.supervisor ? "Supervisor" : "User");
             if(fault.execute)
@@ -637,7 +637,7 @@ vt_d::IOMMU::IOMMU() {
                         auto sid = parse_path(segment, dev);
 
                         auto bus = sid.bus; auto slot = sid.slot; auto func = sid.func;
-                        print("       - PCI Endpoint Device: {}.{}.{}.{} ... ", segment, bus, slot, func);
+                        print("       - PCI Endpoint Device: {:x}.{:x}.{:x}.{:x} ... ", segment, bus, slot, func);
 
                         auto* dev = pci::device_by_location(segment, bus, slot, func);
                         ASSERT(dev);
