@@ -78,6 +78,8 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     lapic.update_apicbase(apicbase);
 
     smbase = 0x3'0000;
+
+    ia32_pat = msr::pat::reset_state_pat;
 }
 
 void vm::VCPU::exit() {
@@ -308,13 +310,45 @@ bool vm::VCPU::run() {
                 } else {
                     value = apicbase;
                 }
+            } else if(index == msr::ia32_bios_sign_id) {
+                if(exit.msr.write)
+                    PANIC("TODO: BIOS SIGN ID write");
+                else 
+                    value = 0; // No microcode loaded
+            } else if(index == msr::ia32_arch_capabilities) {
+                if(exit.msr.write)
+                    PANIC("Read only");
+                else
+                    value = 0;
             } else if(index >= 0x200 && index <= 0x2FF) {
-                update_mtrr(exit.msr.write, index, value);
+                if(index == msr::ia32_pat) {
+                    if(exit.msr.write)
+                        ia32_pat = value;
+                    else
+                        value = ia32_pat;
+                } else {
+                    update_mtrr(exit.msr.write, index, value);
+                }
+            } else if(index == msr::ia32_xss) {
+                if(exit.msr.write)
+                    ia32_xss = value;
+                else
+                    value = ia32_xss;
             } else if(index == msr::ia32_efer) {
                 if(exit.msr.write)
                     regs.efer = value | efer_constraint;
                 else
                     value = regs.efer;
+            } else if(index == msr::syscfg) {
+                if(exit.msr.write)
+                    PANIC("TODO: SYSCFG write");
+                else
+                    value = 0;
+            } else if(index == msr::osvw_id_length) {
+                if(exit.msr.write)
+                    PANIC("Read only");
+                else
+                    value = 0;
             } else {
                 if(exit.msr.write) {
                     print("vcpu: Unhandled wrmsr({:#x}, {:#x})\n", index, value);

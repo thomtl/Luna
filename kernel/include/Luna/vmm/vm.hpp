@@ -211,6 +211,8 @@ namespace vm {
         uint64_t apicbase;
         uint64_t tsc;
         uint64_t smbase;
+        uint64_t ia32_xss;
+        uint64_t ia32_pat;
 
         bool is_in_smm, should_exit;
 

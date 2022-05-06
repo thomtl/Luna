@@ -6,8 +6,11 @@ namespace msr {
     constexpr uint32_t ia32_tsc = 0x10;
     constexpr uint32_t ia32_apic_base = 0x1B;
     constexpr uint32_t ia32_feature_control = 0x3A;
+    constexpr uint32_t ia32_bios_sign_id = 0x8B;
 
     constexpr uint32_t ia32_mtrr_cap = 0xFE;
+
+    constexpr uint32_t ia32_arch_capabilities = 0x10A;
     
     constexpr uint32_t ia32_mtrr_physbase0 = 0x200;
     constexpr uint32_t ia32_mtrr_physmask0 = 0x201;
@@ -62,13 +65,20 @@ namespace msr {
 
     constexpr uint32_t x2apic_base = 0x800;
 
+    constexpr uint32_t ia32_xss = 0xDA0;
+
     constexpr uint32_t ia32_efer = 0xC0000080;
     constexpr uint32_t fs_base = 0xC0000100;
     constexpr uint32_t gs_base = 0xC0000101;
     constexpr uint32_t kernel_gs_base = 0xC0000102;
 
+    constexpr uint32_t syscfg = 0xC0010010;
+
     constexpr uint32_t vm_cr = 0xC0010114;
     constexpr uint32_t vm_hsave_pa = 0xC0010117;
+
+    constexpr uint32_t osvw_id_length = 0xC0010140;
+    constexpr uint32_t osvw_status = 0xC0010141;
 
     namespace pat {
         constexpr uint64_t uc = 0;
@@ -86,6 +96,8 @@ namespace msr {
         constexpr uint8_t uc_minus = uc_;
 
         constexpr uint64_t default_pat = uc | (wc << 8) | (wt << 32) | (wp << 40) | (wb << 48) | (uc_ << 56);
+
+        constexpr uint64_t reset_state_pat = 0x0007'0406'0007'0406;
     } // namespace pat
     
 
