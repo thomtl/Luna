@@ -17,12 +17,13 @@ namespace svm {
             uint64_t reserved_bit_set : 1;
             uint64_t execute : 1;
             uint64_t shadow_stack_access : 1;
-            uint64_t reserved : 27;
+            uint64_t reserved : 26;
 
             uint64_t reserved_0 : 32;
         };
         uint64_t raw;
     };
+    static_assert(sizeof(NPTViolationInfo) == 8);
     
     union [[gnu::packed]] IOInterceptInfo {
         struct {
@@ -35,9 +36,12 @@ namespace svm {
             uint64_t segment : 3;
             uint64_t reserved_1 : 3;
             uint64_t port : 16;
+
+            uint64_t reserved_2 : 32;
         };
         uint64_t raw;
     };
+    static_assert(sizeof(IOInterceptInfo) == 8);
 
     constexpr size_t io_bitmap_size = 3;
     constexpr size_t msr_bitmap_size = 2;
