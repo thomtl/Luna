@@ -371,7 +371,10 @@ namespace vm::nvme {
                     count++;
 
                     if((count % 8) == 0) { // 8 Sectors in 1 page
-                        vm->cpus[0].dma_read(prp_list + (prp_i * 8), {(uint8_t*)&dst, 8});
+                        if(n_lbas > 8 && n_lbas <= 16)
+                            dst = cmd.prp1;
+                        else
+                            vm->cpus[0].dma_read(prp_list + (prp_i * 8), {(uint8_t*)&dst, 8});
                         prp_i++;
                     } else {
                         dst += 512;
