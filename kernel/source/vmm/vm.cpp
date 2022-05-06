@@ -241,6 +241,13 @@ bool vm::VCPU::run() {
                 write_low32(regs.rdx, d);
             };
 
+            auto zero_cpuid = [&]() {
+                write_low32(regs.rax, 0);
+                write_low32(regs.rbx, 0);
+                write_low32(regs.rcx, 0);
+                write_low32(regs.rdx, 0); 
+            };
+
             auto os_support_bit = [&](uint64_t& reg, uint8_t cr4_bit, uint8_t bit) {
                 reg &= ~(1 << bit);
 
@@ -265,6 +272,8 @@ bool vm::VCPU::run() {
                 } else {
                     print("vcpu: Unhandled CPUID 0x7 subleaf {:#x}\n", subleaf);
                 }
+            } else if(leaf == 0xD) {
+                passthrough(); // Subleaf isn't interesting
             } else if(leaf == 0x4000'0000) {
                 write_low32(regs.rax, 0);
                 write_low32(regs.rbx, luna_sig);
@@ -275,11 +284,18 @@ bool vm::VCPU::run() {
             } else if(leaf == 0x8000'0001) {
                 passthrough();
                 os_support_bit(regs.rdx, 9, 24);
+            } else if(leaf == 0x8000'0007) {
+                passthrough();
             } else if(leaf == 0x8000'0008) {
                 passthrough(); // TODO: Do we want this to be passthrough?
                 write_low32(regs.rcx, 0); // Clear out core info
+            } else if(leaf == 0x8000'000A) { // SVM Info
+                zero_cpuid(); // TODO: Nested Virt
+            } else if(leaf == 0x8000'001F) { // Secure Encryption
+                zero_cpuid();
             } else {
                 print("vcpu: Unhandled CPUID: {:#x}:{}\n", leaf, subleaf);
+                zero_cpuid();
             }
 
             set_regs(regs);
