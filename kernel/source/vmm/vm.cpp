@@ -857,6 +857,10 @@ vm::PageWalkInfo vm::VCPU::walk_guest_paging(uintptr_t gva) {
         ASSERT(pml2_entry & (1 << 0)); // Assert its present
         write = write && (pml2_entry >> 1) & 1;
         user = user && (pml2_entry >> 2) & 1;
+        if(pml2_entry & (1 << 7)) { // Huge page
+            ASSERT(regs.cr4 & (1 << 4));
+            return {.found = true, .is_write = write, .is_user = user, .is_execute = true, .gpa = (pml2_entry & 0xFFC0'0000) + off_4m};
+        }
 
         uint32_t pml1_addr = pml2_entry & 0xFFFF'F000;
         auto* pml1 = (uint32_t*)(vm->mm->get_phys(pml1_addr) + phys_mem_map); // Page tables are always in 1 page so this is fine
