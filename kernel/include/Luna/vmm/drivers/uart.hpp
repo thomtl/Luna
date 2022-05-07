@@ -53,7 +53,7 @@ namespace vm::uart {
             } else if(port == (base + line_control_reg)) {
                 auto new_dlab = (value >> 7) & 1;
                 if(dlab && !new_dlab)
-                    print("uart: New baudrate {:d}\n", clock * baud);
+                    print("uart: New baudrate {:d}\n", clock / baud);
 
                 dlab = new_dlab;
 
