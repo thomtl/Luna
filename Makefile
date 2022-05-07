@@ -11,7 +11,11 @@ configure:
 	git clone https://git.seabios.org/seabios.git build/seabios
 	cd build/seabios && git checkout ef88eeaf052c8a7d28c5f85e790c5e45bcffa45e
 	cp misc/seabios-config.ini build/seabios/.config
-	make -C build/seabios
+	make -C build/seabios -j8
+
+	git clone https://github.com/torvalds/linux --branch v5.17 --depth 1 build/linux
+	cp misc/linux-config.ini build/linux/.config
+	make -C build/linux -j8
 
 	dd if=/dev/zero of=luna.hdd bs=4M count=16
 	parted -s luna.hdd mklabel msdos
@@ -36,9 +40,8 @@ bios:
 	echfs-utils -m -p0 luna.hdd import build/seabios/out/vgabios.bin luna/vgabios.bin
 
 test_guest:
-	nasm misc/test_guest.asm -f bin -o build/test_guest.hdd
-
-	echfs-utils -m -p0 luna.hdd import build/test_guest.hdd disk.bin
+	./misc/create_linux_guest.sh
+	echfs-utils -m -p0 luna.hdd import build/linux-guest.iso disk.bin
 
 # -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
 # Intel IOMMU: -device intel-iommu,aw-bits=48
