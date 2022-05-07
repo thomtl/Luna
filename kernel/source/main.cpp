@@ -349,7 +349,7 @@ void create_vm() {
         ASSERT(signature[0] == 0x55 && signature[1] == 0xAA);
     }
 
-    auto* bga_dev = new vm::gpu::bga::Driver{&vm, pci_host_bridge, vgabios, 1};
+    auto* bga_dev = new vm::gpu::bga::Driver{&vm, pci_host_bridge, vgabios, 2};
     (void)bga_dev;
 
     auto* vga_dev = new vm::gpu::vga::Driver{&vm};
