@@ -454,6 +454,14 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
             exit.instruction_len = read(vm_exit_instruction_len);
 
+            auto grip = read(guest_cs_base) + read(guest_rip);
+            vcpu->mem_read(grip, {exit.instruction});
+
+            vm::emulate::sreg segment = vm::emulate::sreg::Ds; // Default is DS
+            vm::emulate::get_segment_override(exit.instruction, segment); // If one is found it will be written to segmment
+
+            exit.pio.segment_index = static_cast<uint8_t>(segment);
+            exit.pio.address_size = vm::emulate::get_address_size(vcpu, exit.instruction);
             exit.pio.size = info.size + 1;
             exit.pio.port = info.port;
             exit.pio.rep = info.rep;

@@ -61,6 +61,9 @@ namespace std
             }
 
             entry_type& operator*() { return *entry; }
+            entry_type* operator->() const noexcept {
+                return entry;
+            }
             bool operator!=(Iterator it) { return entry != it.entry; }
 
             void operator++() {
@@ -89,6 +92,15 @@ namespace std
         const Iterator begin() const { return Iterator{this}; }
         Iterator end() { return Iterator{this, nullptr}; }
         const Iterator end() const { return Iterator{this, nullptr}; }
+
+        Iterator find(const Key& key) {
+            auto& list = _map[_hasher(key) % bucket_size];
+
+            for(auto& entry : list)
+                if(entry.first == key)
+                    return Iterator{this, &entry};
+            return end();
+        }
 
         void clear() {
             _map.clear();

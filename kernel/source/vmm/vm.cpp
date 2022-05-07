@@ -168,52 +168,58 @@ bool vm::VCPU::run() {
             get_regs(regs); 
 
             ASSERT(!exit.pio.rep); // TODO
-            ASSERT(!exit.pio.string);
 
-            auto reg_clear = [&]<typename T>(T& value) {
-                switch(exit.pio.size) {
-                    case 1: value &= 0xFF; break;
-                    case 2: value &= 0xFFFF; break;
-                    case 4: value &= 0xFFFF'FFFF; break;
+            auto mask_value = [&]<typename T>(T& value, uint8_t size) -> T {
+                switch(size) {
+                    case 1: return value & 0xFF;
+                    case 2: return value & 0xFFFF;
+                    case 4: return value & 0xFFFF'FFFF;
                     default: PANIC("Unknown PIO Size");
                 }
             };
 
-            if(!vm->pio_map.contains(exit.pio.port)) {
-                print("vcpu: Unhandled PIO Access to port {:#x}\n", exit.pio.port);
-
-                if(!exit.pio.write) {
-                    switch(exit.pio.size) {
-                        case 1: regs.rax &= ~0xFF; break;
-                        case 2: regs.rax &= ~0xFFFF; break;
-                        case 4: regs.rax &= ~0xFFFF'FFFF; break;
-                        default: PANIC("Unknown PIO Size");
-                    }
-                }
-                
-                set_regs(regs);
-                break;
-            }
-
-            auto* driver = vm->pio_map[exit.pio.port];
-
+            auto driver = vm->pio_map.find(exit.pio.port);
             if(exit.pio.write) {
-                auto value = regs.rax;
-                reg_clear(value);
+                uint64_t value = 0;
+                if(exit.pio.string) {
+                    ASSERT(!(regs.efer & (1 << 10)));
 
-                driver->pio_write(exit.pio.port, value, exit.pio.size);
+                    auto addr = emulate::get_sreg(regs, static_cast<emulate::sreg>(exit.pio.segment_index)).base + mask_value(regs.rdi, exit.pio.address_size);
+
+                    mem_read(addr, {(uint8_t*)&value, exit.pio.size});
+                    value = mask_value(value, exit.pio.size);
+
+                    if(regs.rflags & (1 << 10)) // Direction Flag
+                        regs.rdi -= exit.pio.size;
+                    else
+                        regs.rdi += exit.pio.size;
+
+                    set_regs(regs, VmRegs::General);
+                } else {
+                    value = mask_value(regs.rax, exit.pio.size);
+                }
+
+                if(driver != vm->pio_map.end())
+                    driver->second->pio_write(exit.pio.port, value, exit.pio.size);
+                else
+                    print("vcpu: Unhandled PIO write to port {:#x}\n", exit.pio.port);
             } else {
-                auto value = driver->pio_read(exit.pio.port, exit.pio.size);
+                ASSERT(!exit.pio.string);
 
+                uint64_t value = 0;
+                if(driver != vm->pio_map.end())
+                    value = driver->second->pio_read(exit.pio.port, exit.pio.size);
+                else
+                    print("vcpu: Unhandled PIO read to port {:#x}\n", exit.pio.port);
+                    
                 switch(exit.pio.size) {
                     case 1: regs.rax &= ~0xFF; break;
                     case 2: regs.rax &= ~0xFFFF; break;
                     case 4: regs.rax &= ~0xFFFF'FFFF; break;
                     default: PANIC("Unknown PIO Size");
                 }
-                reg_clear(value);
 
-                regs.rax |= value;
+                regs.rax |= mask_value(value, exit.pio.size);
 
                 set_regs(regs);
             }

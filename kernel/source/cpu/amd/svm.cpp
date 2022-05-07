@@ -251,6 +251,8 @@ bool svm::Vm::run(vm::VmExit& exit) {
 
             exit.instruction_len = vmcb->exitinfo2 - vmcb->rip;
 
+            exit.pio.address_size = info.address_size;
+            exit.pio.segment_index = info.segment;
             exit.pio.size = info.operand_size;
             exit.pio.port = info.port;
             exit.pio.rep = info.rep;

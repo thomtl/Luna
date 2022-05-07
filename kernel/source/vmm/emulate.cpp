@@ -27,7 +27,7 @@ uint64_t& get_r64(vm::RegisterState& regs, vm::emulate::r64 r) {
     }
 }
 
-vm::RegisterState::Segment& get_sreg(vm::RegisterState& regs, vm::emulate::sreg r) {
+vm::RegisterState::Segment& vm::emulate::get_sreg(vm::RegisterState& regs, vm::emulate::sreg r) {
     using namespace vm::emulate;
     switch (r) {
         case sreg::Es: return regs.es;
@@ -56,6 +56,60 @@ void vm::emulate::write_r64(vm::RegisterState& regs, vm::emulate::r64 r, uint64_
         case 8: *reg = v; break;
         default: PANIC("Unknown size");
     }
+}
+
+bool vm::emulate::get_segment_override(uint8_t instruction[max_x86_instruction_size], sreg& num) {
+    uint8_t i = 0;
+    while(i < max_x86_instruction_size) {
+        auto op = instruction[i++];
+
+        switch (op) {
+            case 0x26: num = sreg::Es; return true; // ES segment override
+            case 0x2E: num = sreg::Cs; return true; // CS segment override
+            case 0x36: num = sreg::Ss; return true; // SS segment override
+            case 0x3E: num = sreg::Ds; return true; // DS segment override
+            case 0x64: num = sreg::Fs; return true; // FS segment override
+            case 0x65: num = sreg::Gs; return true; // GS segment override
+            case 0x66: [[fallthrough]]; // Operand size override
+            case 0xF3: [[fallthrough]]; // REP Prefix
+            case 0x67: break; // Address Size Override
+            default:
+                return false; // Main instruction is here
+        }
+    }
+
+    return false;
+}
+
+uint8_t vm::emulate::get_address_size(vm::VCPU* vcpu, uint8_t instruction[]) {
+    vm::RegisterState regs{};
+    vcpu->get_regs(regs, vm::VmRegs::Segment | vm::VmRegs::Control);
+
+    ASSERT(!(regs.efer & (1 << 10)));
+    uint8_t default_operand_size = regs.cs.attrib.db ? 4 : 2;
+    uint8_t other_operand_size = regs.cs.attrib.db ? 2 : 4;
+    uint8_t address_size = default_operand_size;
+
+    uint8_t i = 0;
+    while(i < max_x86_instruction_size) {
+        auto op = instruction[i++];
+
+        switch (op) {
+            case 0x26: [[fallthrough]]; // ES segment override
+            case 0x2E: [[fallthrough]]; // CS segment override
+            case 0x36: [[fallthrough]]; // SS segment override
+            case 0x3E: [[fallthrough]]; // DS segment override
+            case 0x64: [[fallthrough]]; // FS segment override
+            case 0x65: [[fallthrough]]; // GS segment override
+            case 0x66: [[fallthrough]]; // Operand size override
+            case 0xF3: break; // REP Prefix
+            case 0x67: address_size = other_operand_size; return address_size; // Address Size Override
+            default: // main instruction is here
+                return address_size;
+        }
+    }
+
+    return address_size;
 }
 
 void vm::emulate::emulate_instruction(vm::VCPU* vcpu, uintptr_t gpa, std::pair<uintptr_t, size_t> mmio_region, uint8_t instruction[max_x86_instruction_size], vm::RegisterState& regs, vm::AbstractMMIODriver* driver) {

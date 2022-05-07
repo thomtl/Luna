@@ -82,7 +82,7 @@ namespace vm {
             } mmu;
 
             struct {
-                uint8_t size;
+                uint8_t address_size, segment_index, size;
                 bool write, string, rep;
                 uint16_t port;
             } pio;
