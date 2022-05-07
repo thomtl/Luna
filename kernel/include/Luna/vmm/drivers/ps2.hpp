@@ -84,6 +84,10 @@ namespace vm::ps2 {
                 case 0xAE: // Enable first PS/2 port
                     a.enabled = true;
                     break;
+                case 0xD3: // Write Aux obf
+                    multibyte_cmd = cmd;
+                    multibyte_n = 1;
+                    break;
                 default:
                     print("ps/2: Unknown command: {:#x}\n", cmd);
                     PANIC("Unknown PS/2 command");
@@ -104,6 +108,10 @@ namespace vm::ps2 {
 
                     a.translate = (ram[i] >> 6) & 1;
                 }
+            } else if(multibyte_cmd == 0xD3) {
+                push_obf(pop_ibf()); // What part of this has to do with aux?
+            } else {
+                print("ps/2: Unknown multibyte command: {:#x}\n", multibyte_cmd);
             }
 
             multibyte_cmd = 0;
