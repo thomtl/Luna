@@ -30,6 +30,7 @@ namespace lapic
         constexpr uint64_t timer_divider = 0x3E0;
 
         enum class LapicTimerModes : uint8_t { OneShot = 0, Periodic, TscDeadline };
+        enum class DestinationModes : uint8_t { Flat = 0xF, Cluster = 0 };
     } // namespace regs
 
     class Lapic {

@@ -29,14 +29,13 @@ namespace vm::irqs::lapic {
             if(addr == (base + regs::spurious)) {
                 svr = value;
 
-                auto spurious = svr & 0xFF;
-                bool enable = (svr >> 8) & 1;
-                print("lapic: Spurious IRQ: {:#x}, Enable: {}\n", (uint16_t)spurious, enable);
+                spurious_vector = svr & 0xFF;
+                enabled = (svr >> 8) & 1;
             } else if(addr == (base + regs::icr_low)) {
                 icr = (icr >> 32) << 32;
                 icr |= value;
 
-                print("lapic: IPI: ICR: {:#x}\n", icr);
+                print("lapic: TODO IPI: ICR: {:#x}\n", icr);
             } else if(addr == (base + regs::icr_high)) {
                 icr = (icr << 32) >> 32;
                 icr |= (value << 32);
@@ -44,6 +43,15 @@ namespace vm::irqs::lapic {
                 lint0 = value;
             } else if(addr == (base + regs::lvt_lint1)) {
                 lint1 = value;
+            } else if(addr == (base + regs::ldr)) {
+                ldr = value;
+
+                logical_id = (ldr >> 24) & 0xFF;
+            } else if(addr == (base + regs::dfr)) {
+                dfr = value;
+
+                ASSERT((dfr & 0x0FFF'FFFF) == 0x0FFF'FFFF);
+                destination_mode = static_cast<regs::DestinationModes>((dfr >> 28) & 0xF);
             } else {
                 print("lapic: Unhandled write to reg: {:#x} <- {:#x}, size {}\n", addr, value, (uint16_t)size);
             }
@@ -65,18 +73,27 @@ namespace vm::irqs::lapic {
                 return lint0;
             else if(addr == (base + regs::lvt_lint1))
                 return lint1;
+            else if(addr == (base + regs::ldr))
+                return ldr;
+            else if(addr == (base + regs::dfr))
+                return dfr;
+            else
+                print("lapic: Unhandled read from reg: {:#x}, size {}\n", addr, (uint16_t)size);
             
-            print("lapic: Unhandled read from reg: {:#x}, size {}\n", addr, (uint16_t)size);
             return 0;
         }
 
         private:
         uint64_t base;
 
-        uint8_t id;
+        uint8_t spurious_vector;
+        uint8_t id, logical_id;
+
+        bool enabled;
 
         uint32_t lint0, lint1;
-        uint64_t icr;
+        uint64_t icr, dfr, ldr;
+        ::lapic::regs::DestinationModes destination_mode;
 
         uint32_t svr;
         vm::Vm* vm;
