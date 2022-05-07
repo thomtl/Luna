@@ -49,6 +49,7 @@
 
 #include <Luna/vmm/drivers/irqs/lapic.hpp>
 #include <Luna/vmm/drivers/irqs/8259.hpp>
+#include <Luna/vmm/drivers/irqs/ioapic.hpp>
 
 #include <Luna/vmm/drivers/gpu/bga.hpp>
 #include <Luna/vmm/drivers/gpu/vga.hpp>
@@ -377,6 +378,9 @@ void create_vm() {
 
     auto* pic_dev = new vm::irqs::pic::Driver{&vm};
     vm.irq_listeners.push_back(pic_dev);
+
+    auto* ioapic_dev = new vm::irqs::ioapic::Driver{&vm, 1, 0xFEC0'0000};
+    (void)ioapic_dev;
     
     ASSERT(vm.cpus[0].run());
 }
