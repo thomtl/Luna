@@ -35,6 +35,7 @@
 #include <Luna/vmm/drivers/cmos.hpp>
 #include <Luna/vmm/drivers/ps2.hpp>
 #include <Luna/vmm/drivers/fast_a20.hpp>
+#include <Luna/vmm/drivers/pit.hpp>
 #include <Luna/vmm/drivers/pci/pci.hpp>
 #include <Luna/vmm/drivers/pci/pio_access.hpp>
 #include <Luna/vmm/drivers/pci/ecam.hpp>
@@ -325,6 +326,9 @@ void create_vm() {
 
     auto* hpet_dev = new vm::hpet::Driver{&vm};
     (void)hpet_dev;
+
+    auto* pit_dev = new vm::pit::Driver{&vm};
+    (void)pit_dev;
 
     auto* file = vfs::get_vfs().open("A:/disk.bin");
     auto* nvme_dev = new vm::nvme::Driver{&vm, pci_host_bridge, 16, 0, file};
