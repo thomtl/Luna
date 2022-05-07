@@ -310,9 +310,29 @@ bool vm::VCPU::run() {
 
             if(index == msr::ia32_tsc) {
                 if(exit.msr.write)
-                    tsc = value;
+                    ia32_tsc = value;
                 else
-                    value = tsc;
+                    value = ia32_tsc;
+            } else if(index == msr::ia32_tsc_adjust) {
+                if(exit.msr.write) // Read/Write to clear
+                    ia32_tsc_adjust = 0;
+                else
+                    value = ia32_tsc_adjust;
+            } else if(index == msr::ia32_sysenter_cs) {
+                if(exit.msr.write)
+                    regs.sysenter_cs = value;
+                else
+                    value = regs.sysenter_cs;
+            } else if(index == msr::ia32_sysenter_eip) {
+                if(exit.msr.write)
+                    regs.sysenter_eip = value;
+                else
+                    value = regs.sysenter_eip;
+            } else if(index == msr::ia32_sysenter_esp) {
+                if(exit.msr.write)
+                    regs.sysenter_esp = value;
+                else
+                    value = regs.sysenter_esp;
             } else if(index == msr::ia32_mtrr_cap) {
                 if(exit.msr.write)
                     vcpu->inject_int(AbstractVm::InjectType::Exception, 13, true, 0); // Inject #GP(0)

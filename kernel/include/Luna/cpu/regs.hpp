@@ -6,6 +6,7 @@ namespace msr {
     constexpr uint32_t ia32_tsc = 0x10;
     constexpr uint32_t ia32_apic_base = 0x1B;
     constexpr uint32_t ia32_feature_control = 0x3A;
+    constexpr uint32_t ia32_tsc_adjust = 0x3B;
     constexpr uint32_t ia32_bios_sign_id = 0x8B;
 
     constexpr uint32_t ia32_mtrr_cap = 0xFE;

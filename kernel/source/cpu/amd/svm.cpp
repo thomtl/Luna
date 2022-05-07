@@ -165,7 +165,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
         auto kgs_base = msr::read(msr::kernel_gs_base);
         auto pat = msr::read(msr::ia32_pat);
 
-        vmcb->tsc_offset = -cpu::rdtsc() + vcpu->tsc;
+        vmcb->tsc_offset = -cpu::rdtsc() + vcpu->ia32_tsc;
 
         host_simd.store();
         guest_simd.load();
@@ -180,7 +180,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
         guest_simd.store();
         host_simd.load();
 
-        vcpu->tsc = cpu::rdtsc() + vmcb->tsc_offset;
+        vcpu->ia32_tsc = cpu::rdtsc() + vmcb->tsc_offset;
 
         auto& cpu_data = get_cpu();
         cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table, cpu_data.tss_sel));

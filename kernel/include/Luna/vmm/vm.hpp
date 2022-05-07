@@ -210,7 +210,7 @@ namespace vm {
             uint8_t default_type;
         } mtrr;
         uint64_t apicbase;
-        uint64_t tsc;
+        uint64_t ia32_tsc, ia32_tsc_adjust;
         uint64_t smbase;
         uint64_t ia32_xss;
         uint64_t ia32_pat;

@@ -304,7 +304,7 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
         vmptrld();
 
-        write(tsc_offset, -cpu::rdtsc() + vcpu->tsc);
+        write(tsc_offset, -cpu::rdtsc() + vcpu->ia32_tsc);
 
         host_simd.store();
         guest_simd.load();
@@ -320,7 +320,7 @@ bool vmx::Vm::run(vm::VmExit& exit) {
         guest_simd.store();
         host_simd.load();
 
-        vcpu->tsc = cpu::rdtsc() + tsc_offset;
+        vcpu->ia32_tsc = cpu::rdtsc() + read(tsc_offset);
 
         // VM Exits restore the GDT and IDT Limit to 0xFFFF for some reason, so fix them
         get_cpu().gdt_table.set();
