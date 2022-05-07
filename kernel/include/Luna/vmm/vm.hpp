@@ -142,29 +142,6 @@ namespace vm {
         bool found, is_write = false, is_user = false, is_execute = false;
         uint64_t gpa = 0;
     };
-    
-    struct VTLB {
-        PageWalkInfo lookup(uintptr_t va) {
-            if(gtlb.contains(va >> 12))
-                return gtlb[va >> 12];
-
-            return {.found = false};
-        }
-
-        void add(uintptr_t va, PageWalkInfo info) {
-            gtlb[va >> 12] = info;
-        }
-
-        void invalidate([[maybe_unused]] uintptr_t va) {
-            PANIC("TODO");
-        }
-
-        void invalidate() {
-            gtlb.clear();
-        }
-
-        std::unordered_map<uintptr_t, PageWalkInfo> gtlb;
-    };
 
     struct VCPU {
         VCPU(Vm* vm, uint8_t id);
@@ -186,7 +163,6 @@ namespace vm {
 
         
         PageWalkInfo walk_guest_paging(uintptr_t gva);
-        VTLB guest_tlb;
 
         void mem_write(uintptr_t gva, std::span<uint8_t> buf);
         void mem_read(uintptr_t gva, std::span<uint8_t> buf);

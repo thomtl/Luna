@@ -445,7 +445,6 @@ bool vm::VCPU::run() {
             } else if(exit.cr.cr == 3) {
                 if(exit.cr.write) {
                     regs.cr3 = value;
-                    guest_tlb.invalidate();
                 } else
                     value = regs.cr3;
             } else {
@@ -458,7 +457,7 @@ bool vm::VCPU::run() {
             set_regs(regs);
             break;
         }
-        
+
         default:
             print("vcpu: Exit due to {:s}\n", exit.reason_to_string(exit.reason));
             if(exit.instruction_len != 0) {
@@ -843,14 +842,10 @@ vm::PageWalkInfo vm::VCPU::walk_guest_paging(uintptr_t gva) {
 
     // Paging is enabled, we can assume cr0.PE is true too, now figure out the various paging modes
     // But first look in the TLB
-    auto off = gva & 0xFFF; 
-    auto page = gva & 0xFFFF'F000;
-    if(auto info = guest_tlb.lookup(page); info.found) {
-        info.gpa += off;
-        return info;
-    }
+    auto off_4k = gva & 0xFFF; 
+    auto off_4m = gva & 0x3F'FFFF;
 
-    if(!(regs.efer & (1 << 10) && !(regs.cr4 & (1 << 5)))) { // No long mode and no PAE, thus normal 32bit paging
+    if(!(regs.efer & (1 << 10)) && !(regs.cr4 & (1 << 5))) { // No long mode and no PAE, thus normal 32bit paging
         bool write = true, user = true;
         auto pml2_i = (gva >> 22) & 0x3FF;
         auto pml1_i = (gva >> 12) & 0x3FF;
@@ -872,8 +867,7 @@ vm::PageWalkInfo vm::VCPU::walk_guest_paging(uintptr_t gva) {
         user = user && (pml1_entry >> 2) & 1;
 
         uint32_t gpa = pml1_entry & 0xFFFF'F000;
-        guest_tlb.add(page, {.found = true, .is_write = write, .is_user = user, .is_execute = true, .gpa = gpa});
-        return {.found = true, .is_write = write, .is_user = user, .is_execute = true, .gpa = gpa + off};
+        return {.found = true, .is_write = write, .is_user = user, .is_execute = true, .gpa = gpa + off_4k};
     } else {
         print("cr0: {:#x} cr4: {:#x} efer: {:#x}\n", regs.cr0, regs.cr4, regs.efer);
         PANIC("TODO");
