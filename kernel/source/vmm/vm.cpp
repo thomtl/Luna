@@ -262,7 +262,6 @@ bool vm::VCPU::run() {
 
                 regs.rcx |= (1u << 31); // Set Hypervisor Present bit
 
-                os_support_bit(regs.rdx, 9, 24);
                 os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
             } else if(leaf == 7) {
                 if(subleaf == 0) {
