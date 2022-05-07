@@ -42,6 +42,7 @@ namespace vm {
         uint64_t cr0, cr3, cr4;
         uint64_t efer;
         uint64_t dr0, dr1, dr2, dr3, dr6, dr7;
+        uint64_t sysenter_cs, sysenter_eip, sysenter_esp;
     };
 
     constexpr size_t max_x86_instruction_size = 15;

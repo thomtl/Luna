@@ -579,6 +579,10 @@ void vmx::Vm::get_regs(vm::RegisterState& regs, uint64_t flags) const {
         regs.cr3 = read(guest_cr3);
         regs.cr4 = read(guest_cr4);
         regs.efer = read(guest_efer_full);
+
+        regs.sysenter_cs = read(guest_ia32_sysenter_cs);
+        regs.sysenter_eip = read(guest_ia32_sysenter_eip);
+        regs.sysenter_esp = read(guest_ia32_sysenter_esp);
     }
     
     if(flags & vm::VmRegs::Segment) {
@@ -700,6 +704,10 @@ void vmx::Vm::set_regs(const vm::RegisterState& regs, uint64_t flags) {
             write(vm_entry_control, read(vm_entry_control) & ~(uint32_t)VMEntryControls::IA32eModeGuest);
 
         write(guest_efer_full, efer);
+
+        write(guest_ia32_sysenter_cs, regs.sysenter_cs);
+        write(guest_ia32_sysenter_eip, regs.sysenter_eip);
+        write(guest_ia32_sysenter_esp, regs.sysenter_esp);
     }
 }
 

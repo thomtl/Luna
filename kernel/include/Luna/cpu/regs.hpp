@@ -11,6 +11,10 @@ namespace msr {
     constexpr uint32_t ia32_mtrr_cap = 0xFE;
 
     constexpr uint32_t ia32_arch_capabilities = 0x10A;
+
+    constexpr uint32_t ia32_sysenter_cs = 0x174;
+    constexpr uint32_t ia32_sysenter_esp = 0x175;
+    constexpr uint32_t ia32_sysenter_eip = 0x176;
     
     constexpr uint32_t ia32_mtrr_physbase0 = 0x200;
     constexpr uint32_t ia32_mtrr_physmask0 = 0x201;

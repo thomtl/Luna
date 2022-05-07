@@ -361,6 +361,10 @@ void svm::Vm::get_regs(vm::RegisterState& regs, uint64_t flags) const {
         regs.cr4 = vmcb->cr4;
 
         regs.efer = vmcb->efer;
+
+        regs.sysenter_cs = vmcb->sysenter_cs;
+        regs.sysenter_eip = vmcb->sysenter_eip;
+        regs.sysenter_esp = vmcb->sysenter_esp;
     }
     
     if(flags & vm::VmRegs::Segment) {
@@ -434,6 +438,10 @@ void svm::Vm::set_regs(const vm::RegisterState& regs, uint64_t flags) {
         vmcb->cr4 = regs.cr4;
 
         vmcb->efer = regs.efer;
+
+        vmcb->sysenter_cs = regs.sysenter_cs;
+        vmcb->sysenter_eip = regs.sysenter_eip;
+        vmcb->sysenter_esp = regs.sysenter_esp;
     }
     
     if(flags & vm::VmRegs::Segment) {

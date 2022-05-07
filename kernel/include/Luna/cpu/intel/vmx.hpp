@@ -218,6 +218,7 @@ namespace vmx {
     constexpr uint64_t guest_interruptibility_state = 0x4824;
     constexpr uint64_t guest_activity_state = 0x4826;
     constexpr uint64_t guest_smbase = 0x4828;
+    constexpr uint64_t guest_ia32_sysenter_cs = 0x482A;
 
     constexpr uint64_t guest_intr_status = 0x810;
     constexpr uint64_t guest_pml_index = 0x812;
@@ -229,6 +230,8 @@ namespace vmx {
     constexpr uint64_t guest_rsp = 0x681C;
     constexpr uint64_t guest_rip = 0x681E;
     constexpr uint64_t guest_rflags = 0x6820;
+    constexpr uint64_t guest_ia32_sysenter_esp = 0x6824;
+    constexpr uint64_t guest_ia32_sysenter_eip = 0x6826;
 
     constexpr uint64_t guest_efer_full = 0x2806;
     
