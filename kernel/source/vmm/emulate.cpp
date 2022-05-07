@@ -463,8 +463,44 @@ void vm::emulate::emulate_instruction(vm::VCPU* vcpu, uintptr_t gpa, std::pair<u
             break;
         }
 
+        case 0x0F: { // 2-byte opcode
+            auto sub_op = instruction[++i];
+            switch (sub_op) {
+                case 0xB7: { // MOVZX
+                    auto mod = parse_modrm(instruction[++i]);
+
+                    if(mod.mod == 0b01) {
+                        //auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+                        i += 1;//src += instruction[++i];
+
+                        auto v = driver->mmio_read(gpa, operand_size);
+                        write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
+                    } else if(mod.mod == 0b10) {
+                        //auto src = read_r64(regs, (vm::emulate::r64)mod.rm, address_size);
+                        i += 4;//src += read32();
+
+                        auto v = driver->mmio_read(gpa, operand_size);
+                        write_r64(regs, (vm::emulate::r64)mod.reg, v, operand_size);
+                    } else {
+                        print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
+                        PANIC("TODO");
+                    }
+
+                    done = true;
+                    break;
+                }
+            
+                default:
+                    goto print_opcode_bytes;
+                    break;
+            }
+
+            break;
+        }
+
         
         default:
+        print_opcode_bytes:
             print("vm: Unknown instruction byte: ");
             for(size_t j = 0; j < max_x86_instruction_size; j++) {
                 if(i == j)
