@@ -230,13 +230,13 @@ extern "C" void __ubsan_handle_negate_overflow(OverflowData* data, uintptr_t old
 }
  
 extern "C" void __ubsan_handle_shift_out_of_bounds(ShiftOutOfBoundsData* data, uintptr_t lhs, uintptr_t rhs) {
-	print("ubsan: Shift out of bounds overflow\n");
+	print("ubsan: Shift out of bounds\n");
 	data->print("	");
 	print("	 lhs: {}, rhs: {}\n", lhs, rhs);
 }
  
 extern "C" void __ubsan_handle_out_of_bounds(OutOfBoundsData* data, uintptr_t index) {
-	print("ubsan: Shift out of bounds overflow\n");
+	print("ubsan: Out of bounds\n");
 	data->print("	");
 	print("	index: {}\n", index);
 }
