@@ -36,7 +36,12 @@ namespace vm::pci::pio_access {
                 addr.reg = value & 0xFC;
 
                 addr_raw = value;
-            } else if(port >= (base + config_data) && port <= (base + config_data + 4) && addr.enable) {
+            } else if(port == (base + config_address + 3) && size == 1) { // Is it even allowed to update the reg like this? linux seems to do it
+                addr.reg = value & 0xFC;
+
+                addr_raw &= ~0xFF;
+                addr_raw |= addr.reg;
+            } else if(port >= (base + config_data) && port < (base + config_data + 4) && addr.enable) {
                 auto off = port - (base + config_data);
                 if(bridge->drivers.contains(addr.dev.raw)) {
                     bridge->drivers[addr.dev.raw]->pci_write(addr.dev, addr.reg + off, value, size);
