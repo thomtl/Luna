@@ -11,12 +11,15 @@ namespace vm::q35::smi {
     constexpr uint16_t smi_sts = 0xb3;
 
     struct Driver : public vm::AbstractPIODriver {
-        Driver(Vm* vm): vm{vm}, cmd{0}, sts{0}, smi_generation{false} {
+        Driver(Vm* vm): vm{vm}, cmd{0}, sts{0}, smi_callback{nullptr}, smi_userptr{nullptr} {
             vm->pio_map[smi_cmd] = this;
             vm->pio_map[smi_sts] = this;
         }
 
-        void enable_smi_generation(bool value) { smi_generation = value; }
+        void register_smi_cmd_callback(void (*f)(Driver*, void*), void* userptr) { 
+            smi_callback = f;
+            smi_userptr = userptr;
+        }
 
         void pio_write(uint16_t port, uint32_t value, uint8_t size) {
             ASSERT(size == 1);
@@ -24,11 +27,8 @@ namespace vm::q35::smi {
             if(port == smi_cmd) {
                 cmd = value;
 
-                if(smi_generation) {
-                    //print("q35::smi: Raising SMI\n");
-
-                    vm->cpus[0].enter_smm();
-                }
+                if(smi_callback)
+                    smi_callback(this, smi_userptr);
             } else if(port == smi_sts) {
                 sts = value;
             }
@@ -48,6 +48,8 @@ namespace vm::q35::smi {
         vm::Vm* vm;
 
         uint8_t cmd, sts;
-        bool smi_generation;
+
+        void (*smi_callback)(Driver*, void*);
+        void* smi_userptr;
     };
 } // namespace vm::q35::smi
