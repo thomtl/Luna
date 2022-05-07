@@ -108,21 +108,21 @@ namespace vm::nvme {
         Driver(Vm* vm, pci::HostBridge* bridge, uint8_t slot, uint8_t func, vfs::File* file): PCIDriver{vm}, vm{vm}, file{file} {
             bridge->register_pci_driver(pci::DeviceID{0, 0, slot, func}, this);
 
-            pci_space.header.vendor_id = 0x8086;
-            pci_space.header.device_id = 0xF1A5; // Intel SSD 600P Series
-            pci_space.header.revision = 3;
+            pci_space->header.vendor_id = 0x8086;
+            pci_space->header.device_id = 0xF1A5; // Intel SSD 600P Series
+            pci_space->header.revision = 3;
 
-            pci_space.header.subsystem_vendor_id = 0x8086;
-            pci_space.header.subsystem_device_id = 0x390A;
+            pci_space->header.subsystem_vendor_id = 0x8086;
+            pci_space->header.subsystem_device_id = 0x390A;
 
-            pci_space.header.class_id = 1; // Storage
-            pci_space.header.subclass = 8; // NVMe
-            pci_space.header.prog_if = 2; // NVMe IO Controller
+            pci_space->header.class_id = 1; // Storage
+            pci_space->header.subclass = 8; // NVMe
+            pci_space->header.prog_if = 2; // NVMe IO Controller
 
-            pci_space.header.irq_pin = 1;
+            pci_space->header.irq_pin = 1;
 
             if(func > 0)
-                pci_space.header.header_type = 0x80;
+                pci_space->header.header_type = 0x80;
 
             pci_init_bar(0, bar_size, true, true); // MMIO, 64bit
         }
@@ -247,10 +247,10 @@ namespace vm::nvme {
         }
 
         void pci_update_bars() {
-            if(!(pci_space.header.command & (1 << 1)))
+            if(!(pci_space->header.command & (1 << 1)))
                 return;
 
-            uint64_t base = (pci_space.header.bar[0] & ~0xF) | ((uint64_t)pci_space.header.bar[1] << 32);
+            uint64_t base = (pci_space->header.bar[0] & ~0xF) | ((uint64_t)pci_space->header.bar[1] << 32);
             
             if(mmio_enabled)
                 vm->mmio_map[mmio_base] = {nullptr, 0};

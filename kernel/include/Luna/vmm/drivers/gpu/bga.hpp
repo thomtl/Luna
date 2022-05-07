@@ -36,12 +36,12 @@ namespace vm::gpu::bga {
             pci_init_bar(0, lfb_size, true);
             pci_init_bar(2, mmio_size, true);
             
-            pci_space.header.vendor_id = 0x1234;
-            pci_space.header.device_id = 0x1111;
+            pci_space->header.vendor_id = 0x1234;
+            pci_space->header.device_id = 0x1111;
 
-            pci_space.header.class_id = 3;
-            pci_space.header.subclass = 0;
-            pci_space.header.prog_if = 0;
+            pci_space->header.class_id = 3;
+            pci_space->header.subclass = 0;
+            pci_space->header.prog_if = 0;
 
             this->edid = edid::generate_edid({.native_x = max_x, .native_y = max_y});
 
@@ -129,11 +129,11 @@ namespace vm::gpu::bga {
         }
 
         void pci_update_bars() {
-            if(!(pci_space.header.command & (1 << 1))) // Make sure MMIO Decoding is on
+            if(!(pci_space->header.command & (1 << 1))) // Make sure MMIO Decoding is on
                 return;
 
-            auto bar0 = (pci_space.header.bar[0] & ~0xF);
-            auto bar2 = (pci_space.header.bar[2] & ~0xF);
+            auto bar0 = (pci_space->header.bar[0] & ~0xF);
+            auto bar2 = (pci_space->header.bar[2] & ~0xF);
             
             if(mmio_enabled) {
                 vm->mmio_map[this->bar0] = {nullptr, 0};

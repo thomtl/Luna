@@ -60,38 +60,38 @@ namespace vm::q35::dram {
         Driver(vm::Vm* vm, vm::pci::HostBridge* bus, pci::ecam::Driver* ecam): PCIDriver{vm}, ecam{ecam}, vm{vm} {
             bus->register_pci_driver(vm::pci::DeviceID{0, 0, 0, 0}, this); // Bus 0, Slot 0, Func 0
 
-            pci_space.header.vendor_id = 0x8086;
-            pci_space.header.device_id = 0x29C0;
+            pci_space->header.vendor_id = 0x8086;
+            pci_space->header.device_id = 0x29C0;
 
-            pci_space.header.command = (1 << 1);
-            pci_space.header.status = (1 << 4) | (1 << 7);
+            pci_space->header.command = (1 << 1);
+            pci_space->header.status = (1 << 4) | (1 << 7);
 
-            pci_space.header.revision = 2;
+            pci_space->header.revision = 2;
 
-            pci_space.header.class_id = 6;
-            pci_space.header.subclass = 0;
-            pci_space.header.prog_if = 0;
+            pci_space->header.class_id = 6;
+            pci_space->header.subclass = 0;
+            pci_space->header.prog_if = 0;
 
-            pci_space.header.capabilities = cap_off;
+            pci_space->header.capabilities = cap_off;
 
-            pci_space.header.subsystem_vendor_id = 0x1AF4;
-            pci_space.header.subsystem_device_id = 0x1100;
+            pci_space->header.subsystem_vendor_id = 0x1AF4;
+            pci_space->header.subsystem_device_id = 0x1100;
 
-            pci_space.data8[cap_off] = 0b1001; // Vendor dependent
-            pci_space.data8[cap_off + 1] = 0; // No next cap
-            pci_space.data8[cap_off + 2] = 0xB; // Length
-            pci_space.data8[cap_off + 3] = 1; // Low Nybble = version
+            pci_space->data8[cap_off] = 0b1001; // Vendor dependent
+            pci_space->data8[cap_off + 1] = 0; // No next cap
+            pci_space->data8[cap_off + 2] = 0xB; // Length
+            pci_space->data8[cap_off + 3] = 1; // Low Nybble = version
             // Rest of the cap fields are 0
 
-            pci_space.data8[smram] = 0x2;
+            pci_space->data8[smram] = 0x2;
         }
 
         void pci_handle_write(uint16_t reg, uint32_t value, uint8_t size) {
             auto do_write = [&] {
                 switch (size) {
-                    case 1: pci_space.data8[reg] = value; break;
-                    case 2: pci_space.data16[reg / 2] = value; break;
-                    case 4: pci_space.data32[reg / 4] = value; break;
+                    case 1: pci_space->data8[reg] = value; break;
+                    case 2: pci_space->data16[reg / 2] = value; break;
+                    case 4: pci_space->data32[reg / 4] = value; break;
                     default: PANIC("Unknown PCI Access size");
                 }
             };
@@ -112,9 +112,9 @@ namespace vm::q35::dram {
         uint32_t pci_handle_read(uint16_t reg, uint8_t size) {
             uint32_t ret = 0;
             switch (size) {
-                case 1: ret = pci_space.data8[reg]; break;
-                case 2: ret = pci_space.data16[reg / 2]; break;
-                case 4: ret = pci_space.data32[reg / 4]; break;
+                case 1: ret = pci_space->data8[reg]; break;
+                case 2: ret = pci_space->data16[reg / 2]; break;
+                case 4: ret = pci_space->data32[reg / 4]; break;
                 default: PANIC("Unknown PCI Access size");
             }
 
@@ -129,7 +129,7 @@ namespace vm::q35::dram {
         void pci_update_bars() { }
 
         void pciexbar_update() {
-            uint64_t ecam_base = pci_space.data32[pciexbar / 4] | ((uint64_t)pci_space.data32[(pciexbar / 4) + 1] << 32);
+            uint64_t ecam_base = pci_space->data32[pciexbar / 4] | ((uint64_t)pci_space->data32[(pciexbar / 4) + 1] << 32);
             auto base = (ecam_base >> 26) << 26;
             auto length = (ecam_base >> 1) & 0b11;
             bool enabled = (ecam_base >> 0) & 0b1;
@@ -154,7 +154,7 @@ namespace vm::q35::dram {
 
         void pam_update() {
             for(size_t i = 0; i < 13; i++) {
-                auto pam = (pci_space.data8[pam0 + div_ceil(i, 2)] >> ((!(i & 1)) * 4)) & 0b11;
+                auto pam = (pci_space->data8[pam0 + div_ceil(i, 2)] >> ((!(i & 1)) * 4)) & 0b11;
 
                 if(pam != pam_cache[i]) {
                     if(i == 0) // Keep 0xF'0000 to 0x10'0000 writeable, because SeaBios tries to write to it even though it disables it
@@ -170,7 +170,7 @@ namespace vm::q35::dram {
         }
 
         void smram_update() {
-            auto& v = pci_space.data8[smram];
+            auto& v = pci_space->data8[smram];
 
             v &= ~0b111;
             v |= 0b010; // Field is hardwired to this

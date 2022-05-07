@@ -43,11 +43,11 @@ namespace vm::pci {
 
     union [[gnu::packed]] ConfigSpace {
         ConfigSpaceHeader header;
-        uint8_t data8[256];
-        uint16_t data16[128];
-        uint32_t data32[64];
+        uint8_t data8[4096];
+        uint16_t data16[2048];
+        uint32_t data32[1024];
     };
-    static_assert(sizeof(ConfigSpace) == 256);
+    static_assert(sizeof(ConfigSpace) == 4096);
 
     struct HostBridge {
         void register_pci_driver(const DeviceID& did, AbstractPCIDriver* driver) { drivers[did.raw] = driver; }
