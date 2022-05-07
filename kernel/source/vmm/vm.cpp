@@ -269,6 +269,8 @@ bool vm::VCPU::run() {
                 regs.rcx |= (1u << 31); // Set Hypervisor Present bit
 
                 os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
+            } else if(leaf == 6) {
+                zero_cpuid(); // No thermal / power management stuff
             } else if(leaf == 7) {
                 if(subleaf == 0) {
                     passthrough();
@@ -289,6 +291,12 @@ bool vm::VCPU::run() {
             } else if(leaf == 0x8000'0001) {
                 passthrough();
                 os_support_bit(regs.rdx, 9, 24);
+            } else if(leaf == 0x8000'0002 || leaf == 0x8000'0003 || leaf == 0x8000'0004) { // CPU Brand string
+                passthrough();
+            } else if(leaf == 0x8000'0005) { // L1 and TLB id
+                passthrough();
+            } else if(leaf == 0x8000'0006) {
+                passthrough();
             } else if(leaf == 0x8000'0007) {
                 passthrough();
             } else if(leaf == 0x8000'0008) {
