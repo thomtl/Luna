@@ -36,6 +36,7 @@
 #include <Luna/vmm/drivers/ps2.hpp>
 #include <Luna/vmm/drivers/fast_a20.hpp>
 #include <Luna/vmm/drivers/pit.hpp>
+#include <Luna/vmm/drivers/io_delay.hpp>
 #include <Luna/vmm/drivers/pci/pci.hpp>
 #include <Luna/vmm/drivers/pci/pio_access.hpp>
 #include <Luna/vmm/drivers/pci/ecam.hpp>
@@ -311,6 +312,9 @@ void create_vm() {
 
     auto* a20_dev = new vm::fast_a20::Driver{&vm};
     (void)a20_dev;
+
+    auto* io_delay_dev = new vm::io_delay::Driver{&vm};
+    (void)io_delay_dev;
 
     auto* log_window = new gui::LogWindow{{60, 40}, "VM Log"};
     gui::get_desktop().add_window(log_window);
