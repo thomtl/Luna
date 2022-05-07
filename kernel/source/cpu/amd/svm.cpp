@@ -66,6 +66,7 @@ svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     memset((void*)vmcb, 0, pmm::block_size);
 
     vmcb->icept_exceptions = (1 << 1) | (1 << 6) | (1 << 14) | (1 << 17) | (1 << 18);
+    vmcb->icept_exceptions &= ~((1 << 14) | (1 << 6));
     vmcb->icept_cr_writes = (1 << 8);
 
     vmcb->icept_vmrun = 1;
@@ -81,13 +82,13 @@ svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
 
     vmcb->icept_hlt = 1;
     vmcb->icept_cpuid = 1;
-    vmcb->icept_invlpg = 1;
+    //vmcb->icept_invlpg = 1;
     vmcb->icept_rdpmc = 1;
     vmcb->icept_invd = 1;
     vmcb->icept_stgi = 1;
     vmcb->icept_clgi = 1;
     vmcb->icept_skinit = 1;
-    vmcb->icept_xsetbv = 1;
+    //vmcb->icept_xsetbv = 1;
     //vmcb->icept_wbinvd = 1;
     vmcb->icept_rdpru = 1;
     vmcb->icept_rsm = 1;
@@ -211,6 +212,12 @@ bool svm::Vm::run(vm::VmExit& exit) {
                     next_instruction();
 
                     return true;
+                } else {
+                    print("svm: Guest #UD, gRIP: {:#x}\n     ", grip);
+                    for(size_t i = 0; i < 15; i++)
+                        print("{:#x} ", instruction[i]);
+                    print("\n");
+                    return false;
                 }
             }
 
