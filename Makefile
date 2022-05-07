@@ -43,7 +43,7 @@ test_guest:
 # -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
 # Intel IOMMU: -device intel-iommu,aw-bits=48
 # AMD IOMMU: -device amd-iommu
-QEMU_FLAGS := -enable-kvm -cpu host -device intel-iommu,aw-bits=48 -machine q35 -global hpet.msi=true -smp 4 -hda luna.hdd -serial file:/dev/stdout -monitor stdio -no-reboot -no-shutdown \
+QEMU_FLAGS := -enable-kvm -cpu host -device intel-iommu,aw-bits=48 -machine q35 -global hpet.msi=true -smp 4 -m 512M -hda luna.hdd -serial file:/dev/stdout -monitor stdio -no-reboot -no-shutdown \
 			  -device ich9-intel-hda -device hda-output \
 			  -device qemu-xhci -device usb-mouse
 

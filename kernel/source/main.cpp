@@ -215,7 +215,7 @@ void create_vm() {
     this_thread()->pin_to_this_cpu(); // TODO: Is it possible to migrate vcpus between cpus?
 
     constexpr uintptr_t himem_start = 0x10'0000;
-    constexpr size_t himem_size = 32 * 1024 * 1024; // 16MiB
+    constexpr size_t himem_size = 128 * 1024 * 1024; // 16MiB
 
     vm::Vm vm{1};
     {
