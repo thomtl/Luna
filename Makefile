@@ -34,7 +34,7 @@ kernel:
 	echfs-utils -m -p0 luna.hdd import build/kernel/luna.bin boot/luna.bin
 
 bios:
-	make -C build/seabios
+	make -C build/seabios -j8
 	
 	echfs-utils -m -p0 luna.hdd import build/seabios/out/bios.bin luna/bios.bin
 	echfs-utils -m -p0 luna.hdd import build/seabios/out/vgabios.bin luna/vgabios.bin
