@@ -38,6 +38,8 @@ namespace vm::nvme {
         constexpr size_t aqa = 0x24;
         constexpr size_t asq = 0x28;
         constexpr size_t acq = 0x30;
+
+        constexpr size_t cmbsz = 0x3C;
     } // namespace regs
 
 
@@ -228,6 +230,8 @@ namespace vm::nvme {
                 return queues[0].cq_base;
             else if(reg == (regs::acq + 4) && size == 4)
                 return queues[0].cq_base >> 32;
+            else if(reg == (regs::cmbsz) && size == 4)
+                return 0; // Feature unsupported in CAP
             else {
                 print("nvme: Unknown MMIO read from {:#x}, size: {}\n", reg, size);
                 PANIC("Unknown reg");
