@@ -13,7 +13,7 @@
 namespace vm::gpu::bga {
     constexpr size_t dispi = 0x500;
 
-    constexpr uint32_t lfb_size = 0x100000;
+    constexpr uint32_t lfb_size = 4 * 1024 * 1024;
     constexpr uint32_t mmio_size = 0x1000;
 
     constexpr size_t edid_size = 256;
@@ -24,6 +24,7 @@ namespace vm::gpu::bga {
         constexpr size_t yres = dispi + (2 * 2);
         constexpr size_t bpp = dispi + (3 * 2);
         constexpr size_t enable = dispi + (4 * 2);
+        constexpr size_t video_memory_64k = dispi + (0xa * 2);
     } // namespace regs
 
     constexpr size_t max_x = 512, max_y = 512;
@@ -111,9 +112,11 @@ namespace vm::gpu::bga {
                     return ((uint8_t*)&edid)[i];
                 else
                     return 0;
-            } else if(addr == bar2 + regs::id)
+            } else if(addr == bar2 + regs::video_memory_64k) {
+                return (lfb_size / (64 * 1024));
+            } else if(addr == bar2 + regs::id) {
                 return 0xB0C5; // ID5
-            else
+            } else
                 print("bga: Unhandled MMIO Read {:#x}\n", addr);
 
             return 0;
