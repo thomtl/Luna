@@ -6,7 +6,7 @@
 
 namespace gui {
     struct LogWindow : public Window, public log::Logger {
-        LogWindow(Vec2i size_chars, const char* title): Window{{size_chars.x * 8 + 1, size_chars.y * 16}, title}, offset{0}, curr_x{0}, curr_y{0}, pos{pos}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
+        LogWindow(Vec2i size_chars, const char* title): Window{{size_chars.x * 8 + 1, size_chars.y * 16}, title}, offset{0}, curr_x{0}, curr_y{0}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
 
         void update() const {
             canvas.clear();
@@ -117,7 +117,7 @@ namespace gui {
         mutable std::vector<char> buf;
         mutable size_t offset;
         mutable size_t curr_x, curr_y;
-        Vec2i pos, size_chars;
+        Vec2i size_chars;
 
         mutable Colour fg, bg, colour_intensity;
     };
