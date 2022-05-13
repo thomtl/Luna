@@ -101,7 +101,6 @@ svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
 
     vmcb->npt_enable = 1;
     vmcb->npt_cr3 = mm->get_root_pa();
-    vmcb->pat = 0x0007040600070406; // Default PAT
 
     vmcb->guest_asid = mm->get_asid();
     vmcb->tlb_control = 0; // Do no TLB flushes on vmrun, all TLB flushes are done by the NPT using invlpga
@@ -374,6 +373,7 @@ void svm::Vm::get_regs(vm::RegisterState& regs, uint64_t flags) const {
         regs.sysenter_cs = vmcb->sysenter_cs;
         regs.sysenter_eip = vmcb->sysenter_eip;
         regs.sysenter_esp = vmcb->sysenter_esp;
+        regs.pat = vmcb->pat;
     }
     
     if(flags & vm::VmRegs::Segment) {
@@ -451,6 +451,7 @@ void svm::Vm::set_regs(const vm::RegisterState& regs, uint64_t flags) {
         vmcb->sysenter_cs = regs.sysenter_cs;
         vmcb->sysenter_eip = regs.sysenter_eip;
         vmcb->sysenter_esp = regs.sysenter_esp;
+        vmcb->pat = regs.pat;
     }
     
     if(flags & vm::VmRegs::Segment) {

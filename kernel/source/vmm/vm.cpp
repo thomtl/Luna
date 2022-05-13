@@ -66,6 +66,7 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
 
     regs.cr3 = 0;
     regs.efer = efer_constraint;
+    regs.pat = msr::pat::reset_state_pat;
 
     vcpu->set_regs(regs, VmRegs::General | VmRegs::Segment | VmRegs::Control);
 
@@ -78,8 +79,6 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     lapic.update_apicbase(apicbase);
 
     smbase = 0x3'0000;
-
-    ia32_pat = msr::pat::reset_state_pat;
 }
 
 void vm::VCPU::exit() {
@@ -375,9 +374,9 @@ bool vm::VCPU::run() {
             } else if(index >= 0x200 && index <= 0x2FF) {
                 if(index == msr::ia32_pat) {
                     if(exit.msr.write)
-                        ia32_pat = value;
+                        regs.pat = value;
                     else
-                        value = ia32_pat;
+                        value = regs.pat;
                 } else {
                     update_mtrr(exit.msr.write, index, value);
                 }

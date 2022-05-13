@@ -211,8 +211,6 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     
     write(exception_bitmap, (1 << 1) | (1 << 6) | (1 << 17) | (1 << 18));
 
-    write(guest_ia32_pat_full, 0x0007040600070406);
-
     {
         uint32_t fixed0 = msr::read(msr::ia32_vmx_cr0_fixed0);
         uint32_t fixed1 = msr::read(msr::ia32_vmx_cr0_fixed1);
@@ -632,6 +630,7 @@ void vmx::Vm::get_regs(vm::RegisterState& regs, uint64_t flags) const {
         regs.sysenter_cs = read(guest_ia32_sysenter_cs);
         regs.sysenter_eip = read(guest_ia32_sysenter_eip);
         regs.sysenter_esp = read(guest_ia32_sysenter_esp);
+        regs.pat = read(guest_ia32_pat_full);
     }
     
     if(flags & vm::VmRegs::Segment) {
@@ -759,6 +758,7 @@ void vmx::Vm::set_regs(const vm::RegisterState& regs, uint64_t flags) {
         write(guest_ia32_sysenter_cs, regs.sysenter_cs);
         write(guest_ia32_sysenter_eip, regs.sysenter_eip);
         write(guest_ia32_sysenter_esp, regs.sysenter_esp);
+        write(guest_ia32_pat_full, regs.pat);
     }
 }
 

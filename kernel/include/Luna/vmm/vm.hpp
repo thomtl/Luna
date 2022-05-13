@@ -44,6 +44,7 @@ namespace vm {
         uint64_t efer;
         uint64_t dr0, dr1, dr2, dr3, dr6, dr7;
         uint64_t sysenter_cs, sysenter_eip, sysenter_esp;
+        uint64_t pat;
     };
 
     constexpr size_t max_x86_instruction_size = 15;
@@ -190,7 +191,6 @@ namespace vm {
         uint64_t ia32_tsc, ia32_tsc_adjust;
         uint64_t smbase;
         uint64_t ia32_xss;
-        uint64_t ia32_pat;
 
         bool is_in_smm, should_exit;
 
