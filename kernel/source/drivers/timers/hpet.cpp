@@ -182,7 +182,7 @@ timers::HardwareTimerCapabilities hpet::Comparator::get_capabilities() {
     return cap;
 }
 
-bool hpet::Comparator::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) {
+bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), void* userptr) {
     if(!supports_periodic && periodic)
         return false;
 
@@ -198,7 +198,7 @@ bool hpet::Comparator::start_timer(bool periodic, uint64_t ms, void(*f)(void*), 
     auto& reg = _device->regs->comparators[this->_i];
     reg.cmd &= ~((1 << 6) | (1 << 3) | (1 << 2));
 
-    auto delta = ms * (femto_per_milli / _device->period);
+    auto delta = ns * (femto_per_nano / _device->period);
 
     if(periodic) {
         reg.cmd |= (1 << 6) | (1 << 3) | (1 << 2);

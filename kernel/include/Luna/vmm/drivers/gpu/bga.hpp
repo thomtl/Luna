@@ -78,7 +78,7 @@ namespace vm::gpu::bga {
                     spawn([this] {
                         Promise<void> promise{};
 
-                        auto success = timers::start_timer(true, 20, [](void* promise) {
+                        auto success = timers::start_timer_ms(true, 20, [](void* promise) {
                             ((Promise<void>*)promise)->complete();
                         }, &promise);
 

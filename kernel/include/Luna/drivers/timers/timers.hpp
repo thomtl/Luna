@@ -13,7 +13,7 @@ namespace timers {
         virtual ~AbstractHardwareTimer() { }
 
         virtual HardwareTimerCapabilities get_capabilities() = 0;
-        virtual bool start_timer([[maybe_unused]] bool periodic, [[maybe_unused]] uint64_t ms, [[maybe_unused]] void(*f)(void*), [[maybe_unused]] void* userptr = nullptr) { PANIC("Not supported"); }
+        virtual bool start_timer([[maybe_unused]] bool periodic, [[maybe_unused]] uint64_t ns, [[maybe_unused]] void(*f)(void*), [[maybe_unused]] void* userptr = nullptr) { PANIC("Not supported"); }
         
         virtual void poll_msleep([[maybe_unused]] size_t ms) { PANIC("Not supported"); }
         virtual void poll_nsleep([[maybe_unused]] size_t ns) { PANIC("Not supported"); }
@@ -26,5 +26,6 @@ namespace timers {
     void poll_nsleep(uint64_t ns);
     uint64_t time_ns();
 
-    bool start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr = nullptr);
+    bool start_timer_ms(bool periodic, uint64_t ms, void(*f)(void*), void* userptr = nullptr);
+    bool start_timer_ns(bool periodic, uint64_t ns, void(*f)(void*), void* userptr = nullptr);
 } // namespace timers

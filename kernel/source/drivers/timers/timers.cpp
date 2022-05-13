@@ -48,7 +48,7 @@ uint64_t timers::time_ns() {
     return time_ns_impl->time_ns();
 }
 
-bool timers::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) {
+bool timers::start_timer_ms(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) {
     std::lock_guard guard{lock};
     for(auto timer : timer_list) {
         auto cap = timer->get_capabilities();
@@ -58,7 +58,24 @@ bool timers::start_timer(bool periodic, uint64_t ms, void(*f)(void*), void* user
         if(periodic && !cap.can_be_periodic)
             continue;
 
-        if(timer->start_timer(periodic, ms, f, userptr))
+        if(timer->start_timer(periodic, ms * (uint64_t)1e6, f, userptr))
+            return true;        
+    }
+
+    return false;
+}
+
+bool timers::start_timer_ns(bool periodic, uint64_t ns, void(*f)(void*), void* userptr) {
+    std::lock_guard guard{lock};
+    for(auto timer : timer_list) {
+        auto cap = timer->get_capabilities();
+        if(!cap.has_irq)
+            continue;
+            
+        if(periodic && !cap.can_be_periodic)
+            continue;
+
+        if(timer->start_timer(periodic, ns, f, userptr))
             return true;        
     }
 
