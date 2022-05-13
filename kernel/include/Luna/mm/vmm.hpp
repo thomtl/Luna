@@ -6,6 +6,7 @@
 namespace vmm
 {
     void init_bsp();
+    bool is_canonical(uintptr_t addr);
     paging::context create_context();
 
     class kernel_vmm {

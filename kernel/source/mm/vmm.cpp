@@ -15,6 +15,16 @@ void vmm::init_bsp(){
     print("vmm: Using {} paging levels with phys mem at {:#x}\n", (uint64_t)paging_levels, phys_mem_map);
 }
 
+bool vmm::is_canonical(uintptr_t addr) {
+    if(paging_levels == 4) {
+        return (addr <= 0x0000'7FFF'FFFF'FFFFull) || (addr >= 0xFFFF'8000'0000'0000ull);
+    } else if(paging_levels == 5) {
+        return (addr <= 0x00FF'FFFF'FFFF'FFFFull) || (addr >= 0xFF00'0000'0000'0000ull);
+    } else {
+        PANIC("Unknown paging_levels");
+    }
+}
+
 paging::context vmm::create_context(){
     return paging::context{paging_levels};
 }

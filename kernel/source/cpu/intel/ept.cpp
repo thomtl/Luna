@@ -134,8 +134,13 @@ void ept::context::invept() {
     struct {
         uint64_t eptp;
         uint64_t reserved;
-    } descriptor{root_pa, 0};
+    } descriptor{root_pa | ((levels - 1) << 3) | 6, 0};
     uint64_t mode = 1; // Single Context
+    uint64_t rflags = 0;
     
-    asm volatile("invept %1, %0" : : "r"(mode), "m"(descriptor) : "memory");
+    asm volatile("invept %[Descriptor], %[Mode]\npushfq\npopq %[Flags]" : [Flags] "=r"(rflags): [Mode] "r"(mode), [Descriptor] "m"(descriptor) : "memory");
+    if(rflags & (1 << 0))
+        print("vmx/ept: Failed invept because there is no VMCS loaded\n");
+    else if(rflags & (1 << 6))
+        print("vmx/ept: Failed invept\n");
 }

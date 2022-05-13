@@ -74,11 +74,15 @@ static uint64_t cr_constraint(uint32_t msr0, uint32_t msr1) {
 }
 
 uint64_t vmx::get_cr0_constraint() {
-    return cr_constraint(msr::ia32_vmx_cr0_fixed0, msr::ia32_vmx_cr0_fixed1);
+    auto constraint = cr_constraint(msr::ia32_vmx_cr0_fixed0, msr::ia32_vmx_cr0_fixed1);
+    constraint &= ~(1u << 0); // We don't need to constrain protected mode due to Unrestriced Guest
+    constraint &= ~(1u << 31); // Ditto
+    return constraint;
 }
 
 uint64_t vmx::get_cr4_constraint() {
-    return cr_constraint(msr::ia32_vmx_cr4_fixed0, msr::ia32_vmx_cr4_fixed1);
+    auto constraint = cr_constraint(msr::ia32_vmx_cr4_fixed0, msr::ia32_vmx_cr4_fixed1);
+    return constraint;
 }
 
 void vmx::init() {
@@ -102,7 +106,7 @@ void vmx::init() {
 	cr4 |= msr::read(msr::ia32_vmx_cr4_fixed0);
 	cr4::write(cr4);
 
-    cr4::write(cr4::read() | (1 << 13)); // Set cr4.VMXE
+    cr4::write(cr4::read() | cr4::vmxe);
 
     auto basic = msr::read(msr::ia32_vmx_basic);
     auto revision = basic & 0x7FFF'FFFF;
@@ -191,31 +195,49 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
                      | (uint32_t)ProcBasedControls::SecondaryControlsEnable \
                      | (uint32_t)ProcBasedControls::VMExitOnCr8Store \
                      | (uint32_t)ProcBasedControls::VMExitOnRdpmc \
-                     | (uint32_t)ProcBasedControls::TSCOffsetting \
-                     | (uint32_t)ProcBasedControls::VMExitOnInvlpg;
+                     | (uint32_t)ProcBasedControls::TSCOffsetting;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls));
     }
 
     {
         uint32_t min = (uint32_t)ProcBasedControls2::EPTEnable \
+                     | (uint32_t)ProcBasedControls2::EnableInvpcid \
+                     | (uint32_t)ProcBasedControls2::RDTSCPEnable \
                      | (uint32_t)ProcBasedControls2::UnrestrictedGuest;
         uint32_t opt = 0;
         write(proc_based_vm_exec_controls2, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls2));
     }
     
-    write(exception_bitmap, (1 << 1) | (1 << 6) | (1 << 14) | (1 << 17) | (1 << 18));
+    write(exception_bitmap, (1 << 1) | (1 << 6) | (1 << 17) | (1 << 18));
 
-    write(cr0_mask, ~0);
+    write(guest_ia32_pat_full, 0x0007040600070406);
 
     {
-        uint32_t min = (uint32_t)VMExitControls::LongMode | (uint32_t)VMExitControls::LoadIA32EFER;
+        uint32_t fixed0 = msr::read(msr::ia32_vmx_cr0_fixed0);
+        uint32_t fixed1 = msr::read(msr::ia32_vmx_cr0_fixed1);
+        uint32_t host_owned = fixed0 & fixed1;
+        host_owned &= ~((1 << 0) | (1 << 31)); // We don't own PE and PG due to unrestricted guest
+        write(cr0_mask, host_owned);
+        write(cr0_shadow, 0);
+    }
+
+    {
+        uint32_t fixed0 = msr::read(msr::ia32_vmx_cr4_fixed0);
+        uint32_t fixed1 = msr::read(msr::ia32_vmx_cr4_fixed1);
+        uint32_t host_owned = fixed0 & fixed1;
+        write(cr4_mask, host_owned);
+        write(cr4_shadow, 0);
+    }
+
+    {
+        uint32_t min = (uint32_t)VMExitControls::LongMode | (uint32_t)VMExitControls::LoadIA32EFER | (uint32_t)VMExitControls::SaveIA32EFER | (uint32_t)VMExitControls::SaveIA32PAT | (uint32_t)VMExitControls::LoadIA32PAT;
         uint32_t opt = 0;
         write(vm_exit_control, adjust_controls(min, opt, msr::ia32_vmx_exit_ctls));
     }
 
     {
-        uint32_t min = (uint32_t)VMEntryControls::LoadIA32EFER;
+        uint32_t min = (uint32_t)VMEntryControls::LoadIA32EFER | (uint32_t)VMEntryControls::LoadIA32PAT;
         uint32_t opt = 0;
         write(vm_entry_control, adjust_controls(min, opt, msr::ia32_vmx_entry_ctls));
     }
@@ -373,7 +395,7 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
                         return true;
                     } else {
-                        print("VT-x: #UD: gRIP: {:#x} : ", grip);
+                        print("vmx: #UD: gRIP: {:#x} : ", grip);
 
                         for(uint8_t i = 0; i < 15; i++)
                             print("{:x} ", instruction[i]);
@@ -383,11 +405,16 @@ bool vmx::Vm::run(vm::VmExit& exit) {
                 }
 
                 auto type = info.type, vector = info.vector;
-                print("VT-x: Interruption: Type: {}, Vector: {}\n", type, vector);
+                print("vmx: Interruption: Type: {}, Vector: {}\n", type, vector);
+                print("{:#x}\n", read(guest_cr4));
                 return false;
             }
         } else if(basic_reason == VMExitReasons::ExtInt) {
             
+        } else if(basic_reason == VMExitReasons::TripleFault) {
+            print("vmx: Guest Triple Fault\n");
+
+            return false;            
         } else if(basic_reason == VMExitReasons::CPUID) {
             exit.reason = vm::VmExit::Reason::CPUID;
 
@@ -415,15 +442,15 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             auto grip = read(guest_cs_base) + read(guest_rip);
             vcpu->mem_read(grip, {exit.instruction});
 
-            if(exit.instruction[0] == 0x0F && exit.instruction[1] == 0x20) {
-                // Mov cr0-cr7, {r32, r64}
+            if(exit.instruction[0] == 0x0F && exit.instruction[1] == 0x20) { // Mov {r32, r64}, cr0-cr7
+                ASSERT(exit.instruction_len == 3);
 
                 auto modrm = vm::emulate::parse_modrm(exit.instruction[2]);
                 exit.cr.cr = modrm.reg;
                 exit.cr.gpr = modrm.rm;
                 exit.cr.write = false;
-            } else if(exit.instruction[0] == 0x0F && exit.instruction[1] == 0x22) {
-                // Mov cr0-cr7, {r32, r64}
+            } else if(exit.instruction[0] == 0x0F && exit.instruction[1] == 0x22) { // // Mov cr0-cr7, {r32, r64}
+                ASSERT(exit.instruction_len == 3);
 
                 auto modrm = vm::emulate::parse_modrm(exit.instruction[2]);
                 exit.cr.cr = modrm.reg;
@@ -449,6 +476,7 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             return true;
         } else if(basic_reason == VMExitReasons::PIO) {
             IOQualification info{.raw = read(vm_exit_qualification)};
+            PIOStringOpInfo address{.raw = (uint32_t)read(vm_exit_instruction_info)};
 
             exit.reason = vm::VmExit::Reason::PIO;
 
@@ -456,17 +484,25 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
             auto grip = read(guest_cs_base) + read(guest_rip);
             vcpu->mem_read(grip, {exit.instruction});
+            
+            uint8_t address_size = 0;
+            switch(address.address_size) {
+                case 0: address_size = 2; break;
+                case 1: address_size = 4; break;
+                case 2: address_size = 8; break;
+                default: PANIC("Unknown address size");
+            }
 
-            vm::emulate::sreg segment = vm::emulate::sreg::Ds; // Default is DS
-            vm::emulate::get_segment_override(exit.instruction, segment); // If one is found it will be written to segmment
-
-            exit.pio.segment_index = static_cast<uint8_t>(segment);
-            exit.pio.address_size = vm::emulate::get_address_size(vcpu, exit.instruction);
+            exit.pio.segment_index = address.segment_idx;
+            exit.pio.address_size = address_size;
             exit.pio.size = info.size + 1;
             exit.pio.port = info.port;
             exit.pio.rep = info.rep;
             exit.pio.string = info.string;
             exit.pio.write = !info.dir;
+
+            if(info.string)
+                print("WAtch out weird stuffs\n");
 
             next_instruction();
 
@@ -498,6 +534,11 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             return true;
         } else if(basic_reason == VMExitReasons::InvalidGuestState) {
             print("vmx: VM-Entry Failure due to invalid guest state\n");
+            print("     Qualification: {}\n", read(vm_exit_qualification));
+            auto grip = read(guest_cs_base) + read(guest_rip);
+            print("     RIP: {:#x}, CR0: {:#x}, CR3: {:#x}, CR4: {:#x}, EFER: {:#x}\n", grip, read(guest_cr0), read(guest_cr3), read(guest_cr4), read(guest_efer_full));
+            
+            check_guest_state();
             return false;
         } else if(basic_reason == VMExitReasons::EPTViolation) {
             auto addr = read(ept_violation_addr);
@@ -615,6 +656,7 @@ void vmx::Vm::get_regs(vm::RegisterState& regs, uint64_t flags) const {
                 regs.segment.attrib.l = (seg >> 13) & 1; \
                 regs.segment.attrib.db = (seg >> 14) & 1; \
                 regs.segment.attrib.g = (seg >> 15) & 1; \
+                regs.segment.attrib.unusable = (seg >> 16) & 1; \
             } 
 
         GET_SEGMENT(cs);
@@ -670,33 +712,34 @@ void vmx::Vm::set_regs(const vm::RegisterState& regs, uint64_t flags) {
         SET_TABLE(gdtr);
         SET_TABLE(idtr);
 
-        #define SET_SEGMENT(segment) \
+        #define SET_SEGMENT(segment, needs_accessed_cleanup) \
             write(guest_##segment##_base, regs.segment.base); \
             write(guest_##segment##_limit, regs.segment.limit); \
             write(guest_##segment##_selector, regs.segment.selector); \
             { \
-                uint32_t attrib = regs.segment.attrib.type | (regs.segment.attrib.s << 4) | \
+                uint32_t attrib = (regs.segment.attrib.type | (needs_accessed_cleanup ? 1 : 0)) | (regs.segment.attrib.s << 4) | \
                                   (regs.segment.attrib.dpl << 5) | (regs.segment.attrib.present << 7) | \
                                   (regs.segment.attrib.avl << 12) | (regs.segment.attrib.l << 13) | \
-                                  (regs.segment.attrib.db << 14) | (regs.segment.attrib.g << 15); \
+                                  (regs.segment.attrib.db << 14) | (regs.segment.attrib.g << 15) | (regs.segment.attrib.unusable ? (1 << 16) : 0); \
                 write(guest_##segment##_access_right, attrib); \
             }
 
-        SET_SEGMENT(cs);
-        SET_SEGMENT(ds);
-        SET_SEGMENT(ss);
-        SET_SEGMENT(es);
-        SET_SEGMENT(fs);
-        SET_SEGMENT(gs);
+        SET_SEGMENT(cs, true);
+        SET_SEGMENT(ds, true);
+        SET_SEGMENT(ss, true);
+        SET_SEGMENT(es, true);
+        SET_SEGMENT(fs, true);
+        SET_SEGMENT(gs, true);
 
-        SET_SEGMENT(ldtr);
-        SET_SEGMENT(tr);
+        SET_SEGMENT(ldtr, false);
+        SET_SEGMENT(tr, true);
     }
     
     if(flags & vm::VmRegs::Control) {
         write(guest_cr0, regs.cr0);
         write(cr0_shadow, regs.cr0);
         write(guest_cr4, regs.cr4);
+        write(cr4_shadow, regs.cr4);
         write(guest_cr3, regs.cr3);
 
         uint64_t efer = regs.efer;
@@ -750,4 +793,155 @@ uint64_t vmx::Vm::read(uint64_t field) const {
     }
 
     return ret;
+}
+
+void vmx::Vm::check_guest_state() const {
+    vm::RegisterState regs{};
+    get_regs(regs, (uint64_t)vm::VmRegs::Control | (uint64_t)vm::VmRegs::Segment | (uint64_t)vm::VmRegs::General);
+
+    ASSERT(((regs.cr0 & msr::read(msr::ia32_vmx_cr0_fixed1)) | msr::read(msr::ia32_vmx_cr0_fixed0)) == regs.cr0);
+    ASSERT(((regs.cr4 & msr::read(msr::ia32_vmx_cr4_fixed1)) | msr::read(msr::ia32_vmx_cr4_fixed0)) == regs.cr4);
+
+    if(regs.cr0 & (1 << 31))
+        ASSERT(regs.cr0 & (1 << 0));
+
+    if(regs.cr4 & cr4::cet)
+        ASSERT(regs.cr0 & (1 << 16));
+
+    ASSERT((regs.cr3 >> 52) == 0);
+
+    if(read(vm_entry_control) & static_cast<uint64_t>(VMEntryControls::IA32eModeGuest)) {
+        ASSERT(regs.cr0 & (1 << 31));
+        ASSERT(regs.cr4 & cr4::pae);
+    } else {
+        ASSERT(!(regs.cr4 & cr4::pcide));
+    }
+
+    ASSERT(vmm::is_canonical(read(guest_ia32_sysenter_eip)));
+    ASSERT(vmm::is_canonical(read(guest_ia32_sysenter_esp)));
+
+    ASSERT((regs.rflags >> 22) == 0);
+    ASSERT(!(regs.rflags & (1 << 17)));
+
+    auto activity_state = read(guest_activity_state);
+    ASSERT(activity_state < 4);
+
+    ASSERT(((regs.tr.selector >> 2) & 1) == 0);
+    ASSERT(((regs.ldtr.selector >> 2) & 1) == 0);
+
+    if(regs.rflags & (1 << 17)) {
+        ASSERT(regs.cs.base == ((uint64_t)regs.cs.selector << 4));
+        ASSERT(regs.ss.base == ((uint64_t)regs.ss.selector << 4));
+        ASSERT(regs.ds.base == ((uint64_t)regs.ds.selector << 4));
+        ASSERT(regs.es.base == ((uint64_t)regs.es.selector << 4));
+        ASSERT(regs.fs.base == ((uint64_t)regs.fs.selector << 4));
+        ASSERT(regs.gs.base == ((uint64_t)regs.gs.selector << 4));
+
+        ASSERT(regs.cs.limit == 0xFFFF);
+        ASSERT(regs.ss.limit == 0xFFFF);
+        ASSERT(regs.ds.limit == 0xFFFF);
+        ASSERT(regs.es.limit == 0xFFFF);
+        ASSERT(regs.fs.limit == 0xFFFF);
+        ASSERT(regs.gs.limit == 0xFFFF);
+
+        ASSERT(read(guest_cs_access_right) == 0xF3);
+        ASSERT(read(guest_ss_access_right) == 0xF3);
+        ASSERT(read(guest_ds_access_right) == 0xF3);
+        ASSERT(read(guest_es_access_right) == 0xF3);
+        ASSERT(read(guest_fs_access_right) == 0xF3);
+        ASSERT(read(guest_gs_access_right) == 0xF3);
+    } else {
+        ASSERT(regs.cs.attrib.type == 3 || regs.cs.attrib.type == 9 || regs.cs.attrib.type == 11 || regs.cs.attrib.type == 13 || regs.cs.attrib.type == 15);
+        ASSERT(regs.cs.attrib.s);
+
+        if(regs.cs.attrib.type == 3) {
+            ASSERT(regs.cs.attrib.dpl == 0);
+        } else if(regs.cs.attrib.type == 9 || regs.cs.attrib.type == 11) {
+            ASSERT(regs.cs.attrib.dpl == regs.ss.attrib.dpl);
+        } else if(regs.cs.attrib.type == 13 || regs.cs.attrib.type == 15) {
+            ASSERT(regs.cs.attrib.dpl <= regs.ss.attrib.dpl);
+        } else {
+            PANIC("Unreadable");
+        }
+
+        if(!regs.ss.attrib.unusable) {
+            ASSERT(regs.ss.attrib.type == 3 || regs.ss.attrib.type == 7);
+            ASSERT(regs.cs.attrib.s);
+            ASSERT(regs.ss.attrib.present);
+        }
+
+        if(regs.cs.attrib.type == 3 || (regs.cr0 & 1) == 0)
+            ASSERT(regs.ss.attrib.dpl == 0);
+        
+        if(!regs.ds.attrib.unusable) {
+                ASSERT(regs.ds.attrib.type & 1);
+
+            if(regs.ds.attrib.type & (1 << 3))
+                ASSERT(regs.ds.attrib.type & (1 << 1));
+                    
+            ASSERT(regs.ds.attrib.s);
+            ASSERT(regs.ds.attrib.present);
+        }
+
+        if(!regs.es.attrib.unusable) {
+            ASSERT(regs.es.attrib.type & 1);
+            if(regs.es.attrib.type & (1 << 3))
+                ASSERT(regs.es.attrib.type & (1 << 1));
+                    
+            ASSERT(regs.es.attrib.s);
+            ASSERT(regs.es.attrib.present);
+        }
+
+        if(!regs.fs.attrib.unusable) {
+            ASSERT(regs.fs.attrib.type & 1);
+
+            if(regs.fs.attrib.type & (1 << 3))
+                ASSERT(regs.fs.attrib.type & (1 << 1));
+                    
+            ASSERT(regs.fs.attrib.s);
+            ASSERT(regs.fs.attrib.present);
+        }
+
+        if(!regs.gs.attrib.unusable) {
+            ASSERT(regs.gs.attrib.type & 1);
+
+            if(regs.gs.attrib.type & (1 << 3))
+                ASSERT(regs.gs.attrib.type & (1 << 1));
+                    
+            ASSERT(regs.gs.attrib.s);
+            ASSERT(regs.gs.attrib.present);
+        }              
+        
+        // TODO: D/B checks, G checkss
+    }
+
+    { //If Intel 64 
+        ASSERT(vmm::is_canonical(regs.tr.base));
+        ASSERT(vmm::is_canonical(regs.fs.base));
+        ASSERT(vmm::is_canonical(regs.gs.base));
+
+        // If usable
+        ASSERT(vmm::is_canonical(regs.ldtr.base));
+
+        ASSERT((regs.cs.base >> 32) == 0);
+
+        // If usable
+        ASSERT((regs.ss.base >> 32) == 0);
+        ASSERT((regs.ds.base >> 32) == 0);
+        ASSERT((regs.es.base >> 32) == 0);
+    }
+
+    // TODO: IA-32e mode type
+    ASSERT(regs.tr.attrib.type == 3 || regs.tr.attrib.type == 11);
+    ASSERT(regs.tr.attrib.s == 0);
+    ASSERT(regs.tr.attrib.present == 1);
+    // TODO: G check
+
+    ASSERT(regs.ldtr.attrib.type == 2);
+    ASSERT(regs.tr.attrib.s == 0);
+    ASSERT(regs.tr.attrib.present == 1);
+    // TODO: G check
+
+    ASSERT(vmm::is_canonical(regs.gdtr.base));
+    ASSERT(vmm::is_canonical(regs.idtr.base));
 }

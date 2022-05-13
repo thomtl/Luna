@@ -86,6 +86,7 @@ namespace vmx {
     enum class VMExitReasons : uint32_t {
         Exception = 0,
         ExtInt = 1,
+        TripleFault = 2,
         CPUID = 10,
         Hlt = 12,
         Vmcall = 18,
@@ -108,6 +109,19 @@ namespace vmx {
         };
         uint32_t raw;
     };
+    static_assert(sizeof(InterruptionInfo) == 4);
+
+    union [[gnu::packed]] PIOStringOpInfo {
+        struct {
+            uint32_t reserved : 7;
+            uint32_t address_size : 3;
+            uint32_t reserved_1 : 5;
+            uint32_t segment_idx : 3;
+            uint32_t reserved_2 : 14;
+        };
+        uint32_t raw;
+    };
+    static_assert(sizeof(PIOStringOpInfo) == 4);
 
     union [[gnu::packed]] IOQualification {
         struct {
@@ -152,7 +166,9 @@ namespace vmx {
     constexpr uint64_t cr3_target_count = 0x400A;
 
     constexpr uint64_t cr0_mask = 0x6000;
+    constexpr uint64_t cr4_mask = 0x6002;
     constexpr uint64_t cr0_shadow = 0x6004;
+    constexpr uint64_t cr4_shadow = 0x6006;
 
     constexpr uint64_t host_cr0 = 0x6c00;
     constexpr uint64_t host_cr3 = 0x6c02;
@@ -233,6 +249,7 @@ namespace vmx {
     constexpr uint64_t guest_ia32_sysenter_esp = 0x6824;
     constexpr uint64_t guest_ia32_sysenter_eip = 0x6826;
 
+    constexpr uint64_t guest_ia32_pat_full = 0x2804;
     constexpr uint64_t guest_efer_full = 0x2806;
     
     constexpr uint64_t tsc_offset = 0x2010;
@@ -247,6 +264,7 @@ namespace vmx {
     constexpr uint64_t vm_exit_interruption_info = 0x4404;
     constexpr uint64_t vm_exit_interruption_error_code = 0x4406;
     constexpr uint64_t vm_exit_instruction_len = 0x440C;
+    constexpr uint64_t vm_exit_instruction_info = 0x440E;
     constexpr uint64_t vm_exit_qualification = 0x6400;
 
     void init();
@@ -279,6 +297,8 @@ namespace vmx {
         void vmptrld() const;
         void write(uint64_t field, uint64_t value);
         uint64_t read(uint64_t field) const;
+
+        void check_guest_state() const;
 
         uintptr_t vmcs_pa;
         uintptr_t vmcs;

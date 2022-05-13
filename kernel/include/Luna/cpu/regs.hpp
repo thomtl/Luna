@@ -116,6 +116,11 @@ namespace cr0 {
 } // namespace cr0
 
 namespace cr4 {
+    constexpr uint64_t pae = (1 << 5);
+    constexpr uint64_t vmxe = (1 << 13);
+    constexpr uint64_t pcide = (1 << 17);
+    constexpr uint64_t cet = (1 << 23);
+
     uint64_t read();
     void write(uint64_t v);
 } // namespace cr4

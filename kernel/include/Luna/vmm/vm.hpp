@@ -29,6 +29,7 @@ namespace vm {
                 uint64_t l : 1 = 0;
                 uint16_t db : 1 = 0;
                 uint16_t g : 1 = 0;
+                uint16_t unusable : 1 = 0;
             } attrib;
         };
         Segment cs, ds, ss, es, fs, gs, ldtr, tr;

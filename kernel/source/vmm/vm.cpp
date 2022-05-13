@@ -61,7 +61,7 @@ vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
     regs.rip = 0xFFF0;
     regs.rflags = (1 << 1);
 
-    regs.cr0 = (cr0_constraint & ~((1 << 0) | (1u << 31))); // Clear PE and PG;
+    regs.cr0 = cr0_constraint;
     regs.cr4 = cr4_constraint;
 
     regs.cr3 = 0;
@@ -269,6 +269,8 @@ bool vm::VCPU::run() {
                 regs.rcx |= (1u << 31); // Set Hypervisor Present bit
 
                 os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
+
+                regs.rcx &= ~(1u << 26); // TODO: Emulate VMX xsetbv
             } else if(leaf == 6) {
                 zero_cpuid(); // No thermal / power management stuff
             } else if(leaf == 7) {
@@ -360,10 +362,11 @@ bool vm::VCPU::run() {
                     value = apicbase;
                 }
             } else if(index == msr::ia32_bios_sign_id) {
-                if(exit.msr.write)
-                    PANIC("TODO: BIOS SIGN ID write");
-                else 
+                if(exit.msr.write) {
+                    ASSERT(value == 0); // TODO, CPUID should write the rev
+                } else {
                     value = 0; // No microcode loaded
+                }
             } else if(index == msr::ia32_arch_capabilities) {
                 if(exit.msr.write)
                     PANIC("Read only");
@@ -435,24 +438,32 @@ bool vm::VCPU::run() {
             uint64_t value = 0;
 
             if(exit.cr.write)
-                value = vm::emulate::read_r64(regs, (vm::emulate::r64)exit.cr.gpr, 8);
+                value = vm::emulate::read_r64(regs, (vm::emulate::r64)exit.cr.gpr, 4);
             
             if(exit.cr.cr == 0) {
-                if(exit.cr.write)
-                    regs.cr0 = value;
-                else
+                if(exit.cr.write) {
+                    regs.cr0 = value | cr0_constraint;
+                } else {
                     PANIC("TODO");
+                }
             } else if(exit.cr.cr == 3) {
                 if(exit.cr.write) {
                     regs.cr3 = value;
-                } else
+                } else {
                     value = regs.cr3;
+                }
+            } else if(exit.cr.cr == 4) {
+                if(exit.cr.write) {
+                    regs.cr4 = value | cr4_constraint;
+                } else {
+                    PANIC("TODO");
+                }
             } else {
                 PANIC("TODO");
             }
 
             if(!exit.cr.write)
-                vm::emulate::write_r64(regs, (vm::emulate::r64)exit.cr.gpr, value, 8);
+                vm::emulate::write_r64(regs, (vm::emulate::r64)exit.cr.gpr, value, 4);
 
             set_regs(regs);
             break;

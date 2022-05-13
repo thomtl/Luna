@@ -29,6 +29,4 @@ namespace vm::emulate {
     void write_r64(vm::RegisterState& regs, vm::emulate::r64 r, uint64_t v, uint8_t s);
     RegisterState::Segment& get_sreg(RegisterState& regs, sreg r);
 
-    bool get_segment_override(uint8_t instruction[max_x86_instruction_size], sreg& num);
-    uint8_t get_address_size(vm::VCPU* vcpu, uint8_t instruction[max_x86_instruction_size]);
 } // namespace vm::emulate
