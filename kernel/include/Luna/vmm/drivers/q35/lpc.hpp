@@ -10,15 +10,20 @@
 
 namespace vm::q35::lpc {
     constexpr uint8_t cap_base = 0xE0;
+    constexpr uint8_t cap_len = 0xC;
 
     constexpr uint8_t pmbase = 0x40;
     constexpr uint8_t acpi_cntl = 0x44;
+    constexpr uint16_t gpio_control_reg = 0x4C;
 
     constexpr uint8_t pirq_a_base = 0x60;
     constexpr uint8_t pirq_a_len = 0x4;
 
     constexpr uint8_t pirq_b_base = 0x68;
     constexpr uint8_t pirq_b_len = 0x4;
+
+    constexpr uint8_t gen_decode_base = 0x84;
+    constexpr uint8_t gen_decode_len = 0x10;
 
     constexpr uint8_t root_complex_base = 0xF0;
 
@@ -44,7 +49,7 @@ namespace vm::q35::lpc {
 
             pci_space->data8[cap_base] = 9; // Vendor Specific
             pci_space->data8[cap_base + 1] = 0; // No Other Caps
-            pci_space->data8[cap_base + 2] = 0xC;
+            pci_space->data8[cap_base + 2] = cap_len;
             pci_space->data8[cap_base + 3] = 0x10; // Feature Detection Cap
             pci_space->data32[(cap_base + 4) / 4] = 0; // Feature low dword, no fancy features supported
             pci_space->data32[(cap_base + 8) / 4] = 0; // Feature high dword
@@ -105,6 +110,14 @@ namespace vm::q35::lpc {
                 ; // Nothing special to do here
             } else if(ranges_overlap(reg, size, pirq_b_base, pirq_b_len)) {
                 ; // Nothing special to do here
+            } else if(ranges_overlap(reg, size, pmbase, 4)) {
+                ;
+            } else if(ranges_overlap(reg, size, gpio_control_reg, 1)) {
+                ;
+            } else if(ranges_overlap(reg, size, cap_base, cap_len)) {
+                ;
+            } else if(ranges_overlap(reg, size, gen_decode_base, gen_decode_len)) {
+                ;
             } else {
                 print("q35::lpc: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
             }

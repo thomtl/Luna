@@ -10,6 +10,7 @@
 
 namespace vm::q35::dram {
     constexpr uint16_t cap_off = 0xE0;
+    constexpr size_t cap_len = 0xB;
 
     constexpr uint16_t pam0 = 0x90;
     constexpr uint16_t pam_size = 7;
@@ -79,7 +80,7 @@ namespace vm::q35::dram {
 
             pci_space->data8[cap_off] = 0b1001; // Vendor dependent
             pci_space->data8[cap_off + 1] = 0; // No next cap
-            pci_space->data8[cap_off + 2] = 0xB; // Length
+            pci_space->data8[cap_off + 2] = cap_len; // Length
             pci_space->data8[cap_off + 3] = 1; // Low Nybble = version
             // Rest of the cap fields are 0
 
@@ -120,6 +121,8 @@ namespace vm::q35::dram {
 
             if(ranges_overlap(reg, size, pam0, pam_size))
                 ; // Nothing special to do here
+            else if(ranges_overlap(reg, size, cap_off, cap_len))
+                ;
             else
                 print("q35::dram: Unhandled PCI read, reg: {:#x}, size: {:#x}\n", reg, (uint16_t)size);
 
