@@ -241,6 +241,15 @@ void threading::ThreadContext::restore(idt::regs* regs) const {
     regs->rflags = rflags;
 }
 
-void threading::Thread::pin_to_this_cpu()  {
+void threading::Thread::pin_to_this_cpu() {
+    std::lock_guard guard{scheduler_lock};
     cpu_pin = {.is_pinned = true, .cpu_id = get_cpu().lapic_id};
+}
+
+void threading::Thread::pin_to_cpu(uint32_t id)  {
+    scheduler_lock.lock(); // Not using lock guard because deadlock on the int, TODO : proper yield
+    cpu_pin = {.is_pinned = true, .cpu_id = id};
+    scheduler_lock.unlock();
+
+    asm("int $254"); // TODO: Proper yield to not fuck up next thread's quantum
 }

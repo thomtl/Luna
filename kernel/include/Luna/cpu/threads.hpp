@@ -61,6 +61,7 @@ namespace threading {
         Event* current_event;
 
         void pin_to_this_cpu();
+        void pin_to_cpu(uint32_t id);
     };
 
     extern "C" void thread_invoke(ThreadContext* new_ctx);
