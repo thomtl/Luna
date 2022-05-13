@@ -50,6 +50,12 @@ namespace vm::uart {
                     baud &= ~0xFF00;
                     baud |= (value << 8);
                 }
+            } else if(port == (base + fifo_control_reg)) {
+                fifo_control = value;
+            } else if(port == (base + modem_control_reg)) {
+                mcr = value;
+
+                ASSERT(!(mcr & (1 << 4)));
             } else if(port == (base + line_control_reg)) {
                 auto new_dlab = (value >> 7) & 1;
                 if(dlab && !new_dlab)
@@ -64,6 +70,8 @@ namespace vm::uart {
                     case 0b011: parity = 'E'; break;
                 }
                 print("uart: Set config {}{}{}\n", (value & 0b11) + 5, parity, (value & (1 << 2)) ? 2 : 1);*/
+            } else if(port == (base + scratch_reg)) {
+                scratchpad = value;
             } else {
                 print("uart: Unhandled write to reg {} (Port: {:#x}): {:#x}\n", port - base, port, value);
             }
@@ -84,8 +92,14 @@ namespace vm::uart {
                 return iir;
             } else if(port == (base + line_control_reg)) {
                 return (dlab << 7);
+            } else if(port == (base + modem_control_reg)) {
+                return mcr;
             } else if(port == (base + line_status_reg)) {
                 return (1 << 6) | (1 << 5); // Transmitter Idle, can send bits
+            } else if(port == (base + modem_status_reg)) {
+                return 0; // TODO
+            } else if(port == (base + scratch_reg)) {
+                return scratchpad;
             }
 
             print("uart: Unhandled read from reg {} (Port: {:#x})\n", port - base, port);
@@ -94,7 +108,8 @@ namespace vm::uart {
 
         private:
         uint16_t base;
-        uint8_t ier, iir;
+        uint8_t ier, iir, mcr, fifo_control;
+        uint8_t scratchpad;
 
         uint16_t baud;
 
