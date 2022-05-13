@@ -937,11 +937,18 @@ void vmx::Vm::check_guest_state() const {
     ASSERT(regs.tr.attrib.present == 1);
     // TODO: G check
 
-    ASSERT(regs.ldtr.attrib.type == 2);
-    ASSERT(regs.tr.attrib.s == 0);
-    ASSERT(regs.tr.attrib.present == 1);
+    if(!regs.ldtr.attrib.unusable) {
+        ASSERT(regs.ldtr.attrib.type == 2);
+        ASSERT(regs.ldtr.attrib.s == 0);
+        ASSERT(regs.ldtr.attrib.present == 1);
+    }
+    
     // TODO: G check
 
     ASSERT(vmm::is_canonical(regs.gdtr.base));
     ASSERT(vmm::is_canonical(regs.idtr.base));
+
+
+    if(read(vm_entry_interruption_info) & (1 << 31) && ((read(vm_entry_interruption_info) >> 8) & 0x7) == 0)
+        ASSERT(regs.rflags & (1 << 9));
 }
