@@ -7,8 +7,8 @@
 #include <Luna/misc/log.hpp>
 #include <std/linked_list.hpp>
 
-constexpr uint64_t femto_per_milli = 1'000'000'000'000;
-constexpr uint64_t femto_per_nano = 1'000'000;
+constexpr uint64_t femto_per_milli = 1'000'000'000'000ull;
+constexpr uint64_t femto_per_nano = 1'000'000ull;
 
 hpet::Device::Device(acpi::Hpet* table): table{table} {
     ASSERT(table->base.id == 0); // Assert it is in MMIO space
@@ -198,7 +198,7 @@ bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), 
     auto& reg = _device->regs->comparators[this->_i];
     reg.cmd &= ~((1 << 6) | (1 << 3) | (1 << 2));
 
-    auto delta = ns * (femto_per_nano / _device->period);
+    auto delta = (ns * femto_per_nano) / _device->period; // Order of multiplication alone does matter here due to integer division
 
     if(periodic) {
         reg.cmd |= (1 << 6) | (1 << 3) | (1 << 2);
