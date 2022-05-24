@@ -16,6 +16,7 @@ namespace std {
         template<typename F>
         void handle(F f) {
             std::lock_guard guard{lock};
+
             for(auto& v : queue)
                 f(v);
 
@@ -25,9 +26,14 @@ namespace std {
         template<typename F>
         void handle_await(F f) {
             ::await(&event);
+
+            std::lock_guard guard{lock};
             event.reset();
 
-            handle(f);
+            for(auto& v : queue)
+                f(v);
+
+            queue.clear();
         }
 
         //private:

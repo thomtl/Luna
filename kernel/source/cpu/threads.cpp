@@ -1,5 +1,4 @@
 #include <Luna/cpu/threads.hpp>
-#include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/idt.hpp>
 
 #include <Luna/cpu/regs.hpp>
@@ -8,33 +7,35 @@
 
 #include <Luna/misc/log.hpp>
 
-#include <std/mutex.hpp>
+#include <std/algorithm.hpp>
 #include <std/vector.hpp>
 
-static IrqTicketLock scheduler_lock{};
-static std::vector<threading::Thread*> threads;
-static size_t index = 0;
+static IrqTicketLock scheduler_lock{}; // TODO: Mostly replace global scheduler lock with per-thread lock
+constinit static std::vector<threading::Thread*> threads;
+
+using RunQueue = std::vector<threading::Thread*>; // TODO: Replace with std::deque
+constinit static RunQueue queue1, queue2;
+constinit static RunQueue* active_ptr = &queue1, *expired_ptr = &queue2;
 
 static void idle();
 
+static void rearm_preemption() {
+    get_cpu().lapic.start_timer(threading::quantum_irq_vector, threading::quantum_time, lapic::regs::LapicTimerModes::OneShot);
+}
+
 static threading::Thread* next_thread() {
-    for(size_t i = 0; i < threads.size(); i++) {
-        index = (index + 1) % threads.size();
-        auto& thread = threads[index];
+    if(active_ptr->size() == 0)
+        std::swap(active_ptr, expired_ptr);
 
-        if(thread->cpu_pin.is_pinned && thread->cpu_pin.cpu_id != get_cpu().lapic_id)
-            continue;
-        
-        if(thread->state == threading::ThreadState::Idle) {
-            return thread;
-        } else if(thread->state == threading::ThreadState::Blocked) {
-            ASSERT(thread->current_event);
-            if(thread->current_event->is_triggered())
-                return thread;
-        }
-    }
+    if(active_ptr->size() == 0) // No threads in either queue
+        return nullptr;
 
-    return nullptr;
+    auto* ret = active_ptr->back();
+    active_ptr->pop_back();
+
+    ASSERT(ret->state == threading::ThreadState::Idle);
+    ASSERT(std::find(threads.begin(), threads.end(), ret) != threads.end());
+    return ret;
 }
 
 threading::Thread* this_thread() {
@@ -56,13 +57,13 @@ void await(threading::Event* event) {
     }
 
     auto* old = this_thread();
-    old->current_event = event;
     old->state = threading::ThreadState::Blocked;
+    event->add_to_waiters(old);
 
     scheduler_lock.saved_if = false;
     scheduler_lock.unlock();
 
-    asm("int $254\r\nsti"); // "yield"
+    asm("int $254\r\nsti"); // Yield
 }
 
 void kill_self() {
@@ -73,6 +74,8 @@ void kill_self() {
     ASSERT(iter != threads.end());
 
     threads.erase(iter); // Bai bai
+    ASSERT(std::find(active_ptr->begin(), active_ptr->end(), self) == active_ptr->end());
+    ASSERT(std::find(expired_ptr->begin(), expired_ptr->end(), self) == expired_ptr->end());
 
     auto& current_thread = get_cpu().current_thread;
     current_thread = next_thread();
@@ -93,6 +96,7 @@ void kill_self() {
     auto kill_epilogue = +[](threading::Thread* self, threading::Thread* next, bool should_idle) {
         delete self;
 
+        rearm_preemption();
         if(should_idle)
             idle();
         else
@@ -121,6 +125,15 @@ void threading::add_thread(Thread* thread) {
     std::lock_guard guard{scheduler_lock};
 
     threads.push_back(thread);
+    expired_ptr->push_back(thread);
+}
+
+void threading::wakeup_thread(Thread* thread) {
+    std::lock_guard guard{scheduler_lock};
+
+    ASSERT(thread->state == ThreadState::Blocked);
+    thread->state = ThreadState::Idle;
+    expired_ptr->push_back(thread);
 }
 
 threading::Thread* spawn(void (*f)(void*), void* arg) {
@@ -158,8 +171,11 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
     
     if(old_thread) { // old_thread might be null
         old_thread->ctx.save(regs);
-        if(old_thread->state == threading::ThreadState::Running)
+        if(old_thread->state == threading::ThreadState::Running) {
             old_thread->state = threading::ThreadState::Idle;
+
+            expired_ptr->push_back(old_thread);
+        }
     }
 
     auto* next = next_thread();
@@ -168,6 +184,8 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
 
         cpu.current_thread = nullptr;
         cpu.lapic.eoi();
+
+        rearm_preemption();
         idle();
 
         __builtin_trap();
@@ -177,6 +195,7 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
     next->ctx.restore(regs);
     cpu.current_thread = next;
 
+    rearm_preemption();
     scheduler_lock.unlock();
 }
 
@@ -184,13 +203,11 @@ void threading::start_on_cpu() {
     auto& cpu = get_cpu();
 
     idt::set_handler(quantum_irq_vector, idt::handler{.f = quantum_irq_handler, .is_irq = true, .should_iret = true, .userptr = nullptr});
-    cpu.lapic.start_timer(quantum_irq_vector, quantum_time, lapic::regs::LapicTimerModes::Periodic, timers::poll_msleep);
     
     cpu.thread_kill_stack.init((size_t)0x1000);
     cpu.current_thread = nullptr;
 
-    asm("sti\r\nhlt"); // Wait for quantum irq to pick us up
-    // TODO: Can't we just do a software int
+    asm("sti\r\nint $254"); // Enter timer handler
     __builtin_trap();
 }
 

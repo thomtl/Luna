@@ -3,12 +3,16 @@
 #include <Luna/common.hpp>
 #include <Luna/cpu/gdt.hpp>
 #include <Luna/cpu/lapic.hpp>
-#include <Luna/cpu/threads.hpp>
 #include <Luna/cpu/stack.hpp>
 
 #include <Luna/cpu/amd/asid.hpp>
 
 #include <std/utility.hpp>
+
+namespace threading {
+    struct Thread;
+} // namespace threading
+
 
 namespace cpu {
     constexpr uint32_t signature_intel_ebx = 0x756e6547;

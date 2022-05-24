@@ -1,6 +1,6 @@
 #include <Luna/cpu/idt.hpp>
 #include <Luna/cpu/gdt.hpp>
-
+#include <Luna/cpu/threads.hpp>
 #include <Luna/cpu/regs.hpp>
 
 #include <Luna/misc/debug.hpp>

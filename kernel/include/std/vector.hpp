@@ -81,6 +81,12 @@ namespace std
         iterator end() { return _elements + _size; }
         const_iterator end() const { return _elements + _size; }
 
+        reference front() { return *begin(); }
+        const_reference front() const { return *begin(); }
+
+        reference back() { return *(end() - 1); }
+        const_reference back() const { return *(end() - 1); }
+
         reference push_back(const_reference value) {
             ensure_capacity(_size + 1);
             T* ret = new (&_elements[_size]) T(value);
@@ -101,6 +107,11 @@ namespace std
 
         void pop_front() {
             erase(begin());
+        }
+
+        void pop_back() {
+            _size--;
+            _elements[_size].~T();
         }
 
 

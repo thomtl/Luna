@@ -40,11 +40,13 @@ namespace lapic
         void ipi(uint32_t id, uint8_t vector);
         void eoi();
 
-        void start_timer(uint8_t vector, uint64_t ms, regs::LapicTimerModes mode, void (*poll)(uint64_t ms));
+        void start_timer(uint8_t vector, uint64_t ms, regs::LapicTimerModes mode);
 
         private:
         uint64_t read(uint32_t reg);
         void write(uint32_t reg, uint64_t v);
+
+        void calibrate_timer();
 
         bool x2apic;
         uintptr_t mmio_base;

@@ -395,8 +395,6 @@ namespace xhci {
 
         void complete(size_t i, TRBXferCompletionEvt& evt) {
             // This function does not have to lock because it only modifies state held by the run function, which currently holds the lock
-            print("completing {}\n", i);
-
             ASSERT(promise_list[i]);
             ASSERT(promise_list[i]->is_done() == false);
 

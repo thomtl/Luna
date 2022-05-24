@@ -130,7 +130,6 @@ void kernel_main(const stivale2_struct* info) {
     smp::start_cpus(boot_info, kernel_main_ap);
 
     pci::init();
-    asm("sti");
 
     spawn([] {
         pci::handoff_bios();
@@ -146,14 +145,6 @@ void kernel_main(const stivale2_struct* info) {
         while(1)
             ;
     });
-
-    /*spawn([]{
-        kill_self();
-        create_vm();
-
-        while(1)
-            ;
-    });*/
 
     threading::start_on_cpu();
     __builtin_unreachable();

@@ -1,6 +1,7 @@
 #include <Luna/cpu/lapic.hpp>
 #include <Luna/cpu/regs.hpp>
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/drivers/timers/timers.hpp>
 
 #include <Luna/mm/vmm.hpp>
 
@@ -63,21 +64,24 @@ void lapic::Lapic::eoi() {
     write(regs::eoi, 0);
 }
 
-void lapic::Lapic::start_timer(uint8_t vector, uint64_t ms, lapic::regs::LapicTimerModes mode, void (*poll)(uint64_t ms)) {
-    if(ticks_per_ms == 0) {
-        write(regs::timer_divider, 3);
-        write(regs::timer_initial_count, ~0u);
-
-        write(regs::lvt_timer, read(regs::lvt_timer) & ~(1 << 16)); // Clear timer mask
-        poll(10);
-        write(regs::lvt_timer, read(regs::lvt_timer) | (1 << 16)); // Set timer mask
-
-        ticks_per_ms = (~0 - read(regs::timer_current_count)) / 10;
-    }
+void lapic::Lapic::start_timer(uint8_t vector, uint64_t ms, lapic::regs::LapicTimerModes mode) {
+    if(ticks_per_ms == 0)
+        calibrate_timer();
 
     write(regs::timer_divider, 3);
     write(regs::lvt_timer, (read(regs::lvt_timer) & ~(0b11 << 17)) | ((uint8_t)mode << 17));
     write(regs::lvt_timer, (read(regs::lvt_timer) & 0xFFFFFF00) | vector);
     write(regs::timer_initial_count, (uint32_t)(ticks_per_ms * ms));
     write(regs::lvt_timer, read(regs::lvt_timer) & ~(1 << 16)); // Clear timer mask
+}
+
+void lapic::Lapic::calibrate_timer() {
+    write(regs::timer_divider, 3);
+    write(regs::timer_initial_count, ~0u);
+
+    write(regs::lvt_timer, read(regs::lvt_timer) & ~(1 << 16)); // Clear timer mask
+    timers::poll_msleep(10);
+    write(regs::lvt_timer, read(regs::lvt_timer) | (1 << 16)); // Set timer mask
+
+    ticks_per_ms = (~0 - read(regs::timer_current_count)) / 10;
 }
