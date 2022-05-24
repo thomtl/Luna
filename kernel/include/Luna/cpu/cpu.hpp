@@ -108,7 +108,7 @@ struct IrqTicketLock {
         asm volatile("pushfq\r\npop %0" : "=r"(rflags));
         bool tmp_if = (rflags >> 9) & 1;
 
-        asm("cli");
+        asm volatile("cli");
         _lock.lock();
 
         saved_if = tmp_if;
@@ -119,9 +119,9 @@ struct IrqTicketLock {
         _lock.unlock();
 
         if(tmp_if)
-            asm("sti");
+            asm volatile("sti");
         else
-            asm("cli");
+            asm volatile("cli");
     }
 
     bool saved_if;

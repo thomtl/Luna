@@ -1,8 +1,10 @@
 #pragma once
 
 #include <Luna/common.hpp>
-#include <std/concepts.hpp>
+#include <Luna/cpu/threads.hpp>
 #include <Luna/mm/iovmm.hpp>
+
+#include <std/concepts.hpp>
 
 namespace xhci {
     namespace trb_types {
@@ -301,6 +303,8 @@ namespace xhci {
             return return_i;
         }
 
+        size_t curr_enqueue_i() const { return enqueue_ptr; }
+
         uintptr_t get_guest_base() const { return alloc.guest_base; }
         size_t& get_cycle() { return cycle; }
 
@@ -367,45 +371,42 @@ namespace xhci {
     };
 
     struct TransferRing : public TRBRing {
-        TransferRing(iovmm::Iovmm& mm, size_t n_entries, volatile uint32_t* doorbell): TRBRing{mm, n_entries, RingType::Command}, completion{}, doorbell{doorbell} { 
-            completion.resize(this->n_entries); // Use the member, not the variable, they are different due to the TRBLink
+        TransferRing(iovmm::Iovmm& mm, size_t n_entries, volatile uint32_t* doorbell): TRBRing{mm, n_entries, RingType::Command}, promise_list{}, doorbell{doorbell} { 
+            promise_list.resize(this->n_entries); // Use the member, not the variable, they are different due to the TRBLink
         }
 
-        TRBXferCompletionEvt run(size_t i, uint32_t db_val) {
-            completion[i].done = false;
+        template<typename... Args>
+        TRBXferCompletionEvt run(uint32_t db_val, Args&&... args) requires(TRB<Args> && ...) {
+            Promise<TRBXferCompletionEvt> promise;
+
+            std::lock_guard guard{lock};
+            auto i = curr_enqueue_i() + (sizeof...(Args) - 1);
+            
+            promise_list[i] = &promise; // Very important to do this before the enqueue, because xhci will semi randomly kick queues itself
+
+            (enqueue(args), ...);
 
             *doorbell = db_val;
-            while(!completion[i].done)
-                asm("pause");
 
-            return completion[i].trb;
-        }
-
-        TRBXferCompletionEvt run_await(size_t i, uint32_t db_val) {
-            completion[i].done = false;
-            completion[i].promise.reset();
-
-            *doorbell = db_val;
-            completion[i].promise.await();
-
-            return completion[i].trb;
+            auto ret = promise.await();
+            promise_list[i] = nullptr;
+            return ret;
         }
 
         void complete(size_t i, TRBXferCompletionEvt& evt) {
-            ASSERT(completion[i].done == false);
+            // This function does not have to lock because it only modifies state held by the run function, which currently holds the lock
+            print("completing {}\n", i);
 
-            completion[i].trb = evt;
-            completion[i].done = true;
-            completion[i].promise.set_value(true);
+            ASSERT(promise_list[i]);
+            ASSERT(promise_list[i]->is_done() == false);
+
+            promise_list[i]->set_value(evt);
         }
 
         private:
-        struct Completion {
-            volatile bool done;
-            Promise<bool> promise;
-            TRBXferCompletionEvt trb;
-        };
-        std::vector<Completion> completion;
+        std::vector<Promise<TRBXferCompletionEvt>*> promise_list;
         volatile uint32_t* doorbell;
+
+        IrqTicketLock lock;
     };
 } // namespace xhci

@@ -150,7 +150,7 @@ namespace xhci {
         private:
         struct Port {
             HCI* hci;
-            TicketLock lock;
+            IrqTicketLock lock;
 
             Protocol* proto;
             bool has_pair, active;

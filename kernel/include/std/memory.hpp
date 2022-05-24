@@ -161,7 +161,7 @@ namespace std
             return _ptr;
         }
 
-        template<typename T1, typename D1, typename T2, typename D2>
+        /*template<typename T1, typename D1, typename T2, typename D2>
         friend bool operator==(const unique_ptr<T1, D1>& x, const unique_ptr<T2, D2>& y){
             return x.get() == y.get();
         }
@@ -251,7 +251,7 @@ namespace std
         template <typename T1, typename D1>
         friend bool operator>=(nullptr_t, const unique_ptr<T1, D1>& y){
             return !(nullptr < y);
-        }
+        }*/
 
         private:
         pointer _ptr;

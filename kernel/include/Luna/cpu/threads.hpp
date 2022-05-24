@@ -117,6 +117,15 @@ struct Promise {
         event.reset();
     }
 
+    bool is_done() const {
+        return event.is_triggered();
+    }
+
+    T& get_value() {
+        ASSERT(is_done());
+        return *reinterpret_cast<T*>(object.data);
+    }
+
     private:
     std::aligned_storage_t<sizeof(T), alignof(T)> object;
     bool constructed = false;
@@ -132,6 +141,10 @@ struct Promise<void> {
 
     void complete() {
         event.trigger();
+    }
+
+    bool is_done() const {
+        return event.is_triggered();
     }
 
     private:

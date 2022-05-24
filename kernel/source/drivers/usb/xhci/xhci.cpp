@@ -380,8 +380,6 @@ void xhci::HCI::enumerate_ports() {
 
 bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacket& packet, bool write, size_t len, uint8_t* buf) {
     timers::poll_msleep(5); // For some reason this sleep is needed to make it work on USB 1.1 devices????
-
-    std::lock_guard guard{port.lock};
     
     uint8_t type = 0;
     if(len > 0 && write) type = 2; // OUT Data Stage
@@ -400,12 +398,11 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
     setup.wValue = packet.value;
     setup.wIndex = packet.index;
     setup.wLength = packet.length;
-    port.ep0_queue->enqueue(setup);
 
     iovmm::Iovmm::Allocation dma{};
     bool allocated = false;
+    TRBData data{};
     if(len > 0) {
-        TRBData data{};
         data.type = trb_types::data;
         data.chain = 0;
         data.ioc = 0; // No IRQ on completion, leave that to the STATUS stage
@@ -430,17 +427,19 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
                 
             data.buf = dma.guest_base;
         }
-
-        port.ep0_queue->enqueue(data);
     }
 
     TRBStatus status{};
     status.type = trb_types::status;
     status.ioc = 1;
     status.direction = (!write && len > 0) ? 0 : 1;
-    auto i = port.ep0_queue->enqueue(status);
     
-    auto evt = port.ep0_queue->run(i, 1);
+    TRBXferCompletionEvt evt;
+    if(len > 0)
+        evt = port.ep0_queue->run(1, setup, data, status);
+    else
+        evt = port.ep0_queue->run(1, setup, status);
+    
     if(evt.code != trb_codes::success) {
         print("xhci: Failed to do EP0 Control Transfer\n");
         return false;
@@ -460,39 +459,35 @@ bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacke
 std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, uint8_t epid, std::span<uint8_t> data) {
     auto ret = std::make_unique<Promise<bool>>();
 
-    std::lock_guard guard{port.lock};
+    spawn([this, epid, &port, data, promise = ret.get()] {
+        auto& ring = *port.ep_rings[epid].second;
+        auto& ep = port.ep_rings[epid].first;
+        bool write = !ep.desc.dir;
 
-    auto& ring = *port.ep_rings[epid].second;
-    auto& ep = port.ep_rings[epid].first;
-    bool write = !ep.desc.dir;
+        TRBNormal xfer{};
+        xfer.type = trb_types::normal;
+        xfer.ioc = 1;
+        xfer.len = data.size_bytes();
 
-    TRBNormal xfer{};
-    xfer.type = trb_types::normal;
-    xfer.ioc = 1;
-    xfer.len = data.size_bytes();
+        iovmm::Iovmm::Allocation dma{};
+        bool allocated = false;
+        if(data.size_bytes() <= 8 && write) { // Eligible for Immediate Data
+            xfer.immediate_data = 1;
+            memcpy((uint8_t*)&xfer.data_buf, data.data(), data.size_bytes());
+        } else {
+            {
+                std::lock_guard guard{lock};
+                dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+            }
+            allocated = true;
 
-    iovmm::Iovmm::Allocation dma{};
-    bool allocated = false;
-    if(data.size_bytes() <= 8 && write) { // Eligible for Immediate Data
-        xfer.immediate_data = 1;
-        memcpy((uint8_t*)&xfer.data_buf, data.data(), data.size_bytes());
-    } else {
-        {
-            std::lock_guard guard{lock};
-            dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+            if(write)
+                memcpy(dma.host_base, data.data(), data.size_bytes());
+
+            xfer.data_buf = dma.guest_base;
         }
-        allocated = true;
 
-        if(write)
-            memcpy(dma.host_base, data.data(), data.size_bytes());
-
-        xfer.data_buf = dma.guest_base;
-    }
-
-    auto i = ring.enqueue(xfer);
-
-    spawn([this, i, &ring, epid, write, allocated, dma, data, promise = ret.get()] {
-        auto res = ring.run_await(i, epid);
+        auto res = ring.run(epid, xfer);
         if(auto code = res.code; code != trb_codes::success && code != trb_codes::short_packet) {
             print("xhci: Failed to do EP Bulk Transfer, code: {}\n", code);
             promise->set_value(false);
@@ -517,39 +512,35 @@ std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_bulk(xhci::HCI::Port& port, ui
 std::unique_ptr<Promise<bool>> xhci::HCI::send_ep_irq(Port& port, uint8_t epid, std::span<uint8_t> data) {
     auto ret = std::make_unique<Promise<bool>>();
 
-    std::lock_guard guard{port.lock};
+    spawn([this, &port, epid, data, promise = ret.get()] {
+        auto& ring = *port.ep_rings[epid].second;
+        auto& ep = port.ep_rings[epid].first;
+        bool write = !ep.desc.dir;
 
-    auto& ring = *port.ep_rings[epid].second;
-    auto& ep = port.ep_rings[epid].first;
-    bool write = !ep.desc.dir;
+        TRBNormal xfer{};
+        xfer.type = trb_types::normal;
+        xfer.ioc = 1;
+        xfer.len = data.size_bytes();
 
-    TRBNormal xfer{};
-    xfer.type = trb_types::normal;
-    xfer.ioc = 1;
-    xfer.len = data.size_bytes();
+        iovmm::Iovmm::Allocation dma{};
+        bool allocated = false;
+        if(data.size_bytes() <= 8 && write) { // Eligible for Immediate Data
+            xfer.immediate_data = 1;
+            memcpy((uint8_t*)&xfer.data_buf, data.data(), data.size_bytes());
+        } else {
+            {
+                std::lock_guard guard{lock};
+                dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+            }
+            allocated = true;
 
-    iovmm::Iovmm::Allocation dma{};
-    bool allocated = false;
-    if(data.size_bytes() <= 8 && write) { // Eligible for Immediate Data
-        xfer.immediate_data = 1;
-        memcpy((uint8_t*)&xfer.data_buf, data.data(), data.size_bytes());
-    } else {
-        {
-            std::lock_guard guard{lock};
-            dma = mm.alloc(data.size_bytes(), write ? iovmm::Iovmm::HostToDevice : iovmm::Iovmm::DeviceToHost);
+            if(write)
+                memcpy(dma.host_base, data.data(), data.size_bytes());
+
+            xfer.data_buf = dma.guest_base;
         }
-        allocated = true;
-
-        if(write)
-            memcpy(dma.host_base, data.data(), data.size_bytes());
-
-        xfer.data_buf = dma.guest_base;
-    }
-
-    auto i = ring.enqueue(xfer);
-
-    spawn([this, i, &ring, epid, write, allocated, dma, data, promise = ret.get()] {
-        auto res = ring.run_await(i, epid);
+    
+        auto res = ring.run(epid, xfer);
         if(auto code = res.code; code != trb_codes::success && code != trb_codes::short_packet) {
             print("xhci: Failed to do EP IRQ Transfer, code: {}\n", code);
             promise->set_value(false);
