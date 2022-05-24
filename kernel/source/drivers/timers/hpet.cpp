@@ -145,7 +145,7 @@ void hpet::Device::poll_msleep(uint64_t ms) {
 }
 
 void hpet::Device::poll_nsleep(uint64_t ns) {
-    auto goal = regs->main_counter + (ns * (femto_per_nano / period));
+    auto goal = regs->main_counter + ((ns * femto_per_nano) / period);
 
     while(regs->main_counter < goal)
         asm("pause");
