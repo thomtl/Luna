@@ -127,10 +127,7 @@ namespace format
 	}
 
 	template<typename T>
-	struct formatter {
-		template<typename OutputIt>
-		static void format(format_output_it<OutputIt>& it, [[maybe_unused]] format_args args, T item);
-	};
+	struct formatter;
 
 	template<>
 	struct formatter<const char*> {
@@ -214,12 +211,17 @@ namespace format
 		}
 	};
 
+	template<typename OutputIt, typename T>
+	concept Printable = requires(format_output_it<OutputIt>& it, T t, format_args args) {
+		{ formatter<T>::format(it, args, t) };
+	};
+
 	namespace internal {
 		template<typename OutputIt, typename... Args>
 		void format_int(format_output_it<OutputIt> out, const char* fmt, Args&&... args);
 
-		template<typename OutputIt, typename T, typename... Args>
-		void format_part(format_output_it<OutputIt>& out, [[maybe_unused]] format_args f_args, const char* fmt, T v, Args&&... args){
+		template<typename OutputIt, typename T, typename... Args> requires Printable<OutputIt, T>
+		void format_part(format_output_it<OutputIt>& out, [[maybe_unused]] format_args f_args, const char* fmt, T v, Args&&... args) {
 			formatter<T>::format(out, f_args, v);
 			format_int(out, fmt, std::forward<Args>(args)...);
 		}
