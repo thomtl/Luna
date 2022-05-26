@@ -1,6 +1,6 @@
 #include <Luna/drivers/vga.hpp>
 
-void vga::Writer::putc(const char c) const {
+void vga::Writer::putc(const char c) {
     if(c == '\n') {
         x = 0;
         y++;
@@ -29,7 +29,7 @@ void vga::Writer::putc(const char c) const {
     }
 }
 
-void vga::Writer::scroll() const {
+void vga::Writer::scroll() {
     for(size_t i = 1; i < screen_height; i++) {
         auto* dst = fb + ((i - 1) * screen_width);
         auto* src = fb + (i * screen_width);

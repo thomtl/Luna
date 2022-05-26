@@ -10,7 +10,7 @@ namespace e9 {
     constexpr uint16_t expected_value = 0xe9;
 
     struct Writer : public log::Logger {
-        void putc(const char c) const {
+        void putc(const char c) {
             pio::outb(port_addr, c);
         }
     };

@@ -9,7 +9,7 @@ tty::Writer::Writer() {
 
 }
 
-void tty::Writer::putc(const char c) const {
+void tty::Writer::putc(const char c) {
     auto& gpu = gpu::get_gpu();
     auto mode = gpu.get_mode();
     auto screen_height = mode.height / font_height;
@@ -80,6 +80,6 @@ void tty::Writer::putc(const char c) const {
     }
 }
 
-void tty::Writer::flush() const {
+void tty::Writer::flush() {
     gpu::get_gpu().flush();
 }

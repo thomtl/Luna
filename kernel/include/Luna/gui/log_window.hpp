@@ -8,7 +8,7 @@ namespace gui {
     struct LogWindow : public Window, public log::Logger {
         LogWindow(Vec2i size_chars, const char* title): Window{{size_chars.x * 8 + 1, size_chars.y * 16}, title}, offset{0}, curr_x{0}, curr_y{0}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
 
-        void update() const {
+        void update() {
             canvas.clear();
 
             size_t off = offset;
@@ -84,7 +84,7 @@ namespace gui {
             stop: ;
         }
 
-        void putc(const char c) const {
+        void putc(const char c) {
             if(c == '\t') {
                 putc(' ');
                 buf.push_back(' ');
@@ -109,16 +109,16 @@ namespace gui {
             }     
         }
 
-        void flush() const {
+        void flush() {
             update();
         }
 
         private:
-        mutable std::vector<char> buf;
-        mutable size_t offset;
-        mutable size_t curr_x, curr_y;
+        std::vector<char> buf;
+        size_t offset;
+        size_t curr_x, curr_y;
         Vec2i size_chars;
 
-        mutable Colour fg, bg, colour_intensity;
+        Colour fg, bg, colour_intensity;
     };
 } // namespace gui

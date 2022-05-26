@@ -21,7 +21,7 @@ namespace uart {
             pio::outb(base + 3, pio::inb(base + 3) & ~(1 << 7)); // Clear DLAB
         }
 
-        void putc(const char c) const {
+        void putc(const char c) {
             while((pio::inb(base + 5) & (1 << 5)) == 0)
                 ;
 

@@ -13,7 +13,7 @@ namespace format
 {
 	template<typename OutputIt>
 	struct format_output_it {
-		format_output_it(const OutputIt& it): it{it} {}
+		format_output_it(OutputIt& it): it{it} {}
 
 		void write(const char* str){
 			while(*str)
@@ -29,7 +29,7 @@ namespace format
 		}
 
 		private:
-		const OutputIt& it;
+		OutputIt& it;
 	};
 
 	struct format_args {
@@ -277,8 +277,7 @@ namespace format
 	} // namespace internal
 
 	template<typename OutputIt, typename... Args>
-	void format_to(const OutputIt& out, const char* fmt, Args&&... args){
+	void format_to(OutputIt out, const char* fmt, Args&&... args){
 		internal::format_int(format_output_it{out}, fmt, std::forward<Args>(args)...);
-		out.flush();
 	}
 } // namespace format

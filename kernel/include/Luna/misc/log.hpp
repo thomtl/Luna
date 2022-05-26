@@ -9,8 +9,17 @@ namespace log
 	struct Logger {
 		virtual ~Logger() {}
 
-		virtual void putc(const char c) const = 0;
-		virtual void flush() const {}
+		virtual void putc(const char c) = 0;
+		virtual void flush() {}
+
+		struct FormatIterator {
+			Logger* log;
+
+			void putc(const char c) { log->putc(c); }
+			void flush() { log->flush(); }
+		};
+
+		FormatIterator format_it() { return {this}; }
 	};
 
 	extern Logger* global_logger;
@@ -25,5 +34,6 @@ template<typename... Args>
 void print(const char* fmt, Args&&... args){
 	std::lock_guard guard{log::global_lock};
 
-	format::format_to(*log::global_logger, fmt, std::forward<Args>(args)...);
+	format::format_to(log::global_logger->format_it(), fmt, std::forward<Args>(args)...);
+	log::global_logger->flush();
 }

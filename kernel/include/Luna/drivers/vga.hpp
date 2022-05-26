@@ -13,12 +13,12 @@ namespace vga {
 
     struct Writer : public log::Logger {
         Writer(): fb{(uint16_t*)(fb_pa + phys_mem_map)} {}
-        void putc(const char c) const;
+        void putc(const char c);
 
         private:
-        void scroll() const;
+        void scroll();
 
-        mutable uint8_t x, y;
+        uint8_t x, y;
         uint16_t* fb;
     };
 } // namespace vga

@@ -8,10 +8,10 @@
 namespace tty {
     struct Writer : public log::Logger {
         Writer();
-        void putc(const char c) const;
-        void flush() const override;
+        void putc(const char c);
+        void flush();
 
         private:
-        mutable size_t x, y;
+        size_t x, y;
     };
 } // namespace tty

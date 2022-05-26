@@ -8,14 +8,14 @@
 
 namespace net::luna_debug {
     struct Writer : public log::Logger {
-        void putc(const char c) const {
+        void putc(const char c) {
             buf[i++] = c;
 
             if(i == buf_size)
                 flush();
         }
 
-		void flush() const {
+		void flush() {
             Address a{};
             a.ip = {255, 255, 255, 255};
             a.mac = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -30,7 +30,7 @@ namespace net::luna_debug {
 
         private:
         static constexpr size_t buf_size = 100;
-        mutable char buf[buf_size];
-        mutable size_t i;
+        char buf[buf_size];
+        size_t i;
 	};
 } // namespace net::luna_debug

@@ -12,14 +12,14 @@ namespace gui::draw {
     struct TextWriter : public log::Logger {
         TextWriter(Canvas& canvas, Vec2i pos, Colour fg = Colour(255, 255, 255), Colour bg = Colour(0, 0, 0)): _canvas(&canvas), _pos{pos}, _fg{fg}, _bg{bg} {}
 
-        void putc(const char c) const {
+        void putc(const char c) {
             _canvas->put_char(_pos, c, _fg, _bg);
             _pos += Vec2i{8, 0}; // TODO
         }
 
         private:
         Canvas* _canvas;
-        mutable Vec2i _pos;
+        Vec2i _pos;
         Colour _fg, _bg;
     };
 } // namespace gui
