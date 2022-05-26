@@ -16,8 +16,7 @@ namespace format
 		format_output_it(OutputIt& it): it{it} {}
 
 		void write(const char* str){
-			while(*str)
-				it.putc(*str++);
+			it.puts(str, strlen(str));
 		}
 
 		void write(const char c){

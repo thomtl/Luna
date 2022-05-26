@@ -10,12 +10,18 @@ namespace log
 		virtual ~Logger() {}
 
 		virtual void putc(const char c) = 0;
+		virtual void puts(const char* str, size_t len) {
+			for(size_t i = 0; i < len; i++)
+				putc(str[i]);
+		}
+
 		virtual void flush() {}
 
 		struct FormatIterator {
 			Logger* log;
 
 			void putc(const char c) { log->putc(c); }
+			void puts(const char* str, size_t len) { log->puts(str, len); }
 			void flush() { log->flush(); }
 		};
 

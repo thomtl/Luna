@@ -13,5 +13,10 @@ namespace e9 {
         void putc(const char c) {
             pio::outb(port_addr, c);
         }
+
+        void puts(const char* str) {
+            while(*str)
+                pio::outb(port_addr, *str++);
+        }
     };
 } // namespace e9

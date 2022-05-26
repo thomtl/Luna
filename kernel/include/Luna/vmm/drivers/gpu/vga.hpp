@@ -44,8 +44,6 @@ namespace vm::gpu::vga {
         }
 
         private:
-        log::Logger* logger;
-
         uint8_t index_3d4;
     };
 } // namespace vm::e9
