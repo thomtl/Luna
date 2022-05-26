@@ -118,7 +118,9 @@ namespace gui {
         }
         
         void clear() {
-            memset(fb.data(), 0, fb.size() * sizeof(Colour));
+            //memset(fb.data(), 0, fb.size() * sizeof(Colour));
+            for(auto& item : fb)
+                item = Colour{0, 0, 0}; // Make sure alpha is set
         }
 
         Vec2i size;
@@ -126,13 +128,15 @@ namespace gui {
     };
 
     struct Window {
-        Window(Vec2i size, const char* title): canvas{size}, title{title} {}
+        Window(Vec2i size, const char* title): canvas{size}, title{title}, pos{0, 0}, size{size} {}
         virtual ~Window() {}
 
         const Canvas& get_rendering_info() { return canvas; }
 
         mutable Canvas canvas;
         const char* title;
+
+        Vec2i pos, size;
     };
 
     struct GuiEvent {
@@ -146,8 +150,13 @@ namespace gui {
         Desktop(gpu::GpuManager& gpu);
         void add_window(Window* window) {
             static int size = 0;
-            windows.push_back({window, {5 + size, 40}});
+
+            window->pos = {5 + size, 40};
+            
             size += window->canvas.size.x + 8;
+
+            std::lock_guard guard{compositor_lock};
+            windows.push_back(window);
         }
 
         std::EventQueue<GuiEvent>& get_event_queue() { return event_queue; }
@@ -157,12 +166,8 @@ namespace gui {
         std::EventQueue<GuiEvent> event_queue;
         Canvas fb_canvas;
 
-        struct CompositorWindow {
-            Window* window;
-            Vec2i pos;
-        };
-
-        std::vector<CompositorWindow> windows;
+        IrqTicketLock compositor_lock;
+        std::vector<Window*> windows;
 
         volatile uint32_t* fb;
         Vec2<size_t> size;
@@ -174,7 +179,7 @@ namespace gui {
             bool left_button_down;
             
             bool is_dragging;
-            CompositorWindow* dragging_window;
+            Window* dragging_window;
             Vec2i dragging_offset;
         } mouse;
     };

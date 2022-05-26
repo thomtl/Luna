@@ -55,41 +55,55 @@ Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, fb_canvas{Vec2i{(int32_t)gpu.
                     print("gui: Unknown Event Type: {}\n", (uint32_t)event.type);
                 }
             });
+
+            std::lock_guard guard{compositor_lock};
             
             if(mouse.is_dragging) {
                 if(!mouse.left_button_down) {
                     mouse.is_dragging = false;
                 } else {
                     mouse.dragging_window->pos = mouse.pos + mouse.dragging_offset;
-                    mouse.dragging_window->pos.clamp(Vec2i{decoration_side_width, decoration_top_width + 20}, Vec2i{(int)size.x, (int)size.y} - mouse.dragging_window->window->canvas.size - Vec2i{decoration_side_width, decoration_top_width});
+                    mouse.dragging_window->pos.clamp(Vec2i{decoration_side_width, decoration_top_width + 20}, Vec2i{(int)size.x, (int)size.y} - mouse.dragging_window->canvas.size - Vec2i{decoration_side_width, decoration_top_width});
+                }
+            }
+
+            for(auto it = windows.begin(); it != windows.end(); ++it) {
+                auto* window = *it;
+                auto size = window->size;
+                Rect top_bar{window->pos - Vec2i{decoration_side_width, decoration_top_width}, Vec2i{size.x + 2 * decoration_side_width, decoration_top_width}};
+
+                if(mouse.pos.collides_with(top_bar.pos, top_bar.size) && mouse.left_button_down && !mouse.is_dragging) {
+                    mouse.dragging_window = window;
+                    mouse.dragging_offset = window->pos - mouse.pos;
+                    mouse.is_dragging = true;
+
+                    auto* it = windows.find(window);
+                    ASSERT(it != windows.end());
+                    windows.erase(it);
+                    windows.push_back(window);
+                    break; // iterators invalidated
                 }
             }
 
             fb_canvas.clear();
 
-            for(auto& window : windows) {
+            for(auto* window : windows) {
                 // Draw decorations
-                auto size = window.window->canvas.size;
+                auto size = window->canvas.size;
 
                 using namespace draw;
 
-                rect(fb_canvas, window.pos - Vec2i{decoration_side_width, 0}, Vec2i{decoration_side_width, size.y}, decoration_colour); // Left bar
-                rect(fb_canvas, window.pos + Vec2i{size.x, 0}, Vec2i{decoration_side_width, size.y}, decoration_colour); // Right bar
+                rect(fb_canvas, window->pos - Vec2i{decoration_side_width, 0}, Vec2i{decoration_side_width, size.y}, decoration_colour); // Left bar
+                rect(fb_canvas, window->pos + Vec2i{size.x, 0}, Vec2i{decoration_side_width, size.y}, decoration_colour); // Right bar
 
-                rect(fb_canvas, window.pos + Vec2i{-decoration_side_width, size.y}, Vec2i{size.x + 2 * decoration_side_width, decoration_side_width}, decoration_colour); // Bottom bar
+                rect(fb_canvas, window->pos + Vec2i{-decoration_side_width, size.y}, Vec2i{size.x + 2 * decoration_side_width, decoration_side_width}, decoration_colour); // Bottom bar
 
-                Rect top_bar{window.pos - Vec2i{decoration_side_width, decoration_top_width}, Vec2i{size.x + 2 * decoration_side_width, decoration_top_width}};
+                Rect top_bar{window->pos - Vec2i{decoration_side_width, decoration_top_width}, Vec2i{size.x + 2 * decoration_side_width, decoration_top_width}};
                 rect(fb_canvas, top_bar, decoration_colour); // Top bar
-                text(fb_canvas, window.pos - Vec2i{decoration_side_width, decoration_top_width - 1} + Vec2i{size.x / 2, 0}, window.window->title, Colour{0, 0, 0}, decoration_colour, TextAlign::Center);
+                text(fb_canvas, window->pos - Vec2i{decoration_side_width, decoration_top_width - 1} + Vec2i{size.x / 2, 0}, window->title, Colour{0, 0, 0}, decoration_colour, TextAlign::Center);
 
-                if(mouse.pos.collides_with(top_bar.pos, top_bar.size) && mouse.left_button_down) {
-                    mouse.dragging_window = &window;
-                    mouse.dragging_offset = window.pos - mouse.pos;
-                    mouse.is_dragging = true;
-                }
-            
                 // Actually blit screen
-                fb_canvas.blit(window.pos, window.window->canvas.size, window.window->canvas.fb.data());
+                fb_canvas.blit(window->pos, window->canvas.size, window->canvas.fb.data());
             }
 
             // Draw mouse
