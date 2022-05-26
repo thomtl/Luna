@@ -9,6 +9,7 @@
 
 #include <std/algorithm.hpp>
 #include <std/vector.hpp>
+#include <std/unordered_map.hpp>
 
 static IrqTicketLock scheduler_lock{}; // TODO: Mostly replace global scheduler lock with per-thread lock
 constinit static std::vector<threading::Thread*> threads;
@@ -16,6 +17,7 @@ constinit static std::vector<threading::Thread*> threads;
 using RunQueue = std::vector<threading::Thread*>; // TODO: Replace with std::deque
 constinit static RunQueue queue1, queue2;
 constinit static RunQueue* active_ptr = &queue1, *expired_ptr = &queue2;
+constinit static std::lazy_initializer<std::unordered_map<uint32_t, RunQueue>> per_cpu_queue;
 
 static void idle();
 
@@ -24,6 +26,12 @@ static void rearm_preemption() {
 }
 
 static threading::Thread* next_thread() {
+    if(auto& queue = (*per_cpu_queue)[get_cpu().lapic_id]; !queue.empty()) {
+        auto* ret = queue.back();
+        queue.pop_back();
+        return ret;
+    }
+
     if(active_ptr->size() == 0)
         std::swap(active_ptr, expired_ptr);
 
@@ -35,6 +43,10 @@ static threading::Thread* next_thread() {
 
     ASSERT(ret->state == threading::ThreadState::Idle);
     ASSERT(std::find(threads.begin(), threads.end(), ret) != threads.end());
+    if(ret->cpu_pin.is_pinned && ret->cpu_pin.cpu_id != get_cpu().lapic_id) {
+        (*per_cpu_queue)[ret->cpu_pin.cpu_id].push_back(ret);
+        return next_thread();
+    }
     return ret;
 }
 
@@ -200,6 +212,11 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
 }
 
 void threading::start_on_cpu() {
+    {
+        std::lock_guard guard{scheduler_lock};
+        per_cpu_queue.init();
+    }
+
     auto& cpu = get_cpu();
 
     idt::set_handler(quantum_irq_vector, idt::handler{.f = quantum_irq_handler, .is_irq = true, .should_iret = true, .userptr = nullptr});
