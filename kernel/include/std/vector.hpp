@@ -81,11 +81,38 @@ namespace std
         iterator end() { return _elements + _size; }
         const_iterator end() const { return _elements + _size; }
 
+        struct reverse_iterator {
+            reverse_iterator(iterator p): p{p} {}
+
+            reference operator*() { return *p; }
+            void operator++() { p--; }
+            bool operator!=(reverse_iterator it) { return p != it.p; }
+
+            private:
+            iterator p;
+        };
+
+        reverse_iterator rbegin() { 
+            if(_size == 0)
+                return reverse_iterator{nullptr};
+                
+            return reverse_iterator{_elements + _size - 1}; 
+        }
+
+        reverse_iterator rend() { 
+            if(_size == 0)
+                return reverse_iterator{nullptr};
+                
+            return reverse_iterator{_elements - 1}; 
+        }
+
         reference front() { return *begin(); }
         const_reference front() const { return *begin(); }
 
         reference back() { return *(end() - 1); }
         const_reference back() const { return *(end() - 1); }
+
+
 
         reference push_back(const_reference value) {
             ensure_capacity(_size + 1);

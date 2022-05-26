@@ -124,4 +124,17 @@ namespace std
             return seed;
         }
     };
+
+    namespace impl {
+        template<typename T>
+        struct reverse_wrapper {
+            T& it;
+
+            auto begin() { return it.rbegin(); }
+            auto end() { return it.rend(); }
+        };
+    } // namespace impl
+
+    template<typename T>
+    impl::reverse_wrapper<T> reverse(T& it) { return {it}; }
 } // namespace std
