@@ -40,6 +40,8 @@ namespace threading {
 
     struct Thread {
         Thread(): state(ThreadState::Idle), stack(0x4000), ctx(), cpu_pin({.is_pinned = false, .cpu_id = 0}) {}
+
+        IrqTicketLock lock;
         
         ThreadState state;
         cpu::Stack stack;

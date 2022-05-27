@@ -55,32 +55,25 @@ threading::Thread* this_thread() {
 }
 
 void await(threading::Event* event) {   
-    scheduler_lock.lock();
-
-    /*
-        The lock above cli'ed, so we're safe, but if the event has already occured, next_thread won't find it -
-        because we only get the Blocked status on the `do_yield` and the IRQ has already happened, so the idle thread-
-        will "deadlock" the scheduler, this circumvents that. Since we're safe and cli'ed, any event that will happen before do_yield-
-        has happened, and we just need to check for earlier events.
-    */
-    if(event->is_triggered()) {
-        scheduler_lock.unlock();
+    if(event->is_triggered())
         return;
-    }
 
     auto* old = this_thread();
+    old->lock.lock();
+
     old->state = threading::ThreadState::Blocked;
     event->add_to_waiters(old);
 
-    scheduler_lock.saved_if = false;
-    scheduler_lock.unlock();
+    old->lock.saved_if = false;
+    old->lock.unlock();
 
     asm("int $254\r\nsti"); // Yield
 }
 
 void kill_self() {
-    scheduler_lock.lock();
     auto* self = this_thread();
+    self->lock.lock(); // Thread is getting killed so we don't have to unlock in the epilogue
+    scheduler_lock.lock();
 
     auto iter = threads.find(self);
     ASSERT(iter != threads.end());
@@ -89,31 +82,19 @@ void kill_self() {
     ASSERT(std::find(active_ptr->begin(), active_ptr->end(), self) == active_ptr->end());
     ASSERT(std::find(expired_ptr->begin(), expired_ptr->end(), self) == expired_ptr->end());
 
-    auto& current_thread = get_cpu().current_thread;
-    current_thread = next_thread();
+    get_cpu().current_thread = nullptr;
 
-    bool should_idle = false;
-    if(current_thread) { // If we were able to get a new thread
-        current_thread->state = threading::ThreadState::Running;
-    } else {
-        should_idle = true; // If we weren't able to find a new thread we should idle
-    }
+    scheduler_lock.saved_if = false;
+    scheduler_lock.unlock();
 
     auto kill_stack = get_cpu().thread_kill_stack->top();
 
-    scheduler_lock.unlock();
-
     // We need to run an epilogue on a different stack to avoid a UAF bug where the stack gets reused before we're done jumping to a new thread
     // And because stacks are cleared on initialization it jumps to NULL
-    auto kill_epilogue = +[](threading::Thread* self, threading::Thread* next, bool should_idle) {
+    auto kill_epilogue = +[](threading::Thread* self) {
         delete self;
 
-        rearm_preemption();
-        if(should_idle)
-            idle();
-        else
-            thread_invoke(&(next->ctx));
-
+        asm("int $254");
         __builtin_trap();
     };
 
@@ -121,7 +102,7 @@ void kill_self() {
             "mov %[new_stack], %%rsp\n"
             "xor %%rbp, %%rbp\n"
             "call *%[epilogue]" 
-            : : "D"(self), "S"(current_thread), "d"(should_idle), [new_stack] "r"(kill_stack), [epilogue] "r"(kill_epilogue) : "memory");
+            : : "D"(self), [new_stack] "r"(kill_stack), [epilogue] "r"(kill_epilogue) : "memory");
 
     __builtin_trap();
 }
@@ -134,18 +115,28 @@ void threading::init_thread_context(Thread* thread, void (*f)(void*), void* arg)
 }
 
 void threading::add_thread(Thread* thread) {
-    std::lock_guard guard{scheduler_lock};
+    {
+        std::lock_guard guard{thread->lock};
+        threads.push_back(thread);
+    }
 
-    threads.push_back(thread);
-    expired_ptr->push_back(thread);
+    {
+        std::lock_guard guard{scheduler_lock};
+        expired_ptr->push_back(thread);
+    }
 }
 
 void threading::wakeup_thread(Thread* thread) {
-    std::lock_guard guard{scheduler_lock};
+    {
+        std::lock_guard guard{thread->lock};
+        ASSERT(thread->state == ThreadState::Blocked);
+        thread->state = ThreadState::Idle;
+    }
 
-    ASSERT(thread->state == ThreadState::Blocked);
-    thread->state = ThreadState::Idle;
-    expired_ptr->push_back(thread);
+    {
+        std::lock_guard guard{scheduler_lock};
+        expired_ptr->push_back(thread);
+    }
 }
 
 threading::Thread* spawn(void (*f)(void*), void* arg) {
@@ -177,23 +168,25 @@ static void idle() {
 }
 
 static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
-    scheduler_lock.lock();
     auto& cpu = get_cpu();
     auto* old_thread = cpu.current_thread;
     
     if(old_thread) { // old_thread might be null
+        std::lock_guard guard{old_thread->lock};
+
         old_thread->ctx.save(regs);
         if(old_thread->state == threading::ThreadState::Running) {
             old_thread->state = threading::ThreadState::Idle;
 
+            std::lock_guard guard{scheduler_lock};
             expired_ptr->push_back(old_thread);
         }
     }
 
+    scheduler_lock.lock();
     auto* next = next_thread();
+    scheduler_lock.unlock();
     if(!next) {
-        scheduler_lock.unlock();
-
         cpu.current_thread = nullptr;
         cpu.lapic.eoi();
 
@@ -203,12 +196,13 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
         __builtin_trap();
     }
 
+    std::lock_guard guard{next->lock};
+
     next->state = threading::ThreadState::Running;
     next->ctx.restore(regs);
     cpu.current_thread = next;
 
     rearm_preemption();
-    scheduler_lock.unlock();
 }
 
 void threading::start_on_cpu() {
@@ -276,14 +270,14 @@ void threading::ThreadContext::restore(idt::regs* regs) const {
 }
 
 void threading::Thread::pin_to_this_cpu() {
-    std::lock_guard guard{scheduler_lock};
+    std::lock_guard guard{lock};
     cpu_pin = {.is_pinned = true, .cpu_id = get_cpu().lapic_id};
 }
 
 void threading::Thread::pin_to_cpu(uint32_t id)  {
-    scheduler_lock.lock(); // Not using lock guard because deadlock on the int, TODO : proper yield
+    lock.lock();
     cpu_pin = {.is_pinned = true, .cpu_id = id};
-    scheduler_lock.unlock();
+    lock.unlock();
 
-    asm("int $254"); // TODO: Proper yield to not fuck up next thread's quantum
+    asm("int $254"); // Yield
 }
