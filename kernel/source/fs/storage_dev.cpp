@@ -8,166 +8,95 @@
 #include <std/string.hpp>
 #include <std/algorithm.hpp>
 
-void storage_dev::Device::xfer_sectors(bool write, size_t lba, size_t count, uint8_t* data) {
-    auto evict_cache = [&](PageCache& entry) {
+storage_dev::Device::CacheBlock& storage_dev::Device::get_cache_block(size_t block) {
+    auto evict = [this](CacheBlock& entry) {
         if(!entry.modified)
             return;
         
-        driver.xfer(driver.userptr, true, entry.lba, 1, std::span<uint8_t>{entry.buffer.data(), driver.sector_size});
+        driver.xfer(driver.userptr, true, entry.block * sectors_per_cache_block, sectors_per_cache_block, std::span<uint8_t>{entry.buffer.data(), sectors_per_cache_block * driver.sector_size});
         entry.modified = false;
     };
 
-    auto get_lru_cache = [&]() -> PageCache& {
-        uint64_t oldest_timestamp = ~0;
-        PageCache* oldest = nullptr;
-        for(auto& entry : cache) {
-            if(entry.timestamp < oldest_timestamp) {
-                oldest = &entry;
-                oldest_timestamp = entry.timestamp;
+    auto get_lru = [this] {
+        uint64_t oldest = ~0ull;
+        auto ret = cache.end();
+
+        for(auto it = cache.begin(); it != cache.end(); ++it) {
+            if(it->timestamp < oldest) {
+                oldest = it->timestamp;
+                ret = it;
             }
         }
-        
-        ASSERT(oldest);
-        return *oldest;
+
+        return ret;
     };
 
-    for(size_t curr = lba; curr < (lba + count); curr++) {
-        auto it = std::find_if(cache.begin(), cache.end(), [curr](auto& e) { return e.lba == curr; });
+    auto it = std::find_if(cache.begin(), cache.end(), [block](auto& e) { return (e.block == block); });
+    if(it == cache.end()) {
+        it = get_lru();
+        ASSERT(it != cache.end());
+        evict(*it);
 
-        if(it != cache.end()) {
-            if(write) {
-                memcpy(it->buffer.data(), data, driver.sector_size);
-                it->modified = true;
-            } else {
-                memcpy(data, it->buffer.data(), driver.sector_size);
-            }
-        } else {
-            auto& entry = get_lru_cache();
-            evict_cache(entry);
-            if(write) {
-                entry.lba = curr;
-                entry.modified = true;
-                entry.timestamp = ++curr_timestamp;
+        it->block = block;
 
-                memcpy(it->buffer.data(), data, driver.sector_size);
-            } else {
-                entry.lba = curr;
-                entry.timestamp = ++curr_timestamp;
-
-                driver.xfer(driver.userptr, false, curr, 1, std::span<uint8_t>{entry.buffer.data(), driver.sector_size});
-                memcpy(data, entry.buffer.data(), driver.sector_size);
-            }
-        }
-
-        data += driver.sector_size;
+        driver.xfer(driver.userptr, false, block * sectors_per_cache_block, sectors_per_cache_block, std::span<uint8_t>{it->buffer.data(), sectors_per_cache_block * driver.sector_size});
     }
+    it->timestamp = ++curr_timestamp;
+
+    return *it;
 }
 
 bool storage_dev::Device::read(size_t offset, size_t count, uint8_t* data) {
-    std::lock_guard guard{lock};
-
-    size_t start_lba = offset / driver.sector_size;
-    size_t end_lba = (offset + count - 1) / driver.sector_size;
-
-    size_t sector_size = driver.sector_size;
-    size_t dev_size = (driver.n_lbas * driver.sector_size);
-    size_t x_offset = 0;
-
+    auto dev_size = driver.n_lbas * driver.sector_size;
     if(offset > dev_size)
-        return false; // Beyond range
-
+        return false;
+    
     if((offset + count) > dev_size)
         count = dev_size - offset;
-
-    if(offset % sector_size || count < sector_size) {
-        size_t prefix_size = sector_size - (offset % sector_size);
-
-        if(prefix_size > count)
-            prefix_size = count;
-        
-        auto* sector = new uint8_t[sector_size];
-
-        xfer_sectors(false, start_lba, 1, sector);
-
-        memcpy(data, sector + (offset % sector_size), prefix_size);
-
-        delete[] sector;
-
-        x_offset += prefix_size;
-        start_lba++;
-    }
-
-    if((offset + count) % sector_size && start_lba <= end_lba) {
-        size_t postfix_size = (offset + count) % sector_size;
-
-        auto* sector = new uint8_t[sector_size];
-
-        xfer_sectors(false, end_lba, 1, sector);
-
-        memcpy(data + count - postfix_size, sector, postfix_size);
-
-        delete[] sector;
-
-        end_lba--;
-    }
-
-    size_t n_sectors = end_lba - start_lba + 1;
-    if(n_sectors > 0)
-        xfer_sectors(false, start_lba, n_sectors, data + x_offset);
     
+    std::lock_guard guard{lock};
+
+    auto bytes_per_block = sectors_per_cache_block * driver.sector_size;
+
+    size_t progress = 0;
+    while(progress < count) {
+        size_t block = (offset + progress) / bytes_per_block;
+        auto& cache = get_cache_block(block);
+
+        uint64_t off = (offset + progress) % bytes_per_block;
+        uint64_t chunk = min(count - progress, bytes_per_block - off);
+
+        memcpy(data + progress, cache.buffer.data() + off, chunk);
+        progress += chunk;
+    }
+
     return true;
 }
 
 bool storage_dev::Device::write(size_t offset, size_t count, uint8_t* data) {
-    std::lock_guard guard{lock};
-    
-    size_t start_lba = offset / driver.sector_size;
-    size_t end_lba = (offset + count - 1) / driver.sector_size;
-
-    size_t sector_size = driver.sector_size;
-    size_t dev_size = (driver.n_lbas * driver.sector_size);
-    size_t x_offset = 0;
-
+    auto dev_size = driver.n_lbas * driver.sector_size;
     if(offset > dev_size)
-        return false; // Beyond range
-
+        return false;
+    
     if((offset + count) > dev_size)
         count = dev_size - offset;
 
-    if(offset % sector_size) {
-        size_t prefix_size = sector_size - (offset % sector_size);
+    std::lock_guard guard{lock};
 
-        if(prefix_size > count)
-            prefix_size = count;
+    auto bytes_per_block = sectors_per_cache_block * driver.sector_size;
 
-        auto* sector = new uint8_t[sector_size];
-        
-        xfer_sectors(false, start_lba, 1, sector);
-        memcpy(sector + (offset % sector_size), data, prefix_size);
-        xfer_sectors(true, start_lba, 1, sector);
+    size_t progress = 0;
+    while(progress < count) {
+        size_t block = (offset + progress) / bytes_per_block;
+        auto& cache = get_cache_block(block);
+        cache.modified = true;
 
-        delete[] sector;
+        uint64_t off = (offset + progress) % bytes_per_block;
+        uint64_t chunk = min(count - progress, bytes_per_block - off);
 
-        x_offset += prefix_size;
-        start_lba++;
+        memcpy(cache.buffer.data() + off, data + progress, chunk);
+        progress += chunk;
     }
-
-    if((offset + count) % sector_size && start_lba <= end_lba) {
-        size_t postfix_size = (offset + count) % sector_size;
-
-        auto* sector = new uint8_t[sector_size];
-
-        xfer_sectors(false, end_lba, 1, sector);
-        memcpy(sector, data + count - postfix_size, postfix_size);
-        xfer_sectors(true, end_lba, 1, sector);
-
-        delete[] sector;
-        end_lba--;
-    }
-
-    size_t n_sectors = end_lba - start_lba + 1;
-    if(n_sectors > 0)
-        xfer_sectors(true, start_lba, n_sectors, data + x_offset); 
 
     return true;
 }

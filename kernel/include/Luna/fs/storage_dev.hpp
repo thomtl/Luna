@@ -28,20 +28,21 @@ namespace storage_dev {
         bool write(size_t offset, size_t count, uint8_t* data);
 
         private:
-        void xfer_sectors(bool write, size_t lba, size_t count, uint8_t* data);
-
-        struct PageCache {
-            PageCache(size_t sector_size): timestamp{0}, lba{~0ull}, buffer{}, modified{false} {
-                buffer.resize(sector_size);
+        struct CacheBlock {
+            CacheBlock(size_t sector_size): timestamp{0}, block{~0ull}, buffer{}, modified{false} {
+                buffer.resize(sector_size * sectors_per_cache_block);
             }
 
-            uint64_t timestamp, lba;
+            uint64_t timestamp, block;
             std::vector<uint8_t> buffer;
             bool modified;
         };
-        std::vector<PageCache> cache;
+        CacheBlock& get_cache_block(size_t block);
+
+        std::vector<CacheBlock> cache;
         uint64_t curr_timestamp;
         constexpr static size_t max_cache_size = 64;
+        constexpr static size_t sectors_per_cache_block = 16;
 
         IrqTicketLock lock;
     };
