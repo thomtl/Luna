@@ -9,4 +9,13 @@ namespace std {
 
         return last;
     }
+
+    template<typename InputIt, typename UnaryPredicate>
+    constexpr InputIt find_if(InputIt first, InputIt last, UnaryPredicate p) {
+        for (; first != last; ++first)
+            if (p(*first))
+                return first;
+
+        return last;
+    }
 } // namespace std

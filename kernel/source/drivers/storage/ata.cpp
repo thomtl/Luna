@@ -177,7 +177,7 @@ void ata::register_device(ata::DriverDevice& dev) {
         driver.sector_size = device->sector_size;
         driver.userptr = device;
 
-        driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t>& xfer) {
+        driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t> xfer) {
             auto& device = *(ata::Device*)userptr;
 
             if(write)

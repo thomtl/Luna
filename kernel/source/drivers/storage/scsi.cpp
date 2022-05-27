@@ -164,7 +164,7 @@ void scsi::register_device(scsi::DriverDevice& dev) {
         driver.sector_size = device->sector_size;
         driver.userptr = device;
 
-        driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t>& xfer) {
+        driver.xfer = [](void* userptr, bool write, size_t lba, size_t n_lbas, std::span<uint8_t> xfer) {
             //print("scsi: {} LBA: {} Count: {}\n", write ? "Write" : "Read", lba, n_lbas);
             auto& device = *(scsi::Device*)userptr;
 
