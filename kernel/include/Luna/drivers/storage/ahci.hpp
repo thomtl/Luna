@@ -7,6 +7,8 @@
 
 #include <Luna/mm/iovmm.hpp>
 
+#include <Luna/cpu/threads.hpp>
+
 
 namespace ahci
 {
@@ -150,6 +152,12 @@ namespace ahci
             volatile Prs* regs;
             Controller* controller;
 
+            IrqTicketLock lock{};
+
+            uint32_t allocated_slots = 0;
+            Promise<bool>* command_promises[32] = {}; // TODO: std::array
+            
+
             union PhysRegion {
                 struct {
                     CmdHeader command_headers[32];
@@ -157,8 +165,11 @@ namespace ahci
                 };
                 uint8_t padding[0x1000];
             };
+            static_assert(sizeof(PhysRegion) == 0x1000);
 
             volatile PhysRegion* region;
+
+            void handle_irq();
 
             void wait_idle();
             void wait_ready();
@@ -175,8 +186,6 @@ namespace ahci
 
             void send_ata_cmd(const ata::ATACommand& cmd, uint8_t* data, size_t transfer_len);
             void send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len);
-
-            IrqTicketLock lock{};
         };
 
         private:
@@ -191,6 +200,6 @@ namespace ahci
 
         friend struct Port;
 
-        std::vector<Port> ports;
+        std::vector<Port*> ports;
     };
 } // namespace ahci

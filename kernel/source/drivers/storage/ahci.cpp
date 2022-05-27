@@ -1,8 +1,11 @@
 #include <Luna/drivers/storage/ahci.hpp>
 
+#include <Luna/cpu/idt.hpp>
+
 #include <Luna/mm/vmm.hpp>
 
 #include <Luna/misc/log.hpp>
+
 
 #include <std/linked_list.hpp>
 
@@ -18,7 +21,20 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
 
     print("ahci: Version {}.{}.{}\n", regs->ghcr.vs >> 16, (regs->ghcr.vs >> 8) & 0xFF, regs->ghcr.vs & 0xFF);
 
-    regs->ghcr.ghc |= (1u << 31); // Enable aHCI
+    auto irq_vector = idt::allocate_vector();
+    idt::set_handler(irq_vector, {.f = [](uint8_t, idt::regs*, void* userptr) {
+        auto& self = *(Controller*)userptr;
+
+        for(uint8_t i = 0; i < 32; i++)
+            if(self.regs->ghcr.is & (1 << i))
+                self.ports[i]->handle_irq();
+
+        self.regs->ghcr.is = ~0u;
+    }, .is_irq = true, .should_iret = true, .userptr = this});
+    device->enable_irq(0, irq_vector);
+
+    regs->ghcr.ghc |= (1u << 31) | (1 << 2) | (1 << 1); // Enable aHCI + MSI revert to single message + Enable IRQs
+    regs->ghcr.is = ~0u; // Clear all pending IRQs
 
     a64 = (regs->ghcr.cap & (1u << 31)) != 0;
 
@@ -31,13 +47,14 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
     n_allocated_ports = (regs->ghcr.cap & 0x1F) + 1;
     n_command_slots = ((regs->ghcr.cap >> 8) & 0x1F) + 1;
 
-    ports.resize(n_allocated_ports);
-
+    ports.reserve(32);
     for(size_t i = 0; i < 32; i++) {
         if(!(regs->ghcr.pi & (1 << i)))
             continue; // Port is unimplemented
 
-        auto& port = ports.emplace_back();
+        auto& port = *new Port{};
+        ports[i] = &port;
+
         port.port = i;
         port.controller = this;
         port.regs = (volatile Prs*)&regs->ports[i];
@@ -85,7 +102,9 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
             port.regs->fbu = (fis_addr >> 32) & 0xFFFFFFFF;
 
         port.regs->cmd |= (1 << 0) | (1 << 4);
-        port.regs->is = 0xFFFFFFFF;
+
+        port.regs->ie = (~0u) & ~((1 << 1) | (1 << 2)); // Not interested in PIO or DMA setup IRQs
+        port.regs->is = ~0u;
 
         for(size_t i = 0; i < 100000; i++)
             asm("pause");
@@ -97,28 +116,37 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
 
         ata::DriverDevice device{};
         device.atapi = (sig == 0xEB140101);
-        device.userptr = (void*)&port; // Pointer will not change because we resized earlier
+        device.userptr = (void*)&port; // Pointer will not change because we reserved earlier
         device.ata_cmd = [](void* userptr, const ata::ATACommand& cmd, std::span<uint8_t>& xfer) {
             auto* port = (Controller::Port*)userptr;
-
-            std::lock_guard guard{port->lock};
-
             port->send_ata_cmd(cmd, xfer.data(), xfer.size());
         };
 
         if(device.atapi) { // Only enable the atapi cmd function if the device is actually atapi
             device.atapi_cmd = [](void* userptr, const ata::ATAPICommand& cmd, std::span<uint8_t>& xfer) {
                 auto* port = (Controller::Port*)userptr;
-
-                std::lock_guard guard{port->lock};
-
                 port->send_atapi_cmd(cmd, xfer.data(), xfer.size());
             };
         }
 
         ata::register_device(device);
     }
+}
 
+void ahci::Controller::Port::handle_irq() {
+    std::lock_guard guard{lock};
+
+    for(size_t i = 0; i < 32; i++)
+        if(command_promises[i] && !(regs->ci & (1 << i)) && allocated_slots & (1 << i))
+            command_promises[i]->set_value((regs->is >> 30) & 1);
+
+    regs->is = (1 << 1) | (1 << 2); // Uninterested
+    regs->is = (1 << 0) | (1 << 30); // Clear known bits
+    
+    if(regs->is)
+        print("ahci: Unknown IRQ condition: {:#x}\n", uint32_t{regs->is});
+
+    regs->is = ~0u;
 }
 
 void ahci::Controller::Port::wait_idle() {
@@ -139,9 +167,12 @@ void ahci::Controller::Port::wait_ready() {
 }
 
 uint8_t ahci::Controller::Port::get_free_cmd_slot() {
-    for(size_t i = 0; i < controller->n_command_slots; i++)
-        if((regs->ci & (1 << i)) == 0)
+    for(size_t i = 0; i < controller->n_command_slots; i++) {
+        if((allocated_slots & (1 << i)) == 0) {
+            allocated_slots |= (1 << i);
             return i;
+        }
+    }
 
     return ~0;
 }
@@ -166,10 +197,13 @@ ahci::Controller::Port::Command ahci::Controller::Port::allocate_command(size_t 
 }
 
 void ahci::Controller::Port::free_command(const Command& cmd) {
+    allocated_slots &= ~(1 << cmd.index);
     controller->iommu_vmm.free(cmd.allocation);
 }
 
 void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* data, size_t transfer_len) {
+    lock.lock();
+
     size_t n_prdts = div_ceil(transfer_len, 0x3FFFFF);
     auto slot = allocate_command(n_prdts);
     ASSERT(slot.index != ~0);
@@ -220,15 +254,22 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
 
     wait_ready();
 
+    Promise<bool> promise;
+    command_promises[slot.index] = &promise;
     regs->ci |= (1 << slot.index);
+    lock.unlock();
+    
+    bool err = promise.await();
 
-    while(regs->ci & (1 << slot.index)) {
-        if(regs->is & (1 << 30)) {
-            if(regs->tfd & (1 << 0)) {
-                auto err = regs->tfd >> 8;
-                print("ahci: Error on CMD, code {}\n", err);
-                return;
-            }
+    std::lock_guard guard{lock};
+
+    command_promises[slot.index] = nullptr;
+    ASSERT(!((regs->ci >> slot.index) & 1));
+    if(err) {
+        if(regs->tfd & (1 << 0)) {
+            auto err = regs->tfd >> 8;
+            print("ahci: Error on CMD, code {}\n", err);
+            return;
         }
     }
 
@@ -240,6 +281,7 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
 }
 
 void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len) {
+    lock.lock();
     size_t n_prdts = div_ceil(transfer_len, 0x3FFFFF);
     auto slot = allocate_command(n_prdts);
     ASSERT(slot.index != ~0);
@@ -285,15 +327,22 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
 
     wait_ready();
 
+    Promise<bool> promise;
+    command_promises[slot.index] = &promise;
     regs->ci |= (1 << slot.index);
 
-    while(regs->ci & (1 << slot.index)) {
-        if(regs->is & (1 << 30)) {
-            if(regs->tfd & (1 << 0)) {
-                auto err = regs->tfd >> 8;
-                print("ahci: Error on CMD, code {}\n", err);
-                return;
-            }
+    lock.unlock();
+    bool err = promise.await();
+    
+    std::lock_guard guard{lock};
+
+    command_promises[slot.index] = nullptr;
+    ASSERT(!((regs->ci >> slot.index) & 1));
+    if(err) {
+        if(regs->tfd & (1 << 0)) {
+            auto err = regs->tfd >> 8;
+            print("ahci: Error on CMD, code {}\n", err);
+            return;
         }
     }
 
