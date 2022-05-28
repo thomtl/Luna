@@ -41,8 +41,8 @@ namespace storage_dev {
 
         std::vector<CacheBlock> cache;
         uint64_t curr_timestamp;
-        constexpr static size_t max_cache_size = 64;
-        constexpr static size_t sectors_per_cache_block = 16;
+        constexpr static size_t max_cache_size = 256;
+        constexpr static size_t sectors_per_cache_block = 64;
 
         IrqTicketLock lock;
     };

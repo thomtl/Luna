@@ -135,7 +135,7 @@ void threading::wakeup_thread(Thread* thread) {
 
     {
         std::lock_guard guard{scheduler_lock};
-        expired_ptr->push_back(thread);
+        active_ptr->push_back(thread); // Schedule ASAP
     }
 }
 
