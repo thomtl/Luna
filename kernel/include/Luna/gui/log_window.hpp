@@ -3,10 +3,11 @@
 #include <Luna/gui/gui.hpp>
 #include <Luna/gui/framework.hpp>
 #include <Luna/misc/log.hpp>
+#include <Luna/misc/font.hpp>
 
 namespace gui {
     struct LogWindow : public Window, public log::Logger {
-        LogWindow(Vec2i size_chars, const char* title): Window{{size_chars.x * 8 + 1, size_chars.y * 16}, title}, offset{0}, curr_x{0}, curr_y{0}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
+        LogWindow(Vec2i size_chars, const char* title): Window{{size_chars.x * font::width + 1, size_chars.y * font::height}, title}, offset{0}, curr_x{0}, curr_y{0}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
 
         void update() {
             canvas.clear();
@@ -75,7 +76,7 @@ namespace gui {
                             print("gui::log:Unknown ANSI Escape op {:c}\n", op);
                         }
                     } else {
-                        canvas.put_char(Vec2i{(int32_t)(8 * x) + 1, (int32_t)(16 * y)}, buf[off], fg + colour_intensity, bg);
+                        canvas.put_char(Vec2i{(int32_t)(font::width * x) + 1, (int32_t)(font::height * y)}, buf[off], fg + colour_intensity, bg);
                         off++;
                     }
                 }

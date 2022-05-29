@@ -4,10 +4,9 @@
 #include <Luna/drivers/gpu/gpu.hpp>
 #include <Luna/cpu/threads.hpp>
 #include <Luna/misc/log.hpp>
+#include <Luna/misc/font.hpp>
 
 #include <std/event_queue.hpp>
-
-extern uint8_t font_bitmap[];
 
 namespace gui {
     template<typename T>
@@ -99,17 +98,14 @@ namespace gui {
 
         [[gnu::always_inline]]
         inline void put_char(const Vec2i& c, const char v, Colour fg, Colour bg) {
-            constexpr uint8_t font_width = 8;
-            constexpr uint8_t font_height = 16;
-
             auto* line = fb.data() + c.y * size.x + c.x;
 
             auto dc = (v >= 32) ? v : 127;
-            for(uint8_t i = 0; i < font_height; i++) {
+            for(uint8_t i = 0; i < font::height; i++) {
                 auto* dest = line;
-                auto bits = font_bitmap[(dc - 32) * font_height + i];
-                for(uint8_t j = 0; j < font_width; j++) {
-                    auto bit = (1 << ((font_width - 1) - j));
+                auto bits = font::bitmap[(dc - 32) * font::height + i];
+                for(uint8_t j = 0; j < font::width; j++) {
+                    auto bit = (1 << ((font::width - 1) - j));
                     dest->raw = (bits & bit) ? (fg.a == 255 ? fg.raw : dest->raw) : (bg.a == 255 ? bg.raw : dest->raw);
                     dest++;
                 }
