@@ -41,8 +41,8 @@ namespace ata {
     struct DriverDevice {
         bool atapi;
         void* userptr;
-        void (*ata_cmd)(void* userptr, const ATACommand& cmd, std::span<uint8_t>& xfer);
-        void (*atapi_cmd)(void* userptr, const ATAPICommand& cmd, std::span<uint8_t>& xfer);
+        bool (*ata_cmd)(void* userptr, const ATACommand& cmd, std::span<uint8_t>& xfer);
+        bool (*atapi_cmd)(void* userptr, const ATAPICommand& cmd, std::span<uint8_t>& xfer);
     };
 
     struct Device {

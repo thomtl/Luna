@@ -97,23 +97,29 @@ static void init(usb::Device& device) {
         cbw.cmd_len = cmd.packet_len;
         memset(cbw.scsi_cmd, 0, 16);
         memcpy(cbw.scsi_cmd, cmd.packet, cmd.packet_len);
-        device.out->xfer(cbw.span())->await();
+        ASSERT(device.out->xfer(cbw.span())->await());
 
-        if(cmd.write)
-            device.out->xfer(xfer)->await();
-        else
-            device.in->xfer(xfer)->await();
+        if(cmd.write) {
+            ASSERT(device.out->xfer(xfer)->await());
+        } else {
+            ASSERT(device.in->xfer(xfer)->await());
+        }
 
         CSW csw{};
-        device.in->xfer(csw.span())->await();
+        ASSERT(device.in->xfer(csw.span())->await());
 
         ASSERT(csw.sig == csw_sig);
 
-        if(auto status = csw.status; status != 0)
+        if(auto status = csw.status; status != 0) {
             print("usb/msd: Failure: Status: {}\n", status);
+
+            return false;
+        }
 
         if(auto residue = csw.residue; residue != 0)
             print("usb/msd: Residue: {:#x}\n", residue);
+
+        return true;
     };
 
     scsi::register_device(scsi_dev);

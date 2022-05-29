@@ -138,7 +138,7 @@ namespace scsi {
 
     struct DriverDevice {
         void* userptr;
-        void (*scsi_cmd)(void* userptr, const SCSICommand& cmd, std::span<uint8_t>& xfer);
+        bool (*scsi_cmd)(void* userptr, const SCSICommand& cmd, std::span<uint8_t>& xfer);
 
         uint8_t max_packet_size;
     };

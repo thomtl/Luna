@@ -119,13 +119,13 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
         device.userptr = (void*)&port; // Pointer will not change because we reserved earlier
         device.ata_cmd = [](void* userptr, const ata::ATACommand& cmd, std::span<uint8_t>& xfer) {
             auto* port = (Controller::Port*)userptr;
-            port->send_ata_cmd(cmd, xfer.data(), xfer.size());
+            return port->send_ata_cmd(cmd, xfer.data(), xfer.size());
         };
 
         if(device.atapi) { // Only enable the atapi cmd function if the device is actually atapi
             device.atapi_cmd = [](void* userptr, const ata::ATAPICommand& cmd, std::span<uint8_t>& xfer) {
                 auto* port = (Controller::Port*)userptr;
-                port->send_atapi_cmd(cmd, xfer.data(), xfer.size());
+                return port->send_atapi_cmd(cmd, xfer.data(), xfer.size());
             };
         }
 
@@ -201,7 +201,7 @@ void ahci::Controller::Port::free_command(const Command& cmd) {
     controller->iommu_vmm.free(cmd.allocation);
 }
 
-void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* data, size_t transfer_len) {
+bool ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* data, size_t transfer_len) {
     lock.lock();
 
     size_t n_prdts = div_ceil(transfer_len, 0x3FFFFF);
@@ -251,6 +251,7 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
         if(controller->a64)
             prdt.high = (pa >> 32) & 0xFFFF'FFFF;
     }
+    slot.table->prdts[n_prdts - 1].flags.irq_on_completion = 1;
 
     wait_ready();
 
@@ -267,9 +268,8 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     ASSERT(!((regs->ci >> slot.index) & 1));
     if(err) {
         if(regs->tfd & (1 << 0)) {
-            auto err = regs->tfd >> 8;
-            print("ahci: Error on CMD, code {}\n", err);
-            return;
+            print("ahci: Error on CMD, code {:#x}\n", regs->tfd >> 8);
+            return false;
         }
     }
 
@@ -278,9 +278,11 @@ void ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     controller->iommu_vmm.free(region);
 
     free_command(slot);
+
+    return true;
 }
 
-void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len) {
+bool ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len) {
     lock.lock();
     size_t n_prdts = div_ceil(transfer_len, 0x3FFFFF);
     auto slot = allocate_command(n_prdts);
@@ -324,6 +326,7 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
         if(controller->a64)
             prdt.high = (pa >> 32) & 0xFFFF'FFFF;
     }
+    slot.table->prdts[n_prdts - 1].flags.irq_on_completion = 1;
 
     wait_ready();
 
@@ -340,9 +343,9 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
     ASSERT(!((regs->ci >> slot.index) & 1));
     if(err) {
         if(regs->tfd & (1 << 0)) {
-            auto err = regs->tfd >> 8;
-            print("ahci: Error on CMD, code {}\n", err);
-            return;
+            if(!((regs->tfd >> 8) & (1 << 5))) // Ignore Media Changed errors, they happen when there's no CD inserted
+                print("ahci: Error on CMD, code {:#x}\n", regs->tfd >> 8);
+            return false;
         }
     }
 
@@ -351,6 +354,8 @@ void ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
     controller->iommu_vmm.free(region);
 
     free_command(slot);
+
+    return true;
 }
 
 std::linked_list<ahci::Controller> controllers;

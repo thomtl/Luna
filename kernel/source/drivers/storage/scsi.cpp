@@ -19,7 +19,8 @@ std::pair<uint32_t, uint32_t> scsi_read_capacity(scsi::Device& device) {
     scsi::commands::read_capacity::Response res{};
 
     std::span<uint8_t> xfer{(uint8_t*)&res, sizeof(res)};
-    device.driver.scsi_cmd(device.driver.userptr, cmd, xfer);
+    if(!device.driver.scsi_cmd(device.driver.userptr, cmd, xfer))
+        return {0, 0}; // Device not present
 
     uint32_t block_size = bswap<uint32_t>(res.block_size);
     uint32_t lba = bswap<uint32_t>(res.lba) + 1; // Returned is the last lba, so add 1 for total
@@ -39,7 +40,7 @@ void scsi_inquiry(scsi::Device& dev) {
 
     uint8_t inquiry[128] = {};
     std::span<uint8_t> xfer{inquiry, 128};
-    dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
+    ASSERT(dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer));
 
     dev.type = inquiry[0] & 0x1F;
     switch (dev.type) {
@@ -93,7 +94,7 @@ void scsi_read12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* d
     packet.length = bswap<uint32_t>(n_sectors);
 
     std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
-    dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
+    ASSERT(dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer));
 }
 
 void scsi_read10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* data) {
@@ -110,7 +111,7 @@ void scsi_read10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* d
     packet.length = bswap<uint16_t>(n_sectors);
 
     std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
-    dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
+    ASSERT(dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer));
 }
 
 void scsi_write12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* data) {
@@ -128,7 +129,7 @@ void scsi_write12(scsi::Device& dev, uint32_t lba, uint32_t n_sectors, uint8_t* 
     packet.length = bswap<uint32_t>(n_sectors);
 
     std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
-    dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
+    ASSERT(dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer));
 }
 
 void scsi_write10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* data) {
@@ -146,7 +147,7 @@ void scsi_write10(scsi::Device& dev, uint32_t lba, uint16_t n_sectors, uint8_t* 
     packet.length = bswap<uint16_t>(n_sectors);
 
     std::span<uint8_t> xfer{data, dev.sector_size * n_sectors};
-    dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer);
+    ASSERT(dev.driver.scsi_cmd(dev.driver.userptr, cmd, xfer));
 }
 
 void scsi::register_device(scsi::DriverDevice& dev) {

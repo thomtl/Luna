@@ -184,8 +184,8 @@ namespace ahci
             Command allocate_command(size_t n_prdts);
             void free_command(const Command& cmd);
 
-            void send_ata_cmd(const ata::ATACommand& cmd, uint8_t* data, size_t transfer_len);
-            void send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len);
+            bool send_ata_cmd(const ata::ATACommand& cmd, uint8_t* data, size_t transfer_len);
+            bool send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_t* data, size_t transfer_len);
         };
 
         private:

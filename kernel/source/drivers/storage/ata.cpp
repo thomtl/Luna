@@ -14,7 +14,7 @@ void identify_drive(ata::Device& device) {
     
     uint8_t identify[512] = {};
     std::span<uint8_t> xfer{identify, 512};
-    device.driver.ata_cmd(device.driver.userptr, cmd, xfer);
+    ASSERT(device.driver.ata_cmd(device.driver.userptr, cmd, xfer));
 
     auto checksum = [&]() -> bool {
         if(xfer[510] == 0xA5) {
@@ -114,7 +114,7 @@ bool read_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t* 
     cmd.lba28 = !device.lba48; // We need this info to write the correct top lba28 nybble
 
     std::span<uint8_t> xfer{data, device.sector_size * n_sectors};
-    device.driver.ata_cmd(device.driver.userptr, cmd, xfer);
+    ASSERT(device.driver.ata_cmd(device.driver.userptr, cmd, xfer));
 
     return true;
 }
@@ -134,7 +134,7 @@ bool write_sectors(ata::Device& device, uint64_t lba, size_t n_sectors, uint8_t*
     cmd.lba28 = !device.lba48; // We need this info to write the correct top lba28 nybble
 
     std::span<uint8_t> xfer{data, device.sector_size * n_sectors};
-    device.driver.ata_cmd(device.driver.userptr, cmd, xfer);
+    ASSERT(device.driver.ata_cmd(device.driver.userptr, cmd, xfer));
 
     return true;
 }
@@ -164,7 +164,7 @@ void ata::register_device(ata::DriverDevice& dev) {
             memcpy(atapi_cmd.packet, cmd.packet, 16);
             atapi_cmd.write = cmd.write;
 
-            device.driver.atapi_cmd(device.driver.userptr, atapi_cmd, xfer);
+            return device.driver.atapi_cmd(device.driver.userptr, atapi_cmd, xfer);
         };
 
         scsi::register_device(scsi_dev);
