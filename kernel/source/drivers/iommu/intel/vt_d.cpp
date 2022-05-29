@@ -536,6 +536,7 @@ void vt_d::RemappingEngine::handle_primary_fault() {
             auto reason = fault.reason;
             switch (reason) {
                 case 1: print("      Reason: Non-present Root Entry\n"); break;
+                case 4: print("      Reason: Input address to second level translation is larger than maximum address size\n"); break;
                 case 5: print("      Reason: A Write or AtomicOp request encountered lack of write permission\n"); break;
                 case 6: print("      Reason: A Read or AtomicOp request encountered lack of read permission.\n"); break;
                 case 0xA: print("      Reason: Non-zero reserved field in root-entry with the Present field set\n"); break;
