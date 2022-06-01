@@ -42,7 +42,7 @@ namespace gpu
         void set_mode(const gpu::Mode& mode);
         Mode get_mode() const;
 
-        uint8_t* get_fb();
+        std::span<uint8_t> get_fb();
         void clear_backbuffer();
         void flush();
         void flush(const Rect& rect);

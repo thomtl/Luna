@@ -83,6 +83,8 @@ namespace gui {
             }
 
             stop: ;
+
+            request_redraw();
         }
 
         void putc(const char c) {

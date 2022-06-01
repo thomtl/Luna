@@ -57,7 +57,7 @@
 #include <Luna/net/luna_debug.hpp>
 
 #include <Luna/gui/gui.hpp>
-#include <Luna/gui/log_window.hpp>
+#include <Luna/gui/windows/log_window.hpp>
 
 #include <std/mutex.hpp>
 #include <std/event_queue.hpp>

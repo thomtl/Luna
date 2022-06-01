@@ -63,8 +63,8 @@ static void init(usb::Device& device) {
 
             gui::GuiEvent event{};
             event.type = gui::GuiEvent::Type::MouseUpdate;
-            event.pos = {report.x, report.y};
-            event.left_button_down = report.buttons & 1;
+            event.mouse.pos = {report.x, report.y};
+            event.mouse.left_button_down = report.buttons & 1;
             dev->queue->push(event);
         }
     });

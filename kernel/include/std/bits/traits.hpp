@@ -40,6 +40,21 @@ namespace std
     template<typename T, typename U>
     inline constexpr bool is_same_v = is_same<T, U>::value;
 
+    template<typename T> struct is_integral : std::integral_constant<bool, std::is_same_v<std::remove_cv_t<T>, bool> || 
+                                                std::is_same_v<std::remove_cv_t<T>, char> || std::is_same_v<std::remove_cv_t<T>, signed char> || std::is_same_v<std::remove_cv_t<T>, unsigned char> ||
+                                                std::is_same_v<std::remove_cv_t<T>, char8_t> || std::is_same_v<std::remove_cv_t<T>, char16_t> || std::is_same_v<std::remove_cv_t<T>, char32_t> || std::is_same_v<std::remove_cv_t<T>, wchar_t> || 
+                                                std::is_same_v<std::remove_cv_t<T>, short> || std::is_same_v<std::remove_cv_t<T>, unsigned short> ||
+                                                std::is_same_v<std::remove_cv_t<T>, int> || std::is_same_v<std::remove_cv_t<T>, unsigned int> ||
+                                                std::is_same_v<std::remove_cv_t<T>, long> || std::is_same_v<std::remove_cv_t<T>, unsigned long> ||
+                                                std::is_same_v<std::remove_cv_t<T>, long long> || std::is_same_v<std::remove_cv_t<T>, unsigned long long>> {};
+    template<typename T> inline constexpr bool is_integral_v = is_integral<T>::value;
+
+    template<typename T> struct is_floating_point : std::integral_constant<bool, std::is_same_v<std::remove_cv_t<T>, float> || std::is_same_v<std::remove_cv_t<T>, double> || std::is_same_v<std::remove_cv_t<T>, long double>>  {};
+    template<typename T> inline constexpr bool is_floating_point_v = is_floating_point<T>::value;
+
+    template<typename T> struct is_arithmetic : std::integral_constant<bool, std::is_integral<T>::value || std::is_floating_point<T>::value> {};
+    template<typename T> inline constexpr bool is_arithmetic_v = is_arithmetic<T>::value;
+
     template<typename T> struct is_lvalue_reference : std::false_type {};
     template<typename T> struct is_lvalue_reference<T&> : std::true_type {};
 

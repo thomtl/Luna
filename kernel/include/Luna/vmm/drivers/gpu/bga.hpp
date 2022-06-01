@@ -8,7 +8,7 @@
 #include <Luna/vmm/drivers/pci/pci_driver.hpp>
 #include <Luna/vmm/drivers/gpu/edid.hpp>
 
-#include <Luna/gui/fb_window.hpp>
+#include <Luna/gui/windows/fb_window.hpp>
 
 namespace vm::gpu::bga {
     constexpr size_t dispi = 0x500;

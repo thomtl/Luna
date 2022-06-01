@@ -28,6 +28,11 @@ namespace std
         }
 
         constexpr vector(): _elements{nullptr}, _size{0}, _capacity{0} {}
+
+        explicit vector(size_type count): vector() {
+            resize(count);
+        } 
+
         vector(const std::vector<T>& src): vector{} {
             ensure_capacity(src.size());
             for(size_t i = 0; i < src.size(); i++)
@@ -84,6 +89,8 @@ namespace std
         const_iterator begin() const { return _elements; }
         iterator end() { return _elements + _size; }
         const_iterator end() const { return _elements + _size; }
+
+        std::span<T> span() { return std::span<T>{_elements, _size}; }
 
         struct reverse_iterator {
             reverse_iterator(iterator p): p{p} {}

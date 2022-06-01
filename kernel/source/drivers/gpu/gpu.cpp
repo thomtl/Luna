@@ -35,8 +35,8 @@ gpu::Mode gpu::GpuManager::get_mode() const {
     return curr_mode;
 }
 
-uint8_t* gpu::GpuManager::get_fb() {
-    return backbuffer;
+std::span<uint8_t> gpu::GpuManager::get_fb() {
+    return std::span<uint8_t>{backbuffer, curr_mode.height * curr_mode.pitch};
 }
 
 void gpu::GpuManager::clear_backbuffer() {

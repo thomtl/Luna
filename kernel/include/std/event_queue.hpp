@@ -36,7 +36,7 @@ namespace std {
             queue.clear();
         }
 
-        //private:
+        private:
         std::vector<T> queue;
         threading::Event event;
         IrqTicketLock lock;
