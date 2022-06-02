@@ -20,7 +20,7 @@ constexpr char char_for_index(uint8_t i) {
     return 'A' + i;
 }
 
-char vfs::Vfs::mount(Filesystem* mount) {
+std::optional<char> vfs::Vfs::mount(Filesystem* mount) {
     for(uint8_t i = 0; i < 26; i++) {
         if(mounted_fses[i] == nullptr) {
             mounted_fses[i] = mount;
@@ -28,7 +28,7 @@ char vfs::Vfs::mount(Filesystem* mount) {
         }
     }
 
-    return ' '; // TODO: std::optional or something
+    return std::nullopt;
 }
 
 void vfs::Vfs::unmount(char fs) {

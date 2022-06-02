@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Luna/common.hpp>
+
+#include <std/optional.hpp>
 #include <std/unordered_map.hpp>
 
 namespace vfs {
@@ -23,7 +25,7 @@ namespace vfs {
 
     class Vfs {
         public:
-        char mount(Filesystem* fs);
+        std::optional<char> mount(Filesystem* fs);
         void unmount(char fs);
 
         Filesystem& get_fs(char fs);

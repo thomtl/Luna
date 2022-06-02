@@ -29,16 +29,6 @@ namespace std
     template<typename From, typename To>
     inline constexpr bool is_convertible_v = is_convertible<From, To>::value;
 
-    template<size_t L, size_t A>
-    struct aligned_storage {
-        struct type {
-            alignas(A) unsigned char data[L];
-        };
-    };
-
-    template<size_t L, size_t A = alignof(int)>
-    using aligned_storage_t = typename aligned_storage<L, A>::type;
-
     template< class T >
     struct decay {
     private:

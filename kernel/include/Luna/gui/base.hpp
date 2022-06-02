@@ -6,6 +6,7 @@
 
 #include <std/concepts.hpp>
 #include <std/vector.hpp>
+#include <std/optional.hpp>
 
 namespace gui {
     template<typename T, size_t N> requires std::integral<T> || std::floating_point<T>
@@ -79,10 +80,7 @@ namespace gui {
     static_assert(sizeof(Colour) == 4);
     
     struct NonOwningCanvas {
-        NonOwningCanvas(std::span<Colour> fb, Vec2i size, size_t pitch = 0): size{size}, pitch{pitch / sizeof(Colour)}, fb{fb} {
-            if(pitch == 0)
-                this->pitch = size.x;
-
+        NonOwningCanvas(std::span<Colour> fb, Vec2i size, std::optional<size_t> pitch = std::nullopt): size{size}, pitch{pitch.value_or(size.x)}, fb{fb} {
             ASSERT(fb.size() == (size_t)(size.y * this->pitch));
 
             clear();

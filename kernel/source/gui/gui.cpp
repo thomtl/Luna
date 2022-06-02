@@ -31,7 +31,7 @@ constexpr Colour cursor[cursor_size * cursor_size] = {
 #undef G
 #undef B
 
-Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, gpu_mode{gpu.get_mode()}, fb_canvas{std::span<Colour>{(Colour*)gpu.get_fb().data(), (gpu_mode.height * gpu_mode.pitch) / sizeof(Colour)}, Vec2i{(int64_t)gpu_mode.width, (int64_t)gpu_mode.height}, gpu_mode.pitch} {
+Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, gpu_mode{gpu.get_mode()}, fb_canvas{std::span<Colour>{(Colour*)gpu.get_fb().data(), (gpu_mode.height * gpu_mode.pitch) / sizeof(Colour)}, Vec2i{(int64_t)gpu_mode.width, (int64_t)gpu_mode.height}, gpu_mode.pitch/ sizeof(Colour)} {
     size = {(int64_t)gpu_mode.width, (int64_t)gpu_mode.height};
     pitch = gpu_mode.pitch / 4;
 
@@ -127,8 +127,6 @@ void gui::Desktop::redraw_desktop() {
     // Draw topbar
     draw::rect(fb_canvas, Vec2i{0, 0}, Vec2i{(int)size.x, 20}, Colour{203, 45, 62});
     draw::text(fb_canvas, Vec2i{2, 2}, "Luna", Colour{255, 214, 191}, Colour{0, 0, 0, 0});
-
-    //memcpy(this->gpu->get_main_gpu()->get_lfb(), fb_canvas.fb.data(), fb_canvas.fb.size() * 4);
 
     gpu->flush();
 }

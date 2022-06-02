@@ -12,7 +12,10 @@ bool echfs::probe(fs::Partition& part) {
         return false;
 
     auto point = vfs::get_vfs().mount(new Filesystem{part, superblock});
-    print("echfs: Mounting echfs partition on {:c}\n", point);
+    if(!point)
+        print("echfs: Failed to mount partition\n");
+    else
+        print("echfs: Mounting echfs partition on {:c}\n", *point);
     
     return true;
 }
