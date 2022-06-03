@@ -77,7 +77,7 @@ void gui::Desktop::redraw_desktop() {
             mouse.is_dragging = false;
         } else {
             auto new_pos = mouse.pos + mouse.dragging_offset;
-            new_pos.clamp(Vec2i{decoration_side_width, decoration_top_width + 20}, size - mouse.dragging_window->get_rect().size - Vec2i{decoration_side_width, decoration_top_width});
+            new_pos.clamp(Vec2i{decoration_side_width, decoration_top_width + 20}, size - mouse.dragging_window->get_rect().size - Vec2i{decoration_side_width, decoration_side_width});
 
             mouse.dragging_window->set_pos(new_pos);
         }
