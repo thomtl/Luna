@@ -31,8 +31,15 @@ namespace std
 
     template<>
     struct hash<uint64_t> {
-        size_t operator()(const uint32_t v) const {
+        size_t operator()(const uint64_t v) const {
             return v;
+        }
+    };
+
+    template<>
+    struct hash<int64_t> {
+        size_t operator()(const int64_t v) const {
+            return (size_t)v;
         }
     };
 
