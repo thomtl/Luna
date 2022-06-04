@@ -141,7 +141,7 @@ void ahci::Controller::Port::handle_irq() {
             command_promises[i]->set_value((regs->is >> 30) & 1);
 
     regs->is = (1 << 1) | (1 << 2); // Uninterested
-    regs->is = (1 << 0) | (1 << 30); // Clear known bits
+    regs->is = (1 << 0) | (1 << 5) | (1 << 30); // Clear known bits
     
     if(regs->is)
         print("ahci: Unknown IRQ condition: {:#x}\n", uint32_t{regs->is});
