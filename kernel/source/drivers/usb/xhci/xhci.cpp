@@ -5,6 +5,8 @@
 #include <Luna/drivers/timers/timers.hpp>
 #include <Luna/misc/log.hpp>
 
+#include <std/bit.hpp>
+
 template<typename F>
 bool timeout(uint64_t ms, F f) {
     while(!f()) {
@@ -593,6 +595,62 @@ bool xhci::HCI::setup_ep(xhci::HCI::Port& port, const usb::EndpointData& ep) {
         ctx.max_esit_high = (v >> 16) & 0xFF;
     };
 
+    auto set_interval = [&] {
+        auto parse_exponent_interval = [&] { 
+            ctx.interval = clamp(ep.desc.interval, 1, 16) - 1;
+            //if(ctx.interval != ep.desc.interval - 1)
+            //    print("xhci: Rounding bInterval from {} to {}\n", ep.desc.interval, uint32_t{ctx.interval});
+
+            if(port.speed == portsc::full_speed)
+                ctx.interval += 3; // microframes to frames  
+        };
+
+        auto parse_microframe_interval = [&] {
+            if(ep.desc.interval == 0) {
+                ctx.interval = 0;
+            } else {
+                ctx.interval = clamp(std::find_last_set(ep.desc.interval) - 1, 0, 15);
+                //if((1 << ctx.interval) != ep.desc.interval)
+                //    print("xhci: rounding interval from {} to {} microframes\n", ep.desc.interval, 1 << ctx.interval);
+            }
+        };
+
+        auto parse_frame_interval = [&] {
+            if(ep.desc.interval == 0) {
+                ctx.interval = 0;
+            } else {
+                ctx.interval = clamp(std::find_last_set(ep.desc.interval * 8) - 1, 3, 10);
+                //if((1 << ctx.interval) != (ep.desc.interval * 8))
+                //    print("xhci: rounding interval from {} to {} microframes\n", ep.desc.interval * 8, 1 << ctx.interval);
+            }
+        };
+
+        using namespace usb::spec;
+
+        if(port.speed == portsc::super_speed) {
+            if(ep.desc.ep_type == ep_type::irq || ep.desc.ep_type == ep_type::isoch) {
+                parse_exponent_interval();
+            }
+        } else if(port.speed == portsc::high_speed) {
+            if(ep.desc.ep_type == ep_type::bulk || ep.desc.ep_type == ep_type::control) {
+                parse_microframe_interval();
+            } else if(ep.desc.ep_type == ep_type::irq || ep.desc.ep_type == ep_type::isoch) {
+                parse_exponent_interval();
+            }
+        } else if(port.speed == portsc::full_speed) {
+            if(ep.desc.ep_type == ep_type::isoch) {
+                parse_exponent_interval();
+            } else if(ep.desc.ep_type == ep_type::irq) {
+                parse_frame_interval();
+            }
+        } else if(port.speed == portsc::low_speed) {
+            if(ep.desc.ep_type == ep_type::irq || ep.desc.ep_type == ep_type::isoch) {
+                parse_frame_interval();
+            }
+        }
+    };
+
+    set_interval();
     if(ep.desc.ep_type == usb::spec::ep_type::control) {
         ctx.ep_type = ep_types::control_bi;
 
