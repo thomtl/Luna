@@ -18,4 +18,12 @@ namespace std {
 
         return last;
     }
+
+    template<typename OutputIt, typename Size, typename T>
+    constexpr OutputIt fill_n(OutputIt first, Size count, const T& value) {
+        for(Size i = 0; i < count; i++)
+            *first++ = value;
+
+        return first;
+    }
 } // namespace std
