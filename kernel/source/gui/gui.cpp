@@ -121,12 +121,12 @@ void gui::Desktop::redraw_desktop() {
         fb_canvas.blit_noalpha(rect.pos, rect.size, canvas.fb.data());
     }
 
-    // Draw mouse
-    fb_canvas.blit(mouse.pos, Vec2i{cursor_size, cursor_size}, cursor);
-
     // Draw topbar
     draw::rect(fb_canvas, Vec2i{0, 0}, Vec2i{(int)size.x, 20}, Colour{203, 45, 62});
     draw::text(fb_canvas, Vec2i{2, 2}, "Luna", Colour{255, 214, 191}, Colour{0, 0, 0, 0});
+
+    // Draw mouse
+    fb_canvas.blit(mouse.pos, Vec2i{cursor_size, cursor_size}, cursor);
 
     gpu->flush();
 }
