@@ -663,36 +663,31 @@ bool xhci::HCI::setup_ep(xhci::HCI::Port& port, const usb::EndpointData& ep) {
         if(port.proto->major >= 3)
             ctx.max_burst_size = ep.companion.max_burst;
 
-        // TODO: Set interval for USB2 devices
-        
         ctx.average_trb_len = 0;
     } else if(ep.desc.ep_type == usb::spec::ep_type::irq) {
         ctx.ep_type = ep.desc.dir ? ep_types::interrupt_in : ep_types::interrupt_out;
 
         ctx.error_count = 3;
-        if(port.proto->major >= 3)
+        if(port.speed == portsc::super_speed)
             ctx.max_burst_size = ep.companion.max_burst;
-        else
+        else if(port.speed == portsc::high_speed)
             ctx.max_burst_size = ep.desc.usb2_max_burst - 1;
         
         ctx.average_trb_len = 0;
-
-        // TODO: Set interval
 
         set_max_esit();
     } else if(ep.desc.ep_type == usb::spec::ep_type::isoch) {
         ctx.ep_type = ep.desc.dir ? ep_types::isoch_in : ep_types::isoch_out;
 
         ctx.error_count = 0;
-        if(port.proto->major >= 3)
+        if(port.speed == portsc::super_speed)
             ctx.max_burst_size = ep.companion.max_burst;
-        else
+        else if(port.speed == portsc::high_speed)
             ctx.max_burst_size = ep.desc.usb2_max_burst - 1;
 
         if(port.proto->major >= 3)
             ctx.mult = ep.companion.attributes & 0b11;
 
-        // TODO: Set interval
 
         ctx.average_trb_len = 0;
 
