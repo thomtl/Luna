@@ -54,12 +54,17 @@ static void init(usb::Device& device) {
 
     dev->set_idle();
 
-    spawn([dev] {
-        while(true) {
-            BootReport report{};
-            std::span<uint8_t> data{(uint8_t*)&report, sizeof(report)};
+    uint8_t packet_size = in_data.desc.max_packet_size; // TODO: Can we assume this?
+    ASSERT(packet_size <= 8); // TODO
 
+    spawn([dev, packet_size] {
+        auto* buf = new uint8_t[packet_size];
+        std::span<uint8_t> data{buf, packet_size};
+
+        while(true) {
             dev->in->xfer(data)->await();
+
+            auto report = *(BootReport*)buf;
 
             gui::GuiEvent event{};
             event.type = gui::GuiEvent::Type::MouseUpdate;
@@ -67,6 +72,8 @@ static void init(usb::Device& device) {
             event.mouse.left_button_down = report.buttons & 1;
             dev->queue->push(event);
         }
+
+        delete[] buf;
     });
 }
 
