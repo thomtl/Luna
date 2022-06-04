@@ -81,6 +81,8 @@ namespace std
     template<typename T>
     class lazy_initializer {
         public:
+        constexpr lazy_initializer(): _initialized{false}, _storage{} {}
+
         template<typename... Args>
         T& init(Args&&... args){
             if(_initialized)
