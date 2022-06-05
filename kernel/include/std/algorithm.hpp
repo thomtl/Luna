@@ -26,4 +26,10 @@ namespace std {
 
         return first;
     }
+
+    template<typename ForwardIt, typename Generator>
+    constexpr void generate(ForwardIt first, ForwardIt last, Generator g) {
+        while(first != last)
+            *first++ = g();
+    }
 } // namespace std

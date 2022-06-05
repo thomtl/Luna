@@ -139,6 +139,9 @@ void kernel_main(const stivale2_struct* info) {
         gui::init();
 
         usb::init_devices();
+
+
+        gui::get_desktop().start_gui(); // Only start GUI until after USB devices are mounted
         //vbe::init();
 
         create_vm();

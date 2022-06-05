@@ -33,6 +33,13 @@ namespace std
             resize(count);
         } 
 
+        vector(size_type count, const T& value): vector() {
+            ensure_capacity(count);
+            for(size_t i = 0; i < count; i++)
+                new (&_elements[i]) T(value);
+            _size = count;
+        }
+
         vector(const std::vector<T>& src): vector{} {
             ensure_capacity(src.size());
             for(size_t i = 0; i < src.size(); i++)

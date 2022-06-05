@@ -1,35 +1,10 @@
 #include <Luna/gui/gui.hpp>
 #include <Luna/gui/framework.hpp>
 
+#include <Luna/gui/bmp_parser.hpp>
+#include <Luna/fs/vfs.hpp>
+
 using namespace gui;
-
-#define W Colour{255, 255, 255}
-#define G Colour{127, 127, 127}
-#define B Colour{0, 0, 0, 0}
-
-constexpr int cursor_size = 16;
-constexpr Colour cursor[cursor_size * cursor_size] = {
-    W, B, B, B, B, B, B, B, B, B, B, B, B, B, B, W,
-    B, W, B, B, B, B, B, B, B, B, B, B, B, B, W, B,
-    B, B, W, B, B, B, B, B, B, B, B, B, B, W, B, B,
-    B, B, B, W, B, B, B, B, B, B, B, B, W, B, B, B,
-    B, B, B, B, W, B, B, B, B, B, B, W, B, B, B, B,
-    B, B, B, B, B, W, B, B, B, B, W, B, B, B, B, B,
-    B, B, B, B, B, B, W, B, B, W, B, B, B, B, B, B,
-    B, B, B, B, B, B, B, W, W, B, B, B, B, B, B, B,
-    B, B, B, B, B, B, B, W, W, B, B, B, B, B, B, B,
-    B, B, B, B, B, B, W, B, B, W, B, B, B, B, B, B,
-    B, B, B, B, B, W, B, B, B, B, W, B, B, B, B, B,
-    B, B, B, B, W, B, B, B, B, B, B, W, B, B, B, B,
-    B, B, B, W, B, B, B, B, B, B, B, B, W, B, B, B,
-    B, B, W, B, B, B, B, B, B, B, B, B, B, W, B, B,
-    B, W, B, B, B, B, B, B, B, B, B, B, B, B, W, B,
-    W, B, B, B, B, B, B, B, B, B, B, B, B, B, B, W,
-};
-
-#undef W
-#undef G
-#undef B
 
 Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, gpu_mode{gpu.get_mode()}, fb_canvas{std::span<Colour>{(Colour*)gpu.get_fb().data(), (gpu_mode.height * gpu_mode.pitch) / sizeof(Colour)}, Vec2i{(int64_t)gpu_mode.width, (int64_t)gpu_mode.height}, gpu_mode.pitch/ sizeof(Colour)} {
     size = {(int64_t)gpu_mode.width, (int64_t)gpu_mode.height};
@@ -37,6 +12,45 @@ Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, gpu_mode{gpu.get_mode()}, fb_
 
     mouse.pos = {(int64_t)size.x / 2, (int64_t)size.y / 2};
     mouse.is_dragging = false;
+
+}
+
+void Desktop::start_gui() {
+    {
+        auto* file = vfs::get_vfs().open("A:/luna/assets/background.bmp");
+        if(file) {
+            auto image = bmp_parser::parse_bmp(file);
+            if(!image)
+                PANIC("Couldn't load background");
+
+            file->close();
+
+            background = image->crop(size);
+        } else {
+            background = Image{size, {255, 0, 0}};
+            auto fb = background.span();
+
+            constexpr Colour gradient_a{104, 242, 205};
+            constexpr Colour gradient_b{121, 39, 234};
+            for(int64_t y = 0; y < size.y; y++) {
+                uint8_t idx = y / (size.y / 256);
+                auto c = gradient_a.lerp(idx, gradient_b);
+
+                std::fill_n(fb.begin() + y * size.x, size.x, c);
+            }
+        }
+    }
+
+    {
+        auto file = vfs::get_vfs().open("A:/luna/assets/cursor.bmp");
+        ASSERT(file);
+        auto image = bmp_parser::parse_bmp(file);
+        if(!image)
+            PANIC("Couldn't load cursor");
+        file->close();
+
+        cursor = std::move(*image);
+    }
 
     spawn([this] {
         while(true) {
@@ -47,7 +61,7 @@ Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, gpu_mode{gpu.get_mode()}, fb_
                     using enum GuiEvent::Type;
                     case MouseUpdate:
                         mouse.pos += event.mouse.pos;
-                        mouse.pos.clamp({0, 0}, {(int)size.x - cursor_size, (int)size.y - cursor_size});
+                        mouse.pos.clamp({0, 0}, size - cursor.get_res());
                         mouse.left_button_down = event.mouse.left_button_down;
 
                         redraw = true;
@@ -101,7 +115,7 @@ void gui::Desktop::redraw_desktop() {
         }
     }
 
-    fb_canvas.clear();
+    fb_canvas.blit_noalpha({0, 0}, {0, 0}, size, background.canvas());
 
     for(auto* window : windows) {
         // Draw decorations
@@ -117,8 +131,7 @@ void gui::Desktop::redraw_desktop() {
         draw::text(fb_canvas, rect.pos - Vec2i{decoration_side_width, decoration_top_width - 1} + Vec2i{rect.size.x / 2, 0}, window->get_title(), Colour{0, 0, 0}, decoration_colour, draw::TextAlign::Center);
 
         // Actually blit screen
-        const auto& canvas = window->get_canvas();
-        fb_canvas.blit_noalpha(rect.pos, rect.size, canvas.fb.data());
+        fb_canvas.blit_noalpha(rect.pos, {0, 0}, rect.size, window->get_canvas());
     }
 
     // Draw topbar
@@ -126,7 +139,7 @@ void gui::Desktop::redraw_desktop() {
     draw::text(fb_canvas, Vec2i{2, 2}, "Luna", Colour{255, 214, 191}, Colour{0, 0, 0, 0});
 
     // Draw mouse
-    fb_canvas.blit(mouse.pos, Vec2i{cursor_size, cursor_size}, cursor);
+    fb_canvas.blit(mouse.pos, {0, 0}, cursor.get_res(), cursor.canvas());
 
     gpu->flush();
 }

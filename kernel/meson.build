@@ -66,6 +66,7 @@ main_sources = files(
     'source/fs/storage_dev.cpp',
     'source/fs/vfs.cpp',
 
+    'source/gui/bmp_parser.cpp',
     'source/gui/framework.cpp',
     'source/gui/gui.cpp',
 

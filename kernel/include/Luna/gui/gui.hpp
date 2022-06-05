@@ -27,7 +27,7 @@ namespace gui {
     };
 
     struct Window {
-        Window(Vec2i size, const char* title): fb{(size_t)(size.x * size.y)}, canvas{fb.span(), size}, title{title}, pos{0, 0}, size{size} {}
+        Window(Vec2i size, const char* title): fb{size}, canvas{fb.canvas()}, title{title}, pos{0, 0}, size{size} {}
         virtual ~Window() {}
 
         Rect get_rect() const { return Rect{pos, size}; }
@@ -43,7 +43,7 @@ namespace gui {
         }
 
         protected:
-        std::vector<Colour> fb;
+        Image fb;
         NonOwningCanvas canvas;
         const char* title;
 
@@ -56,6 +56,8 @@ namespace gui {
 
     struct Desktop {
         Desktop(gpu::GpuManager& gpu);
+        void start_gui();
+        
         void add_window(Window* window) {
             static int size = 0;
 
@@ -82,6 +84,8 @@ namespace gui {
 
         IrqTicketLock compositor_lock;
         std::vector<Window*> windows;
+
+        Image background, cursor;
 
         //volatile uint32_t* fb;
         Vec2i size;

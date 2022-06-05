@@ -6,6 +6,7 @@
 
 #include <std/concepts.hpp>
 #include <std/vector.hpp>
+#include <std/algorithm.hpp>
 #include <std/optional.hpp>
 
 namespace gui {
@@ -28,6 +29,10 @@ namespace gui {
             return {x - b.x, y - b.y};
         }
 
+        Vec operator/(const T& b) const {
+            return {x / b, y / b};
+        }
+
         Vec& operator+=(const Vec& b) {
             x += b.x;
             y += b.y;
@@ -35,14 +40,13 @@ namespace gui {
             return *this;
         }
 
+        bool operator==(const Vec& b) {
+            return (x == b.x) && (y == b.y);
+        }
+
         void clamp(Vec min, Vec max) {
             x = ::clamp(x, min.x, max.x);
             y = ::clamp(y, min.y, max.y);
-        }
-
-        void lerp(Vec b, float a) {
-            x = x * (1 - a) + b.x * a;
-            y = y * (1 - a) + b.y * a;
         }
 
         bool collides_with(Vec pos, Vec size) {
@@ -72,6 +76,15 @@ namespace gui {
             return {(uint8_t)(r + b.r), (uint8_t)(g + b.g), (uint8_t)(this->b + b.b), a};
         }
 
+        constexpr Colour lerp(uint8_t t, const Colour& other) const {
+            auto r = (this->r * (256 - t) + other.r * t) / 256;
+            auto g = (this->g * (256 - t) + other.g * t) / 256;
+            auto b = (this->g * (256 - t) + other.b * t) / 256;
+            auto a = (this->a * (256 - t) + other.a * t) / 256;
+
+            return {(uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)a};
+        }
+
         uint32_t raw;
         struct {
             uint8_t b, g, r, a;
@@ -82,8 +95,6 @@ namespace gui {
     struct NonOwningCanvas {
         NonOwningCanvas(std::span<Colour> fb, Vec2i size, std::optional<size_t> pitch = std::nullopt): size{size}, pitch{pitch.value_or(size.x)}, fb{fb} {
             ASSERT(fb.size() == (size_t)(size.y * this->pitch));
-
-            clear();
         }
 
         [[gnu::always_inline]]
@@ -93,29 +104,30 @@ namespace gui {
         }
 
         [[gnu::always_inline]]
-        inline void blit(const Vec2i& pos, const Vec2i& size, const Colour* bitmap) {
-            Colour* line = &fb[pos.x + pos.y * pitch];
+        inline void blit(const Vec2i& dst_pos, const Vec2i& src_pos, const Vec2i& size, const NonOwningCanvas& bitmap) {
+            Colour* dst_line = &fb[dst_pos.x + dst_pos.y * pitch];
+            const Colour* src_line = &bitmap.fb[src_pos.x + src_pos.y * bitmap.pitch];
             
             for(int64_t i = 0; i < size.y; i++) {
-                //auto line_pos = pos + Vec2i{0, i};
-                //memcpy((void*)(fb + (line_pos.x + line_pos.y * pitch)), bitmap + i * size.y, size.x * sizeof(Colour));
-
                 for(int64_t j = 0; j < size.x; j++) {
-                    auto c = bitmap[i * size.x + j];
+                    auto c = src_line[j];
                     if(c.a < 255)
                         continue;
-                    line[j] = c;
+
+                    dst_line[j] = c;
                 }
 
-                line += pitch;
+                dst_line += pitch;
+                src_line += bitmap.pitch;
             }
         }
 
         [[gnu::always_inline]]
-        inline void blit_noalpha(const Vec2i& pos, const Vec2i& size, const Colour* bitmap) {
+        inline void blit_noalpha(const Vec2i& dst_pos, const Vec2i& src_pos, const Vec2i& size, const NonOwningCanvas& bitmap) {
             for(int64_t i = 0; i < size.y; i++) {
-                auto line_pos = pos + Vec2i{0, i};
-                memcpy((void*)(fb.data() + (line_pos.x + line_pos.y * pitch)), bitmap + i * size.x, size.x * sizeof(Colour));
+                auto dst_line_pos = dst_pos + Vec2i{0, i};
+                auto src_line_pos = src_pos + Vec2i{0, i};
+                memcpy((void*)(fb.data() + (dst_line_pos.x + dst_line_pos.y * pitch)), (void*)(bitmap.fb.data() + (src_line_pos.x + src_line_pos.y * bitmap.pitch)), size.x * sizeof(Colour));
             }
         }
 
@@ -136,13 +148,51 @@ namespace gui {
             }
         }
         
-        void clear() {
+        void clear(const Colour& clear_color = Colour(0, 0, 0)) {
             for(auto& e : fb)
-                e = Colour{0, 0, 0};
+                e = clear_color;
         }
 
         Vec2i size;
         size_t pitch;
         std::span<Colour> fb;
+    };
+
+    struct Image {
+        Image(): res{0, 0}, data{} {}
+        
+        Image(Vec2i res, Colour* bitmap = nullptr): res{res}, data{(size_t)(res.x * res.y)} {
+            if(bitmap)
+                memcpy(data.data(), bitmap, res.x * res.y * sizeof(Colour));
+        }
+
+        Image(Vec2i res, Colour fill_colour): res{res}, data{(size_t)(res.x * res.y), fill_colour} { }
+
+        NonOwningCanvas canvas() { return NonOwningCanvas{data.span(), res}; }
+        std::span<Colour> span() { return data.span(); }
+        Vec2i get_res() const { return res; }
+
+        Image crop(const Vec2i& new_res) {
+            if(res == new_res)
+                return *this;
+
+            ASSERT(new_res.x < res.x && new_res.y < res.y);
+
+            auto half_res = new_res / 2;
+            auto src_center = res / 2;
+
+            Rect src_rect{src_center - half_res, new_res};
+
+            Image image{new_res};
+            image.canvas().blit_noalpha({0, 0}, src_rect.pos, src_rect.size, canvas());
+
+            return image;
+        }
+
+
+
+        private:
+        Vec2i res;
+        std::vector<Colour> data;
     };
 } // namespace gui

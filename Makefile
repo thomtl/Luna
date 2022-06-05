@@ -1,4 +1,4 @@
-.PHONY: configure kernel bios test_guest run
+.PHONY: all configure kernel assets bios test_guest run debug
 
 all: run
 
@@ -33,6 +33,11 @@ kernel:
 
 	echfs-utils -m -p0 luna.hdd import build/kernel/luna.bin boot/luna.bin
 
+	
+
+assets:
+	echfs-utils -m -p0 luna.hdd import misc/cursor.bmp luna/assets/cursor.bmp
+
 bios:
 	make -C build/seabios -j8
 	
@@ -50,10 +55,10 @@ QEMU_FLAGS := -enable-kvm -cpu host -device intel-iommu,aw-bits=48 -machine q35 
 			  -device ich9-intel-hda -device hda-output \
 			  -device qemu-xhci -device usb-mouse
 
-run: kernel bios test_guest
+run: kernel assets bios test_guest
 	qemu-system-x86_64 ${QEMU_FLAGS}
 
-debug: kernel bios test_guest
+debug: kernel assets bios test_guest
 	qemu-system-x86_64 ${QEMU_FLAGS} -s -S &
 
 	gdb build/kernel/luna.bin -ex "target remote localhost:1234" -ex "set disassemble-next-line on" -ex "set disassembly-flavor intel"
