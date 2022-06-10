@@ -76,7 +76,7 @@ void create_vm();
 
 void kernel_main(const stivale2_struct* info) {
     log::select_logger(log::LoggerType::Early);
-    print("Booting Luna, Copyright Thomas Woertman 2020\nBootloader: {:s} {:s}\n", info->bootloader_brand, info->bootloader_version);
+    print("Booting Luna, Copyright Thomas Woertman 2020 - 2022\nBootloader: {:s} {:s}\n", info->bootloader_brand, info->bootloader_version);
 
     cpu::early_init();
     vmm::init_bsp(); // This doesn't actually allocate any memory or anything, it just detects 5 level paging and sets phys_mem_map
