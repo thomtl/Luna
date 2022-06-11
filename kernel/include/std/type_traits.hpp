@@ -5,6 +5,7 @@
 
 namespace std
 {
+    // Taken from https://en.cppreference.com/w/cpp/types/is_convertible
     namespace detail
     {
         template<typename>
@@ -29,7 +30,8 @@ namespace std
     template<typename From, typename To>
     inline constexpr bool is_convertible_v = is_convertible<From, To>::value;
 
-    template< class T >
+    // Taken from https://en.cppreference.com/w/cpp/types/decay
+    template<typename T>
     struct decay {
     private:
         typedef typename std::remove_reference<T>::type U;
@@ -45,11 +47,9 @@ namespace std
         >::type type;
     };
  
-    template <class...>
-    struct common_type {};
-
-    template <class T>
-    struct common_type<T> : common_type<T, T> {};
+    // Taken from https://en.cppreference.com/w/cpp/types/common_type
+    template <typename...> struct common_type {};
+    template <typename T> struct common_type<T> : common_type<T, T> {};
 
     namespace detail {
         template <class T1, class T2>

@@ -6,6 +6,7 @@
 
 namespace std
 {
+    // Taken from https://en.cppreference.com/w/cpp/memory/to_address
     template<typename T>
     constexpr T* to_address(T* p) {
         static_assert(!std::is_function_v<T>);

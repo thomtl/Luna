@@ -4,6 +4,7 @@
 #include <std/bits/move.hpp>
 
 namespace std {
+    // Taken from https://en.cppreference.com/w/cpp/utility/optional/nullopt_t
     struct nullopt_t {
         explicit constexpr nullopt_t(int) {}
     };
