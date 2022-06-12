@@ -49,7 +49,7 @@ namespace gui {
             y = ::clamp(y, min.y, max.y);
         }
 
-        bool collides_with(Vec pos, Vec size) {
+        bool collides_with(Vec pos, Vec size) const {
             return (x >= pos.x && x <= (pos.x + size.x)) && (y >= pos.y && y <= (pos.y + size.y));
         }
     };
@@ -93,6 +93,7 @@ namespace gui {
     static_assert(sizeof(Colour) == 4);
     
     struct NonOwningCanvas {
+        NonOwningCanvas() = default;
         NonOwningCanvas(std::span<Colour> fb, Vec2i size, std::optional<size_t> pitch = std::nullopt): size{size}, pitch{pitch.value_or(size.x)}, fb{fb} {
             ASSERT(fb.size() == (size_t)(size.y * this->pitch));
         }
@@ -151,6 +152,10 @@ namespace gui {
         void clear(const Colour& clear_color = Colour(0, 0, 0)) {
             for(auto& e : fb)
                 e = clear_color;
+        }
+
+        NonOwningCanvas subcanvas(const Rect& rect) {
+            return NonOwningCanvas{std::span<Colour>{fb.data() + rect.pos.x + rect.pos.y * pitch, rect.size.y * pitch}, rect.size, pitch};
         }
 
         Vec2i size;

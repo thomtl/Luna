@@ -9,6 +9,17 @@
 
 namespace std
 {
+    template<typename T, T... Ints>
+    struct integer_sequence {
+        using value_type = T;
+        static constexpr size_t size() noexcept { return sizeof...(Ints); }
+    };
+
+    template<size_t... Ints> using index_sequence = std::integer_sequence<size_t, Ints...>;
+    template<typename T, T N> using make_integer_sequence = std::integer_sequence<T, __integer_pack(N)...>;
+    template<size_t N> using make_index_sequence = std::make_integer_sequence<size_t, N>;
+    template<typename... T> using index_sequence_for = std::make_index_sequence<sizeof...(T)>;
+
     template<typename T>
     constexpr void swap(T& a, T& b) {
         T tmp{move(a)};

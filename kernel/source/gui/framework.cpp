@@ -13,7 +13,7 @@ void gui::draw::rect(gui::NonOwningCanvas& canvas, Rect rect, Colour colour) {
 void gui::draw::text(gui::NonOwningCanvas& canvas, Vec2i pos, const char* text, Colour fg, Colour bg, TextAlign align) {
     auto size = strlen(text);
     if(align == TextAlign::Center)
-        pos.x -= (size * 8) / 2;
+        pos.x -= (size * font::width) / 2;
 
     for(size_t i = 0; i < size; i++)
         canvas.put_char(pos + Vec2i{(int32_t)(8 * i), 0}, text[i], fg, bg);

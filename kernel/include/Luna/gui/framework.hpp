@@ -14,7 +14,7 @@ namespace gui::draw {
 
         void putc(const char c) {
             _canvas->put_char(_pos, c, _fg, _bg);
-            _pos += Vec2i{8, 0}; // TODO
+            _pos += Vec2i{font::width, 0}; // TODO
         }
 
         private:

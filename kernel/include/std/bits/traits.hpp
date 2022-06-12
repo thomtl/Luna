@@ -160,4 +160,7 @@ namespace std
 
     template<size_t L, size_t A = alignof(int)>
     using aligned_storage_t = typename aligned_storage<L, A>::type;
+
+    template<typename T, typename... Args> struct is_constructible : std::integral_constant<bool, __is_constructible(T, Args...)> { };
+    template<typename T, typename... Args> inline constexpr bool is_constructible_v = is_constructible<T, Args...>::value;
 } // namespace std
