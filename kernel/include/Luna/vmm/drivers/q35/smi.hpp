@@ -10,7 +10,7 @@ namespace vm::q35::smi {
     constexpr uint16_t smi_cmd = 0xb2;
     constexpr uint16_t smi_sts = 0xb3;
 
-    struct Driver : public vm::AbstractPIODriver {
+    struct Driver final : public vm::AbstractPIODriver {
         Driver(Vm* vm): vm{vm}, cmd{0}, sts{0}, smi_callback{nullptr}, smi_userptr{nullptr} {
             vm->pio_map[smi_cmd] = this;
             vm->pio_map[smi_sts] = this;

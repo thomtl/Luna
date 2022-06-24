@@ -35,7 +35,7 @@ namespace vm::cmos {
 
     };
 
-    struct Driver : public vm::AbstractPIODriver {
+    struct Driver final : public vm::AbstractPIODriver {
         Driver(Vm* vm) {
             vm->pio_map[base + cmd] = this;
             vm->pio_map[base + data] = this;

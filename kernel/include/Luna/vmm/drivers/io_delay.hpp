@@ -4,7 +4,7 @@
 #include <Luna/vmm/vm.hpp>
 
 namespace vm::io_delay {
-    struct Driver : public vm::AbstractPIODriver {
+    struct Driver final : public vm::AbstractPIODriver {
         Driver(Vm* vm) {
             vm->pio_map[0xED] = this; // 0xED and 0x80 are commonly used as short io delays, but thats only needed on real hw
             vm->pio_map[0x80] = this;

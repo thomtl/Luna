@@ -7,7 +7,7 @@
 #include <Luna/net/udp.hpp>
 
 namespace net::luna_debug {
-    struct Writer : public log::Logger {
+    struct Writer final : public log::Logger {
         ~Writer() { flush(); }
         
         void putc(const char c) {

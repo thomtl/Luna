@@ -9,7 +9,7 @@ namespace gui::draw {
     enum class TextAlign { None, Center };
     void text(NonOwningCanvas& canvas, Vec2i pos, const char* text, Colour fg = Colour(255, 255, 255), Colour bg = Colour(0, 0, 0), TextAlign align = TextAlign::None);
 
-    struct TextWriter : public log::Logger {
+    struct TextWriter final : public log::Logger {
         TextWriter(NonOwningCanvas& canvas, Vec2i pos, Colour fg = Colour(255, 255, 255), Colour bg = Colour(0, 0, 0)): _canvas(&canvas), _pos{pos}, _fg{fg}, _bg{bg} {}
 
         void putc(const char c) {

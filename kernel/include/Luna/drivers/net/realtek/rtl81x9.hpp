@@ -152,7 +152,7 @@ namespace rtl81x9 {
         } descriptor[n_descriptor_sets];
     };
 
-    struct Nic : public net::Nic {
+    struct Nic final : public net::Nic {
         Nic(pci::Device& device, uint16_t did);
 
         bool send_packet(const net::Mac& dst, uint16_t ethertype, const std::span<uint8_t>& packet, uint32_t offload);

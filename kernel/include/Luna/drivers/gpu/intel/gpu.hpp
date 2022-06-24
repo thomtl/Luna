@@ -11,7 +11,7 @@ extern "C" {
 }
 
 namespace intel_gpu {
-    class Gpu : public gpu::AbstractGpu {
+    class Gpu final : public gpu::AbstractGpu {
         public:
         Gpu(pci::Device* dev);
 

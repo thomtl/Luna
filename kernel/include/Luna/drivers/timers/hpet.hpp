@@ -24,7 +24,7 @@ namespace hpet {
 
     struct Device;
 
-    struct Comparator : public timers::AbstractHardwareTimer {
+    struct Comparator final : public timers::AbstractHardwareTimer {
         timers::HardwareTimerCapabilities get_capabilities() override;
         bool start_timer(bool periodic, uint64_t ns, void(*f)(void*), void* userptr) override;
         void poll_msleep(size_t ms) override;

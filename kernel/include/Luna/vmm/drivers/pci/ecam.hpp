@@ -29,7 +29,7 @@ namespace vm::pci::ecam {
     };
     static_assert(sizeof(EcamAddress) == 8);
 
-    struct Driver : public vm::AbstractMMIODriver {
+    struct Driver final : public vm::AbstractMMIODriver {
         Driver(Vm* vm, HostBridge* bridge, uint16_t segment): vm{vm}, bridge{bridge}, segment{segment}, curr_config{.base = 0, .size = 0, .bus_start = 0, .bus_end = 0, .enabled = false} {}
 
         void update_region(const EcamConfig& config) {

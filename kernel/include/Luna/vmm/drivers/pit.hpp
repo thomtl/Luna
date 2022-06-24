@@ -8,7 +8,7 @@
 namespace vm::pit {
     constexpr uint16_t channel2_status = 0x61;
 
-    struct Driver : public vm::AbstractPIODriver {
+    struct Driver final : public vm::AbstractPIODriver {
         Driver(Vm* vm) {
             vm->pio_map[channel2_status] = this;
         }

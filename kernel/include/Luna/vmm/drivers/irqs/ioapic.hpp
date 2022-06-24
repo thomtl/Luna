@@ -17,7 +17,7 @@ namespace vm::irqs::ioapic {
     constexpr uint8_t ioapic_version = 0x20; // Most recent version
     constexpr uint8_t n_redirection_entries = 0x17;
 
-    struct Driver : public vm::AbstractMMIODriver {
+    struct Driver final : public vm::AbstractMMIODriver {
         Driver(Vm* vm, uint32_t apic_id, uint64_t base): vm{vm}, apic_id{apic_id}, base{base} {
             vm->mmio_map[base] = {this, 0x1000};
         }

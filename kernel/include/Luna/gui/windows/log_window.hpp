@@ -6,7 +6,7 @@
 #include <Luna/misc/font.hpp>
 
 namespace gui {
-    struct LogWindow : public Window, public log::Logger {
+    struct LogWindow final : public Window, public log::Logger {
         LogWindow(Vec2i size_chars, const char* title): Window{{size_chars.x * font::width + 1, size_chars.y * font::height}, title}, offset{0}, curr_x{0}, curr_y{0}, size_chars{size_chars}, fg{255, 255, 255}, bg{0, 0, 0}, colour_intensity{0, 0, 0} { }
 
         void update() {

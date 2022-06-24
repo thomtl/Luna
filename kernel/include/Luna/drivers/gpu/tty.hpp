@@ -6,7 +6,7 @@
 #include <Luna/misc/log.hpp>
 
 namespace tty {
-    struct Writer : public log::Logger {
+    struct Writer final : public log::Logger {
         Writer();
         void putc(const char c);
         void flush();

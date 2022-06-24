@@ -14,7 +14,7 @@ namespace vm::pci::pio_access {
     constexpr uint16_t config_address = 0;
     constexpr uint16_t config_data = 4;
 
-    struct Driver : public vm::AbstractPIODriver {
+    struct Driver final : public vm::AbstractPIODriver {
         Driver(Vm* vm, uint16_t base, uint16_t segment, HostBridge* bridge): base{base}, segment{segment}, bridge{bridge} {
             vm->pio_map[base + config_address] = this;
             vm->pio_map[base + config_address + 1] = this;

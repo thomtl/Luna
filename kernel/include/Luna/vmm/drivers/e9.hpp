@@ -6,7 +6,7 @@
 #include <Luna/misc/log.hpp>
 
 namespace vm::e9 {
-    struct Driver : public vm::AbstractPIODriver {
+    struct Driver final : public vm::AbstractPIODriver {
         Driver(Vm* vm, log::Logger* logger): logger{logger} {
             vm->pio_map[0xe9] = this;
         }

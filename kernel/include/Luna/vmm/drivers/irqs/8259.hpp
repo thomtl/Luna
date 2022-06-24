@@ -18,7 +18,7 @@ namespace vm::irqs::pic {
     constexpr uint16_t elcr_master = 0x4D0;
     constexpr uint16_t elcr_slave = 0x4D1;
 
-    struct Driver : public vm::AbstractPIODriver, public vm::AbstractIRQListener {
+    struct Driver final : public vm::AbstractPIODriver, public vm::AbstractIRQListener {
         Driver(Vm* vm): vm{vm} {
             pics[0].elcr_mask = 0xF8;
             pics[1].elcr_mask = 0xDE;

@@ -5,7 +5,7 @@
 
 /*#include <Luna/net/luna_debug.hpp>
 
-struct MMIOCapture : public vm::AbstractMMIODriver {
+struct MMIOCapture final : public vm::AbstractMMIODriver {
     MMIOCapture(uintptr_t base, size_t len): base{base}, len{len} {}
 
     void register_mmio_driver(vm::Vm* vm) {

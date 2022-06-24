@@ -6,7 +6,7 @@
 #include <Luna/misc/stivale2.hpp>
 
 namespace lfb {
-    class Gpu : public gpu::AbstractGpu {
+    class Gpu final : public gpu::AbstractGpu {
         public:
         Gpu(stivale2::Parser& boot);
 

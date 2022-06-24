@@ -13,7 +13,7 @@
 
 namespace vm::irqs::lapic {
     // LAPIC is a bit weird and not a normal MMIO driver
-    struct Driver : public vm::AbstractMMIODriver {
+    struct Driver final : public vm::AbstractMMIODriver {
         Driver(uint8_t id): id{id}, svr{0xFF} {}
 
         void register_mmio_driver([[maybe_unused]] Vm* vm) {}

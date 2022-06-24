@@ -47,14 +47,14 @@ namespace vm::pci {
         std::unique_ptr<ConfigSpace> pci_space;
         protected:
         // Handlers
-        void pci_write([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint32_t value, uint8_t size) {            
+        void pci_write([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint32_t value, uint8_t size) final {
             if(ranges_overlap(reg, size, 0, sizeof(pci::ConfigSpaceHeader)))
                 pci_update(reg, size, value);
             else // Delegate to real driver
                 pci_handle_write(reg, value, size);
         }
 
-        uint32_t pci_read([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint8_t size) {
+        uint32_t pci_read([[maybe_unused]] const vm::pci::DeviceID dev, uint16_t reg, uint8_t size) final {
             uint32_t ret = 0;
             switch (size) {
                 case 1: ret = pci_space->data8[reg]; break;

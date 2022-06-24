@@ -6,7 +6,7 @@
 
 
 namespace vm::gpu::vga {
-    struct Driver : public vm::AbstractMMIODriver, public vm::AbstractPIODriver {
+    struct Driver final : public vm::AbstractMMIODriver, public vm::AbstractPIODriver {
         Driver(Vm* vm) {
             vm->mmio_map[0xA'0000] = {this, 0x2'0000};
             vm->pio_map[0x3D4] = this;

@@ -337,7 +337,7 @@ namespace xhci {
     };
 
 
-    struct CmdRing : public TRBRing {
+    struct CmdRing final : public TRBRing {
         CmdRing(iovmm::Iovmm& mm, size_t n_entries, volatile uint32_t* doorbell): TRBRing{mm, n_entries, RingType::Command}, completion{}, doorbell{doorbell} { 
             completion.resize(this->n_entries); // Use the member, not the variable, they are different due to the TRBLink
         }
@@ -370,7 +370,7 @@ namespace xhci {
         volatile uint32_t* doorbell;
     };
 
-    struct TransferRing : public TRBRing {
+    struct TransferRing final : public TRBRing {
         TransferRing(iovmm::Iovmm& mm, size_t n_entries, volatile uint32_t* doorbell): TRBRing{mm, n_entries, RingType::Command}, promise_list{}, doorbell{doorbell} { 
             promise_list.resize(this->n_entries); // Use the member, not the variable, they are different due to the TRBLink
         }

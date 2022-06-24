@@ -11,7 +11,7 @@ namespace vga {
     constexpr uint8_t screen_width = 80;
     constexpr uint8_t screen_height = 25;
 
-    struct Writer : public log::Logger {
+    struct Writer final : public log::Logger {
         Writer(): fb{(uint16_t*)(fb_pa + phys_mem_map)} {}
         void putc(const char c);
 

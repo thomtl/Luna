@@ -30,7 +30,7 @@ namespace vm::gpu::bga {
     constexpr size_t max_x = 512, max_y = 512;
     
 
-    struct Driver : public vm::AbstractMMIODriver, vm::pci::PCIDriver {
+    struct Driver final : public vm::AbstractMMIODriver, vm::pci::PCIDriver {
         Driver(vm::Vm* vm, pci::HostBridge* bridge, vfs::File* vgabios, uint8_t slot): PCIDriver{vm}, vm{vm} {
             bridge->register_pci_driver(pci::DeviceID{0, 0, slot, 0}, this);
             pci_set_option_rom(vgabios);

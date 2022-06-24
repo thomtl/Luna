@@ -34,7 +34,7 @@ namespace vm::q35::acpi {
     constexpr uint16_t glb_smi_en = (1 << 0);
     constexpr uint16_t apmc_en = (1 << 5);
 
-    struct Driver : public vm::AbstractPIODriver {
+    struct Driver final : public vm::AbstractPIODriver {
         Driver(vm::Vm* vm, vm::q35::smi::Driver* smi_dev): vm{vm}, smi_dev{smi_dev}, start_ns{::timers::time_ns()} {
             smi_dev->register_smi_cmd_callback([](smi::Driver* smi, void* self_ptr) {
                 auto& self = *(Driver*)self_ptr;

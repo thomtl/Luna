@@ -32,7 +32,7 @@ namespace vm::hpet {
     constexpr uint64_t comparator_config_clear_bits = (1 << 15); // No FSB IRQs support
     constexpr uint64_t comparator_config_set_bits = (1 << 4) | (1 << 5); // Periodic support, 64bit timer
 
-    struct Driver : public vm::AbstractMMIODriver {
+    struct Driver final : public vm::AbstractMMIODriver {
         Driver(Vm* vm): vm{vm} {
             vm->mmio_map[base] = {this, 0x1000};
 

@@ -196,7 +196,7 @@ namespace svm {
     uint64_t get_cr0_constraint();
     uint64_t get_efer_constraint();
 
-    struct Vm : public vm::AbstractVm {
+    struct Vm final : public vm::AbstractVm {
         Vm(vm::AbstractMM* mm, vm::VCPU* vcpu);
         ~Vm();
         bool run(vm::VmExit& exit);

@@ -45,7 +45,7 @@ namespace echfs {
 
     struct Filesystem;
 
-    struct File : public vfs::File {
+    struct File final : public vfs::File {
         File(Filesystem* fs, const DirectoryEntry& entry, size_t i);
 
         vfs::FileType get_type();
@@ -64,7 +64,7 @@ namespace echfs {
         Filesystem* fs;
     };
 
-    struct Filesystem : public vfs::Filesystem {
+    struct Filesystem final : public vfs::Filesystem {
         Filesystem(fs::Partition& part, const Superblock& superblock);
         vfs::File* open(const char* path);
 

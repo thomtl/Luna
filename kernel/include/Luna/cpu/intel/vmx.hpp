@@ -281,7 +281,7 @@ namespace vmx {
         uint64_t dr0, dr1, dr2, dr3, dr6;
     };
 
-    struct Vm : public vm::AbstractVm {
+    struct Vm final : public vm::AbstractVm {
         Vm(vm::AbstractMM* mm, vm::VCPU* vcpu);
         bool run(vm::VmExit& exit);
 

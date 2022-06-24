@@ -33,7 +33,7 @@ namespace npt {
     };
     static_assert(sizeof(page_table) == pmm::block_size);
 
-    class context : public vm::AbstractMM {
+    class context final : public vm::AbstractMM {
         public:
         context() = default;
         context(uint8_t levels);
