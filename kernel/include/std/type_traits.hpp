@@ -79,4 +79,18 @@ namespace std
     
     template< class... T >
     using common_type_t = typename common_type<T...>::type;
+
+    // Nonstandard
+    template<typename T>
+    struct dependent_false : std::false_type { };
+
+    template<typename T> struct is_trivially_destructible : std::integral_constant<bool, __has_trivial_destructor(T)> { };
+    template<typename T> inline constexpr bool is_trivially_destructible_v = is_trivially_destructible<T>::value;
+
+    template<typename T> struct is_trivially_copy_constructible : std::integral_constant<bool, __has_trivial_copy(T)> { };
+    template<typename T> inline constexpr bool is_trivially_copy_constructible_v = is_trivially_copy_constructible<T>::value;
+
+    template<typename Base, typename Derived> struct is_base_of : std::integral_constant<bool, __is_base_of(Base, Derived)> { };
+    template<typename Base, typename Derived> inline constexpr bool is_base_of_v = is_base_of<Base, Derived>::value;
+
 } // namespace std

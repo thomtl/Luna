@@ -163,4 +163,10 @@ namespace std
 
     template<typename T, typename... Args> struct is_constructible : std::integral_constant<bool, __is_constructible(T, Args...)> { };
     template<typename T, typename... Args> inline constexpr bool is_constructible_v = is_constructible<T, Args...>::value;
+
+    template<typename T> struct is_trivially_copyable : std::integral_constant<bool, __has_trivial_copy(T)> { };
+    template<typename T> inline constexpr bool is_trivially_copyable_v = is_trivially_copyable<T>::value;
+
+    template<typename T> struct add_const { using type = const T; };
+    template<typename T> using add_const_t = add_const<T>::type;
 } // namespace std

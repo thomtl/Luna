@@ -14,4 +14,7 @@ namespace std {
 
     template<typename T>
     concept floating_point = std::is_floating_point_v<T>;
+
+    template<typename Derived, typename Base>
+    concept derived_from = std::is_base_of_v<Base, Derived> && std::is_convertible_v<const volatile Derived*, const volatile Base*>;
 } // namespace std

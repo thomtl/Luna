@@ -19,17 +19,22 @@ namespace std {
         constexpr optional() noexcept : _storage{}, _constructed{false} {}
         constexpr optional(std::nullopt_t) noexcept : _storage{}, _constructed{false} {}
 
-        template<typename U = T>
+        template<typename U = T> requires(std::is_constructible_v<T, U&&>)
         explicit(!std::is_convertible_v<U&&, T>)
         constexpr optional(U&& value) {
             new (_storage.data) T(value);
             _constructed = true;
         }
 
-        constexpr ~optional() {
+        constexpr optional(const optional&) requires(std::is_trivially_copy_constructible_v<T>) = default;
+        constexpr optional(const optional&) = delete;
+
+        constexpr ~optional() requires(!std::is_trivially_destructible_v<T>) {
             if(_constructed)
                 value().T::~T();
         }
+
+        constexpr ~optional() = default;
 
         constexpr T* operator->() noexcept { return (T*)(_storage.data); }
         constexpr const T* operator->() const noexcept { return (const T*)(_storage.data); }

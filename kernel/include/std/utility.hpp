@@ -7,8 +7,7 @@
 #include <std/bits/move.hpp>
 #include <std/functional.hpp>
 
-namespace std
-{
+namespace std {
     template<typename T, T... Ints>
     struct integer_sequence {
         using value_type = T;
@@ -89,6 +88,30 @@ namespace std
     template<typename T1, typename T2>
     struct tuple_size<pair<T1, T2>> : std::integral_constant<size_t, 2> {};
 
+    template<size_t I, typename T>
+    struct tuple_element; // Forward decl
+
+    template<size_t I, typename T>
+    struct tuple_element<I, const T> {
+        using type = std::add_const_t<typename std::tuple_element<I, T>::type>;
+    };
+
+    template<size_t I, typename T1, typename T2> struct tuple_element<I, std::pair<T1, T2>> { static_assert(std::dependent_false<T1>::value, "tuple_element for std::pair only has 2 elements"); };
+    template<typename T1, typename T2> struct tuple_element<0, std::pair<T1, T2>> { using type = T1; };
+    template<typename T1, typename T2> struct tuple_element<1, std::pair<T1, T2>> { using type = T2; };
+
+    /*template<typename T1, typename T2> T1& get<0, T1, T2>(std::pair<T1, T2>& item) { return item.first; }
+    template<typename T1, typename T2> const T1& get<0, T1, T2>(const std::pair<T1, T2>& item) { return item.first; }
+
+    template<typename T1, typename T2> T2& get<0, T1, T2>(std::pair<T1, T2>& item) { return item.second; }
+    template<typename T1, typename T2> const T2& get<0, T1, T2>(const std::pair<T1, T2>& item) { return item.second; }*/
+
+    template<size_t I, typename T1, typename T2>
+    constexpr std::tuple_element<I, std::pair<T1, T2>>::type& get(std::pair<T1, T2>& item) { if constexpr(I == 0) { return item.first; } else { return item.second; } };
+
+    template<size_t I, typename T1, typename T2>
+    constexpr const std::tuple_element<I, std::pair<T1, T2>>::type& get(const std::pair<T1, T2>& item) { if constexpr(I == 0) { return item.first; } else { return item.second; } };
+
     template<typename T>
     class lazy_initializer {
         public:
@@ -150,4 +173,11 @@ namespace std
 
     template<typename T>
     impl::reverse_wrapper<T> reverse(T& it) { return {it}; }
+
+    template<size_t N, typename F>
+    void comptime_iterate_to(F&& f) {
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (f.template operator()<Is>(), ...);
+        }(std::make_index_sequence<N>{});
+    }
 } // namespace std

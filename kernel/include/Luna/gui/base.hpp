@@ -63,6 +63,10 @@ namespace gui {
     struct Rect {
         Vec2i pos;
         Vec2i size;
+
+        bool collides_with(Vec2i x) const {
+            return (x.x >= pos.x && x.x <= (pos.x + size.x)) && (x.y >= pos.y && x.y <= (pos.y + size.y));
+        }
     };
 
     union Colour {
