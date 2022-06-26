@@ -8,21 +8,45 @@
 
 #include <Luna/misc/log.hpp>
 
+namespace {
+    constexpr bool add_guard_pages = false;
+}
 
-static uintptr_t heap_loc = 0xFFFF'FFFE'0000'0000;
-static uintptr_t allocate_page(){
-    auto pa = pmm::alloc_block();
-    if(!pa)
-        PANIC("Couldn't allocate block for heap");
+static uintptr_t allocate_pages(size_t pages) {
+    static uintptr_t heap_loc = 0xFFFF'FFFE'0000'0000;
+
+    auto alloc_page = []() -> uintptr_t {
+        auto pa = pmm::alloc_block();
+        if(!pa)
+            PANIC("Couldn't allocate block for heap");
     
-    auto va = heap_loc;
-    heap_loc += pmm::block_size;
-    if(heap_loc >= kernel_vbase)
-        PANIC("Heap exceeded maximum virtual size");
+        auto va = heap_loc;
+        heap_loc += pmm::block_size;
+        if(heap_loc >= kernel_vbase)
+            PANIC("Heap exceeded maximum virtual size");
 
-    vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite);
-    memset((void*)va, 0, pmm::block_size);
+        vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite);
+        memset((void*)va, 0, pmm::block_size);
 
+        return va;
+    };
+
+    auto alloc_guard_page = [] {
+        heap_loc += pmm::block_size;
+        if(heap_loc >= kernel_vbase)
+            PANIC("Heap exceeded maximum virtual size");
+    };
+
+    if constexpr(add_guard_pages)
+        alloc_guard_page();
+    
+    auto va = alloc_page();
+    for(size_t i = 0; i < (pages - 1); i++)
+        alloc_page();
+
+    if constexpr(add_guard_pages)
+        alloc_guard_page();
+    
     return va;
 }
 
@@ -56,9 +80,7 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
                     pool->items[i].type = Pool::PoolItem::PoolItemType::LargeAlloc;
 
                     // allocate_page() is a bump allocator so this is all fine and dandy
-                    auto addr = allocate_page();
-                    for(size_t i = 0; i < (n_pages - 1); i++)
-                        allocate_page();
+                    auto addr = allocate_pages(n_pages);
                     
                     pool->items[i].large_allocation = LargeAllocation{.free = false, .address = addr, .size = effective_size};
                     return addr;
@@ -97,7 +119,7 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
                 if(pool->items[i].type == Pool::PoolItem::PoolItemType::None) {
                     pool->items[i].type = Pool::PoolItem::PoolItemType::Slab;
                     pool->items[i].slab = {};
-                    pool->items[i].slab.init(allocate_page(), length, alignment);
+                    pool->items[i].slab.init(allocate_pages(1), length, alignment);
 
                     // Since we've just made a new SLAB we can just allocate from this one
                     return pool->items[i].slab.alloc();
@@ -122,7 +144,7 @@ uintptr_t hmm::Allocator::alloc(size_t length, size_t alignment) {
     }    
 }
 
-void hmm::Allocator::free(uintptr_t addr) {
+void hmm::Allocator::free(uintptr_t addr) {   
     if(!addr)
         return;
     
@@ -190,7 +212,7 @@ uintptr_t hmm::Allocator::realloc(uintptr_t old, size_t size, size_t alignment){
 }
 
 hmm::Allocator::Pool* hmm::Allocator::alloc_pool(){
-    auto* pool = (Pool*)allocate_page();
+    auto* pool = (Pool*)allocate_pages(1);
     for(size_t i = 0; i < pool->n_items; i++)
         pool->items[i].type = Pool::PoolItem::PoolItemType::None;
 
