@@ -19,26 +19,6 @@ namespace gui::controls {
         virtual void mouse_exit() { };
     };
 
-    struct Square final : public Control {
-        Square(Vec2i size, Colour c): size{size}, c{c} { }
-
-        void resize(NonOwningCanvas canvas) override {
-            this->canvas = canvas;
-
-            draw::rect(this->canvas, {0, 0}, canvas.size, c);
-        }
-
-        Vec2i preferred_size() const override {
-            return size;
-        }
-
-        private:
-        Vec2i size;
-        Colour c;
-
-        NonOwningCanvas canvas;
-    };
-
     enum class Direction { Vertical, Horizontal };
     struct Insets {
         int32_t left = 0, right = 0, top = 0, bottom = 0;
@@ -90,6 +70,32 @@ namespace gui::controls {
             }
         }
 
+        void mouse_over(const Vec2i& pos) override {
+            if(last_mouse_over && !last_mouse_extent.collides_with(pos)) {
+                last_mouse_over->mouse_exit();
+                last_mouse_over = nullptr;
+            }
+            
+            for(auto& [item, extent] : items) {
+                if(extent.collides_with(pos)) {
+                    item->mouse_over(pos - extent.pos);
+
+                    if(last_mouse_over && last_mouse_over != item) {
+                        last_mouse_over->mouse_exit();
+                    }
+
+                    last_mouse_over = item;
+                    break;
+                }
+            }
+        }
+
+        void mouse_exit() override {
+            if(last_mouse_over)
+                last_mouse_over->mouse_exit();
+        }
+
+
         Vec2i preferred_size() const override {
             Vec2i ret = {0, 0};
 
@@ -114,6 +120,9 @@ namespace gui::controls {
         private:
         Insets inset;
         NonOwningCanvas canvas;
+
+        Control* last_mouse_over;
+        Rect last_mouse_extent;
 
         std::tuple<Items...> storage;
         std::array<std::pair<Control*, Rect>, sizeof...(Items)> items;

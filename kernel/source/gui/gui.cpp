@@ -55,11 +55,14 @@ void Desktop::start_gui() {
     spawn([this] {
         while(true) {
             bool redraw = false;
+            bool mouse_click = false;
 
-            event_queue.handle_await([this, &redraw](GuiEvent& event) {
+            event_queue.handle_await([&](CompositorEvent& event) {
                 switch (event.type) {
-                    using enum GuiEvent::Type;
+                    using enum CompositorEvent::Type;
                     case MouseUpdate:
+                        mouse_click = event.mouse.left_button_down && !mouse.left_button_down;
+
                         mouse.pos += event.mouse.pos;
                         mouse.pos.clamp({0, 0}, size - cursor.get_res());
                         mouse.left_button_down = event.mouse.left_button_down;
@@ -74,15 +77,16 @@ void Desktop::start_gui() {
             });
 
             if(redraw)
-                redraw_desktop();
+                redraw_desktop(mouse_click);
         }
     });
 }
 
-void gui::Desktop::redraw_desktop() {
+void gui::Desktop::redraw_desktop(bool mouse_click) {
     constexpr int32_t decoration_side_width = 3;
     constexpr int32_t decoration_top_width = 18;
-    constexpr auto decoration_colour = Colour(200, 200, 200);
+    constexpr Colour unfocussed_decoration_colour{100, 100, 100};
+    constexpr Colour focussed_decoration_colour{200,200,200};
 
     std::lock_guard guard{compositor_lock};
             
@@ -101,17 +105,29 @@ void gui::Desktop::redraw_desktop() {
         auto* window = *it;
         auto rect = window->get_rect();
         Rect top_bar{rect.pos - Vec2i{decoration_side_width, decoration_top_width}, Vec2i{rect.size.x + 2 * decoration_side_width, decoration_top_width}};
+        Rect focus_region{rect.pos - Vec2i{decoration_side_width, decoration_top_width}, rect.size + Vec2i{2 * decoration_side_width, decoration_top_width + decoration_side_width}};
 
-        if(mouse.pos.collides_with(top_bar.pos, top_bar.size) && mouse.left_button_down && !mouse.is_dragging) {
+        if(top_bar.collides_with(mouse.pos) && mouse_click) {
             mouse.dragging_window = window;
             mouse.dragging_offset = rect.pos - mouse.pos;
             mouse.is_dragging = true;
 
+            // Don't break here, its important that the focussing code still runs
+        }
+
+        if(focus_region.collides_with(mouse.pos) && mouse_click) {
             auto* it = windows.find(window);
             ASSERT(it != windows.end());
             windows.erase(it);
             windows.push_back(window);
-            break; // iterators invalidated
+
+            if(focused_window)
+                focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Unfocus});
+
+            focused_window = window;
+            focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Focus});
+
+            break; // Iterators invalidated
         }
     }
 
@@ -119,7 +135,12 @@ void gui::Desktop::redraw_desktop() {
 
     for(auto* window : windows) {
         // Draw decorations
+        auto is_focussed = (window == focused_window);
         auto rect = window->get_rect();
+        auto decoration_colour = is_focussed ? focussed_decoration_colour : unfocussed_decoration_colour;
+
+        if(is_focussed && rect.collides_with(mouse.pos))
+            window->send_event(WindowEvent{.type = WindowEvent::Type::MouseOver, .pos = mouse.pos - rect.pos});
 
         draw::rect(fb_canvas, rect.pos - Vec2i{decoration_side_width, 0}, Vec2i{decoration_side_width, rect.size.y}, decoration_colour); // Left bar
         draw::rect(fb_canvas, rect.pos + Vec2i{rect.size.x, 0}, Vec2i{decoration_side_width, rect.size.y}, decoration_colour); // Right bar

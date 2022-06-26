@@ -5,13 +5,14 @@
 #include <Luna/cpu/threads.hpp>
 
 #include <Luna/gui/base.hpp>
+#include <Luna/gui/controls/base.hpp>
 
 #include <std/event_queue.hpp>
 
 namespace gui {
-    struct Window;
+    struct RawWindow;
 
-    struct GuiEvent {
+    struct CompositorEvent {
         enum class Type { MouseUpdate, WindowRedraw };
         Type type;
         union {
@@ -21,28 +22,53 @@ namespace gui {
             } mouse;
 
             struct {
-                Window* window;
+                RawWindow* window;
             } window;
         };
     };
 
-    struct Window {
-        Window(Vec2i size, const char* title): fb{size}, canvas{fb.canvas()}, title{title}, pos{0, 0}, size{size} {}
-        virtual ~Window() {}
+    struct WindowEvent {
+        enum class Type { Focus, Unfocus, MouseOver };
+        Type type;
+        Vec2i pos = {0, 0};
+    };
 
+    struct RawWindow {
+        RawWindow(Vec2i size, const char* title): fb{size}, canvas{fb.canvas()}, title{title}, pos{0, 0}, size{size} {
+            spawn([this] { window_thread(); } );
+        }
+        virtual ~RawWindow() {}
+
+        RawWindow(const RawWindow&) = delete;
+        RawWindow(RawWindow&&) = delete;
+        RawWindow& operator=(const RawWindow&) = delete;
+        RawWindow& operator=(RawWindow&&) = delete;
+
+        // Handlers
+        virtual void handle_focus() { }
+        virtual void handle_unfocus() { }
+        virtual void handle_mouse_over(const Vec2i&) { }
+        virtual void handle_mouse_exit() { }
+
+        // Public API
         Rect get_rect() const { return Rect{pos, size}; }
         const char* get_title() const { return title; }
         const NonOwningCanvas& get_canvas() const { return canvas; }
 
         void set_pos(const Vec2i& pos) { this->pos = pos; }
-        void set_queue(std::EventQueue<GuiEvent>* queue) { this->queue = queue; }
+        void set_queue(std::EventQueue<CompositorEvent>* queue) { this->compositor_queue = queue; }
 
         void request_redraw() {
-            ASSERT(queue);
-            queue->push(GuiEvent{.type = GuiEvent::Type::WindowRedraw, .window = {.window = this}});
+            ASSERT(compositor_queue);
+            compositor_queue->push(CompositorEvent{.type = CompositorEvent::Type::WindowRedraw, .window = {.window = this}});
+        }
+
+        void send_event(const WindowEvent& event) {
+            event_queue.push(event);
         }
 
         protected:
+        controls::Control* root;
         Image fb;
         NonOwningCanvas canvas;
         const char* title;
@@ -50,15 +76,47 @@ namespace gui {
         Vec2i pos;
         Vec2i size;
 
+        std::EventQueue<WindowEvent> event_queue;
+
         private:
-        std::EventQueue<GuiEvent>* queue;
+        void window_thread() {
+            while(1) {
+                event_queue.handle_await([&](const WindowEvent& event) {
+                    using enum WindowEvent::Type;
+                    switch(event.type) {
+                        case Focus:
+                            handle_focus();
+                            break;
+                        case Unfocus:
+                            handle_unfocus();
+                            break;
+                        case MouseOver:
+                            handle_mouse_over(event.pos);
+                            break;
+                    }
+                });
+            }
+        }
+
+        std::EventQueue<CompositorEvent>* compositor_queue;
+    };
+
+    struct Window : public RawWindow {
+        Window(controls::Control* root, const char* title): RawWindow{root->preferred_size(), title}, root{root} { }
+        virtual ~Window() { }
+
+        virtual void handle_unfocus() override { root->mouse_exit(); }
+        virtual void handle_mouse_over(const Vec2i& pos) override { root->mouse_over(pos); }
+
+        protected:
+        controls::Control* root;
     };
 
     struct Desktop {
         Desktop(gpu::GpuManager& gpu);
         void start_gui();
         
-        void add_window(Window* window) {
+        void add_window(RawWindow* window) {
             static int size = 0;
 
             auto rect = window->get_rect();
@@ -71,19 +129,20 @@ namespace gui {
             windows.push_back(window);
         }
 
-        std::EventQueue<GuiEvent>& get_event_queue() { return event_queue; }
+        std::EventQueue<CompositorEvent>& get_event_queue() { return event_queue; }
 
         private:
-        void redraw_desktop();
+        void redraw_desktop(bool mouse_click);
 
         gpu::GpuManager* gpu;
         gpu::Mode gpu_mode;
 
-        std::EventQueue<GuiEvent> event_queue;
+        std::EventQueue<CompositorEvent> event_queue;
         NonOwningCanvas fb_canvas;
 
         IrqTicketLock compositor_lock;
-        std::vector<Window*> windows;
+        std::vector<RawWindow*> windows;
+        RawWindow* focused_window;
 
         Image background, cursor;
 
@@ -97,7 +156,7 @@ namespace gui {
             bool left_button_down;
             
             bool is_dragging;
-            Window* dragging_window;
+            RawWindow* dragging_window;
             Vec2i dragging_offset;
         } mouse;
     };

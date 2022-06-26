@@ -23,7 +23,7 @@ struct Device {
     usb::Device* usb_dev;
     usb::Endpoint* in;
 
-    std::EventQueue<gui::GuiEvent>* queue;
+    std::EventQueue<gui::CompositorEvent>* queue;
 
     void set_idle();
 };
@@ -66,8 +66,8 @@ static void init(usb::Device& device) {
 
             auto report = *(BootReport*)buf;
 
-            gui::GuiEvent event{};
-            event.type = gui::GuiEvent::Type::MouseUpdate;
+            gui::CompositorEvent event{};
+            event.type = gui::CompositorEvent::Type::MouseUpdate;
             event.mouse.pos = {report.x, report.y};
             event.mouse.left_button_down = report.buttons & 1;
             dev->queue->push(event);

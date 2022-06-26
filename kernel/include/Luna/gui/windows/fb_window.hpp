@@ -4,8 +4,8 @@
 #include <Luna/gui/framework.hpp>
 
 namespace gui {
-    struct FbWindow final : public Window {
-        FbWindow(Vec2i size, uint8_t* fb, const char* title): Window{size, title}, size{size}, fb{(uint32_t*)fb} { }
+    struct FbWindow final : public RawWindow {
+        FbWindow(Vec2i size, uint8_t* fb, const char* title): RawWindow{size, title}, size{size}, fb{(uint32_t*)fb} { }
 
         void update() {
             for(int64_t y = 0; y < size.y; y++) {
