@@ -11,6 +11,8 @@ namespace std {
 
         template<typename T, typename... Types>
         struct tuple_storage<T, Types...> {
+            constexpr tuple_storage() requires(std::is_default_constructible_v<Types> && ...) = default;
+
             template<typename U, typename... UTypes>
             constexpr tuple_storage(U&& item, UTypes&&... args): item{std::forward<U>(item)}, storage{std::forward<UTypes>(args)...} {}
 
@@ -54,6 +56,8 @@ namespace std {
     template<typename... Types>
     class tuple {
         public:
+        constexpr tuple() = default;
+
         template<typename... UTypes> requires (sizeof...(Types) == sizeof...(UTypes) && sizeof...(Types) >= 1 && (std::is_constructible_v<Types, UTypes> && ...))
         explicit((!std::is_convertible_v<Types, UTypes> || ...))
         constexpr tuple(UTypes&&... args): items{std::forward<UTypes>(args)...} { }

@@ -169,4 +169,12 @@ namespace std
 
     template<typename T> struct add_const { using type = const T; };
     template<typename T> using add_const_t = add_const<T>::type;
+
+    // Taken from https://en.cppreference.com/w/cpp/types/is_copy_constructible
+    template<typename T> struct is_copy_constructible : std::is_constructible<T, std::add_lvalue_reference_t<std::add_const_t<T>>> { };
+    template<typename T> inline constexpr bool is_copy_constructible_v = is_copy_constructible<T>::value;
+
+    // Taken from https://en.cppreference.com/w/cpp/types/is_default_constructible
+    template<typename T> struct is_default_constructible : std::is_constructible<T> {};
+    template<typename T> inline constexpr bool is_default_constructible_v = is_default_constructible<T>::value;
 } // namespace std

@@ -46,11 +46,28 @@ namespace gui::controls {
 
     template<Direction direction, typename... Items> requires(std::derived_from<Items, Control> && ...)
     struct Stack final : public Control {
-        Stack(const Insets& inset, Items&&... items): inset{inset}, storage{std::forward<Items>(items)...}, items{} {
+        Stack(const Insets& inset, Items... items): inset{inset}, last_mouse_over{nullptr}, storage{items...}, items{} {
             std::comptime_iterate_to<sizeof...(Items)>([&]<size_t I>() { std::get<I>(this->items) = {&std::get<I>(storage), Rect{}}; });
         }
 
-        Stack(Items&&... items): Stack{Insets{}, std::forward<Items>(items)...} { }
+        Stack(Items... items): Stack{Insets{}, items...} { }
+
+        Stack(const Stack& other) {
+            inset = other.inset;
+            canvas = other.canvas;
+            last_mouse_over = other.last_mouse_over;
+            last_mouse_extent = other.last_mouse_extent;
+
+            storage = other.storage;
+            for(size_t i = 0; i < items.size(); i++)
+                items[i] = {nullptr, other.items[i].second};
+
+            std::comptime_iterate_to<sizeof...(Items)>([&]<size_t I>() { std::get<I>(this->items).first = &std::get<I>(storage); });
+        }
+
+        Stack(Stack&&) = delete;
+        Stack& operator=(const Stack&) = delete;
+        Stack& operator=(Stack&&) = delete;
 
         void resize(NonOwningCanvas canvas) override {
             this->canvas = canvas;
