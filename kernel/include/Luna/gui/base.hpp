@@ -154,8 +154,8 @@ namespace gui {
         }
         
         void clear(const Colour& clear_color = Colour(0, 0, 0)) {
-            for(auto& e : fb)
-                e = clear_color;
+            for(int64_t y = 0; y < size.y; y++)
+                std::fill_n(fb.data() + y * pitch, size.x, clear_color);
         }
 
         NonOwningCanvas subcanvas(const Rect& rect) {
