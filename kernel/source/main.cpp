@@ -376,5 +376,8 @@ void create_vm() {
     auto* ioapic_dev = new vm::irqs::ioapic::Driver{&vm, 1, 0xFEC0'0000};
     (void)ioapic_dev;
     
-    ASSERT(vm.cpus[0].run());
+    vm.cpus[0].run();
+
+    while(1)
+        ;
 }
