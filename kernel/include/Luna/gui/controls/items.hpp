@@ -55,45 +55,106 @@ namespace gui::controls {
 
         NonOwningCanvas canvas;
     };
-
+        
     struct Button final : public Control {
-        Button(const char* text, Vec2i size, Colour c): text{text}, size{size}, c{c}, state{false} {
-            ASSERT(size.y >= font::height && (uint32_t)size.x >= (strlen(text) * font::width));
+        Button() = default;
+        Button(const Image& unclicked, const Image& hover, void (*f)(void*), void* userptr): fn{f}, userptr{userptr}, state{State::Undrawn} {
+            this->unclicked_glyph = unclicked;
+            this->hover_glyph = hover;
+
+            ASSERT(this->unclicked_glyph.get_res() == this->hover_glyph.get_res());
+            this->res = this->unclicked_glyph.get_res();
         }
 
         void resize(NonOwningCanvas canvas) override {
             this->canvas = canvas;
 
-            ASSERT(canvas.size.x >= size.x && canvas.size.y >= size.y);
+            ASSERT(canvas.size == res);
 
-            draw(c);
-            state = false;
+            update(State::Unclicked);
         }
 
         Vec2i preferred_size() const override {
-            return size;
+            return res;
         }
 
         void mouse_over(const Vec2i&) override {
-            if(!state)
-                draw({128, 128, 128}); 
-            
-            state = true;
-        };
-        void mouse_exit() override { if(state) draw(c); state = false; }
-
-        private:
-        void draw(const Colour& c) {
-            draw::rect(canvas, {0, 0}, canvas.size, c);
-            draw::text(canvas, {canvas.size.x / 2, canvas.size.y / 2 - font::height / 2}, text, {255, 255, 255}, {0, 0, 0, 0}, draw::TextAlign::Center);
+            update(State::Hover);
         }
 
-        const char* text;
-        Vec2i size;
-        Colour c;
+        void mouse_exit() override {
+            update(State::Unclicked);
+        }
 
-        bool state;
+        void mouse_click() override {
+            fn(userptr);
+        }
+
+        private:
+        enum class State { Undrawn, Hover, Unclicked };
+
+        void update(State new_state) {
+            if(new_state != state) {
+                state = new_state;
+
+                Image& glyph = (state == State::Hover) ? hover_glyph : unclicked_glyph;
+                canvas.blit_noalpha({0, 0}, {0, 0}, glyph.get_res(), glyph.canvas());
+            }
+        }
+
+        Image unclicked_glyph, hover_glyph;
+        Vec2i res;
+
+        void (*fn)(void*);
+        void* userptr;
+
+        State state;
 
         NonOwningCanvas canvas;
     };
+
+    struct ScrollBar final : public Control {
+        constexpr ScrollBar() = default;
+
+        ScrollBar(const Vec2i& size, Colour fg = Colour{255, 255, 255}, Colour bg = Colour{0, 0, 0}): size{size}, fg{fg}, bg{bg} { }
+
+        Vec2i preferred_size() const override { return size; }
+        void resize(NonOwningCanvas canvas) override {
+            this->canvas = canvas;
+            ASSERT(canvas.size == size);
+            ASSERT(canvas.fb.data());
+        }
+
+        void update(size_t total_size, size_t visible_region, size_t pos) {
+            int64_t bar_size = (size.y * visible_region) / total_size;
+            bar_size = clamp(bar_size, 0, size.y);
+
+            int64_t bar_pos = (size.y * pos) / total_size;
+            bar_pos = clamp(bar_pos, 0, size.y);
+            
+            canvas.clear(bg);
+            draw::rect(canvas, Vec2i{0, (int64_t)bar_pos}, Vec2i{size.x, bar_size}, fg);
+        }
+
+        private:
+        NonOwningCanvas canvas;
+
+        Vec2i size;
+        Colour fg, bg;
+    };
+
+    /*struct Space final : public Control {
+        constexpr Space() = default;
+
+        Space(const Vec2i& space): space{space} { }
+
+        void resize(NonOwningCanvas) override { }
+
+        Vec2i preferred_size() const override {
+            return space;
+        }
+
+        private:
+        Vec2i space;
+    };*/
 } // namespace gui::controls

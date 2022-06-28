@@ -6,6 +6,19 @@
 
 using namespace gui;
 
+std::optional<Image> gui::read_image(const char* path) {
+    auto* file = vfs::get_vfs().open(path);
+    if(!file) {
+        print("gui: Couldn't open {}\n", path);
+        return std::nullopt;
+    }
+
+    auto image = bmp_parser::parse_bmp(file);
+    file->close();
+
+    return image;
+}
+
 Desktop::Desktop(gpu::GpuManager& gpu): gpu{&gpu}, gpu_mode{gpu.get_mode()}, fb_canvas{std::span<Colour>{(Colour*)gpu.get_fb().data(), (gpu_mode.height * gpu_mode.pitch) / sizeof(Colour)}, Vec2i{(int64_t)gpu_mode.width, (int64_t)gpu_mode.height}, gpu_mode.pitch/ sizeof(Colour)} {
     size = {(int64_t)gpu_mode.width, (int64_t)gpu_mode.height};
     pitch = gpu_mode.pitch / 4;
@@ -42,14 +55,8 @@ void Desktop::start_gui() {
     }
 
     {
-        auto file = vfs::get_vfs().open("A:/luna/assets/cursor.bmp");
-        ASSERT(file);
-        auto image = bmp_parser::parse_bmp(file);
-        if(!image)
-            PANIC("Couldn't load cursor");
-        file->close();
-
-        cursor = std::move(*image);
+        auto image = read_image("A:/luna/assets/cursor.bmp");
+        cursor = std::move(image.value());
     }
 
     spawn([this] {

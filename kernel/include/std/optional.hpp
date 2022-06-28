@@ -27,7 +27,11 @@ namespace std {
         }
 
         constexpr optional(const optional&) requires(std::is_trivially_copy_constructible_v<T>) = default;
-        constexpr optional(const optional&) = delete;
+        constexpr optional(const optional&) requires(std::is_copy_constructible_v<T>) = delete;
+        constexpr optional(const optional& other): _constructed{other._constructed} {
+            if(other._constructed)
+                new (_storage.data) T(*other);
+        }
 
         constexpr ~optional() requires(!std::is_trivially_destructible_v<T>) {
             if(_constructed)
@@ -42,14 +46,14 @@ namespace std {
         constexpr T& operator*() & noexcept { return *(T*)(_storage.data); }
         constexpr const T& operator*() const & noexcept { return *(const T*)(_storage.data); }
 
-        //constexpr T&& operator*() && noexcept { return *(T*)(_storage.data); }
-        //constexpr const T&& operator*() const && noexcept { return *(const T*)(_storage.data); }
+        constexpr T&& operator*() && noexcept { return std::move(*(T*)(_storage.data)); }
+        constexpr const T&& operator*() const && noexcept { return std::move(*(const T*)(_storage.data)); }
 
         constexpr T& value() & { ASSERT(_constructed); return *(T*)(_storage.data); }
         constexpr const T& value() const & { ASSERT(_constructed); return *(const T*)(_storage.data); }
 
-        //constexpr T&& value() && { ASSERT(_constructed); return *(T*)(_storage.data); }
-        //constexpr const T&& value() const && { ASSERT(_constructed); return *(const T*)(_storage.data); }
+        constexpr T&& value() && { ASSERT(_constructed); return std::move(*(T*)(_storage.data)); }
+        constexpr const T&& value() const && { ASSERT(_constructed); return std::move(*(const T*)(_storage.data)); }
 
         constexpr explicit operator bool() const noexcept { return _constructed; }
         constexpr bool has_value() const noexcept { return _constructed; }

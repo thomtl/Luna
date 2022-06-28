@@ -170,4 +170,5 @@ namespace gui {
 
     void init();
     Desktop& get_desktop();
+    std::optional<Image> read_image(const char* path);
 } // namespace gui

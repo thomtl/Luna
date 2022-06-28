@@ -38,6 +38,17 @@ kernel:
 assets:
 	echfs-utils -m -p0 luna.hdd import misc/cursor.bmp luna/assets/cursor.bmp
 
+# convert downarrow.png -alpha set -define bmp:format=bmp4 downarrow.bmp
+	echfs-utils -m -p0 luna.hdd import misc/bottomarrow.bmp luna/assets/bottomarrow.bmp
+	echfs-utils -m -p0 luna.hdd import misc/toparrow.bmp luna/assets/toparrow.bmp
+	echfs-utils -m -p0 luna.hdd import misc/uparrow.bmp luna/assets/uparrow.bmp
+	echfs-utils -m -p0 luna.hdd import misc/downarrow.bmp luna/assets/downarrow.bmp
+
+	echfs-utils -m -p0 luna.hdd import misc/bottomarrow_clicked.bmp luna/assets/bottomarrow_clicked.bmp
+	echfs-utils -m -p0 luna.hdd import misc/toparrow_clicked.bmp luna/assets/toparrow_clicked.bmp
+	echfs-utils -m -p0 luna.hdd import misc/uparrow_clicked.bmp luna/assets/uparrow_clicked.bmp
+	echfs-utils -m -p0 luna.hdd import misc/downarrow_clicked.bmp luna/assets/downarrow_clicked.bmp
+
 bios:
 	make -C build/seabios -j8
 	
