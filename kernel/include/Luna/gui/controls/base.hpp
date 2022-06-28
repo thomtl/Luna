@@ -21,12 +21,15 @@ namespace gui::controls {
         virtual void mouse_exit() { };
     };
 
+    template<typename T>
+    concept IsControl = std::derived_from<T, Control>;
+
     enum class Direction { Vertical, Horizontal };
     struct Insets {
         int32_t left = 0, right = 0, top = 0, bottom = 0;
     };
 
-    template<Direction direction, typename... Items> requires(std::derived_from<Items, Control> && ...)
+    template<Direction direction, typename... Items> requires(IsControl<Items> && ...)
     struct Stack final : public Control {
         Stack(const Insets& inset, Items... items): inset{inset}, last_mouse_over{nullptr}, storage{items...}, items{} {
             std::comptime_iterate_to<sizeof...(Items)>([&]<size_t I>() { std::get<I>(this->items) = {&std::get<I>(storage), Rect{}}; });
@@ -123,6 +126,9 @@ namespace gui::controls {
 
             return ret;
         }
+
+        template<size_t I> auto& get() { return std::get<I>(storage); }
+        template<size_t I> const auto& get() const { return std::get<I>(storage); }
 
         private:
         Insets inset;

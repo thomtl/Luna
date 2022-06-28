@@ -106,8 +106,9 @@ namespace gui {
         std::EventQueue<CompositorEvent>* compositor_queue;
     };
 
+    template<typename T = controls::Control> requires controls::IsControl<T>
     struct Window : public RawWindow {
-        Window(controls::Control* root, const char* title): RawWindow{root->preferred_size(), title}, root{root} { }
+        Window(T* root, const char* title): RawWindow{root->preferred_size(), title}, root{root} { }
         virtual ~Window() { }
 
         virtual void handle_unfocus() override { root->mouse_exit(); }
@@ -115,7 +116,7 @@ namespace gui {
         virtual void handle_mouse_click() override { root->mouse_click(); }
 
         protected:
-        controls::Control* root;
+        T* root;
     };
 
     struct Desktop {
