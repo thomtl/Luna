@@ -127,10 +127,10 @@ namespace gui {
             static int size = 0;
 
             auto rect = window->get_rect();
-            window->set_pos({5 + size, 40});
+            window->set_pos({4 + size, 40});
             window->set_queue(&get_event_queue());
             
-            size += rect.size.x + 8;
+            size += rect.size.x + 7;
 
             std::lock_guard guard{compositor_lock};
             windows.push_back(window);
