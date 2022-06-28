@@ -15,7 +15,9 @@ namespace gui::controls {
 
         virtual void resize(NonOwningCanvas) = 0;
         virtual Vec2i preferred_size() const = 0;
-        virtual void mouse_over(const Vec2i&) { };
+
+        virtual void mouse_over(const Vec2i&) { }
+        virtual void mouse_click() { }
         virtual void mouse_exit() { };
     };
 
@@ -93,6 +95,11 @@ namespace gui::controls {
         void mouse_exit() override {
             if(last_mouse_over)
                 last_mouse_over->mouse_exit();
+        }
+
+        void mouse_click() override {
+            if(last_mouse_over)
+                last_mouse_over->mouse_click();
         }
 
 

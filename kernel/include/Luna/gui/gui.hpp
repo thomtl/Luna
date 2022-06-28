@@ -28,7 +28,7 @@ namespace gui {
     };
 
     struct WindowEvent {
-        enum class Type { Focus, Unfocus, MouseOver };
+        enum class Type { Focus, Unfocus, MouseOver, MouseClick };
         Type type;
         Vec2i pos = {0, 0};
     };
@@ -48,7 +48,9 @@ namespace gui {
         virtual void handle_focus() { }
         virtual void handle_unfocus() { }
         virtual void handle_mouse_over(const Vec2i&) { }
+        virtual void handle_mouse_click() { }
         virtual void handle_mouse_exit() { }
+        
 
         // Public API
         Rect get_rect() const { return Rect{pos, size}; }
@@ -93,6 +95,9 @@ namespace gui {
                         case MouseOver:
                             handle_mouse_over(event.pos);
                             break;
+                        case MouseClick:
+                            handle_mouse_click();
+                            break;
                     }
                 });
             }
@@ -107,6 +112,7 @@ namespace gui {
 
         virtual void handle_unfocus() override { root->mouse_exit(); }
         virtual void handle_mouse_over(const Vec2i& pos) override { root->mouse_over(pos); }
+        virtual void handle_mouse_click() override { root->mouse_click(); }
 
         protected:
         controls::Control* root;

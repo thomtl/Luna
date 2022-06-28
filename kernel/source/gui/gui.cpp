@@ -142,6 +142,9 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
         if(is_focussed && rect.collides_with(mouse.pos))
             window->send_event(WindowEvent{.type = WindowEvent::Type::MouseOver, .pos = mouse.pos - rect.pos});
 
+        if(is_focussed && mouse_click)
+            window->send_event(WindowEvent{.type = WindowEvent::Type::MouseClick});
+
         draw::rect(fb_canvas, rect.pos - Vec2i{decoration_side_width, 0}, Vec2i{decoration_side_width, rect.size.y}, decoration_colour); // Left bar
         draw::rect(fb_canvas, rect.pos + Vec2i{rect.size.x, 0}, Vec2i{decoration_side_width, rect.size.y}, decoration_colour); // Right bar
 
