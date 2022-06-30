@@ -30,3 +30,36 @@ thread_invoke:
     mov rdi, qword [rdi + 5 * 8]
 
     iretq
+
+
+global thread_apc_trampoline
+thread_apc_trampoline:
+    push rax
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push r8
+    push r9
+    push r10
+    push r11
+    pushf
+
+    cld
+
+    extern thread_run_apcs
+    call thread_run_apcs ; real return RIP is in RAX now
+
+    popf
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    xchg rax, [rsp] ; Load real rax from stack into rax, and real return address onto stack
+
+    sti
+    ret

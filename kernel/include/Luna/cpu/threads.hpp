@@ -20,6 +20,7 @@ namespace threading {
     void start_on_cpu();
 
     extern "C" void thread_invoke(ThreadContext* new_ctx);
+    extern "C" void thread_apc_trampoline();
 
     void init_thread_context(Thread* thread, void (*f)(void*), void* arg);
     void add_thread(Thread* thread);
@@ -41,19 +42,26 @@ namespace threading {
     struct Thread {
         Thread(): state(ThreadState::Idle), stack(0x4000), ctx(), cpu_pin({.is_pinned = false, .cpu_id = 0}) {}
 
+        void pin_to_this_cpu();
+        void pin_to_cpu(uint32_t id);
+
+        using APCFunction = void (*)(void*);
+        void queue_apc(APCFunction f, void* userptr = nullptr);
+
         IrqTicketLock lock;
         
         ThreadState state;
         cpu::Stack stack;
         ThreadContext ctx;
 
+        std::vector<std::pair<APCFunction, void*>> apc_queue; // TODO: std::deque
+        uint64_t apc_real_ret;
+
         struct {
             bool is_pinned;
             uint32_t cpu_id;
         } cpu_pin;
 
-        void pin_to_this_cpu();
-        void pin_to_cpu(uint32_t id);
     };
 
     struct Event {

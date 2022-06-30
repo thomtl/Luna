@@ -202,6 +202,13 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
     next->ctx.restore(regs);
     cpu.current_thread = next;
 
+    if(next->apc_queue.size() > 0) {
+        next->apc_real_ret = regs->rip;
+
+        regs->rip = (uint64_t)threading::thread_apc_trampoline;
+        regs->rflags &= ~(1 << 9);
+    }
+
     rearm_preemption();
 }
 
@@ -280,4 +287,26 @@ void threading::Thread::pin_to_cpu(uint32_t id)  {
     lock.unlock();
 
     asm("int $254"); // Yield
+}
+
+
+void threading::Thread::queue_apc(APCFunction func, void* userptr) {
+    std::lock_guard guard{lock};
+
+    ASSERT(apc_queue.size() <= 16); // Seems like a reasonable limit, something is probably wrong if we reach this
+
+    apc_queue.emplace_back(func, userptr);
+}
+
+extern "C" uint64_t thread_run_apcs() {
+    auto* thread = this_thread();
+
+    std::lock_guard guard{thread->lock};
+
+    for(auto& [f, userptr] : thread->apc_queue)
+        f(userptr);
+
+    thread->apc_queue.clear();
+
+    return thread->apc_real_ret;
 }
