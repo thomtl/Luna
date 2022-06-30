@@ -67,7 +67,7 @@ void await(threading::Event* event) {
     old->lock.saved_if = false;
     old->lock.unlock();
 
-    asm("int $254\r\nsti"); // Yield
+    asm volatile("int %0\r\nsti" : : "i"(threading::quantum_irq_vector) : "memory"); // Yield
 }
 
 void kill_self() {
@@ -94,7 +94,7 @@ void kill_self() {
     auto kill_epilogue = +[](threading::Thread* self) {
         delete self;
 
-        asm("int $254");
+        asm volatile("int %0" : : "i"(threading::quantum_irq_vector) : "memory");
         __builtin_trap();
     };
 
@@ -225,7 +225,7 @@ void threading::start_on_cpu() {
     cpu.thread_kill_stack.init((size_t)0x1000);
     cpu.current_thread = nullptr;
 
-    asm("sti\r\nint $254"); // Enter timer handler
+    asm volatile("sti\r\nint %0" : : "i"(threading::quantum_irq_vector) : "memory"); // Enter timer handler
     __builtin_trap();
 }
 
@@ -286,7 +286,7 @@ void threading::Thread::pin_to_cpu(uint32_t id)  {
     cpu_pin = {.is_pinned = true, .cpu_id = id};
     lock.unlock();
 
-    asm("int $254"); // Yield
+    asm volatile("int %0" : : "i"(threading::quantum_irq_vector) : "memory"); // Yield
 }
 
 
