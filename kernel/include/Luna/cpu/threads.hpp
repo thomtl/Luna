@@ -36,7 +36,7 @@ namespace threading {
     };
 
     enum class ThreadState : uint64_t { Idle = 0, Running = 1, Blocked = 2, Ignore = 3 };
-    constexpr uint8_t quantum_irq_vector = 254; // Update hardcoded vector in start_on_cpu()
+    constexpr uint8_t quantum_irq_vector = 254;
     constexpr size_t quantum_time = 10; // ms
 
     struct Thread {
@@ -47,6 +47,7 @@ namespace threading {
 
         using APCFunction = void (*)(void*);
         void queue_apc(APCFunction f, void* userptr = nullptr);
+        void invoke_apcs();
 
         IrqTicketLock lock;
         
@@ -57,11 +58,12 @@ namespace threading {
         std::vector<std::pair<APCFunction, void*>> apc_queue; // TODO: std::deque
         uint64_t apc_real_ret;
 
+        CpuData* running_on_cpu;
+
         struct {
             bool is_pinned;
             uint32_t cpu_id;
         } cpu_pin;
-
     };
 
     struct Event {

@@ -27,7 +27,8 @@ void idt::init_table() {
 
     for(size_t i = 0; i < 32; i++)
         handlers[i].is_reserved = true; // Reserve Exceptions
-    handlers[threading::quantum_irq_vector].is_reserved = true; // Reserve scheduling irq
+
+    handlers[threading::quantum_irq_vector].is_reserved = true; // Reserve scheduling irqs
 }
 
 void idt::load() {

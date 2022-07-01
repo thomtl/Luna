@@ -177,6 +177,7 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
         old_thread->ctx.save(regs);
         if(old_thread->state == threading::ThreadState::Running) {
             old_thread->state = threading::ThreadState::Idle;
+            old_thread->running_on_cpu = nullptr;
 
             std::lock_guard guard{scheduler_lock};
             expired_ptr->push_back(old_thread);
@@ -199,6 +200,7 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
     std::lock_guard guard{next->lock};
 
     next->state = threading::ThreadState::Running;
+    next->running_on_cpu = &cpu;
     next->ctx.restore(regs);
     cpu.current_thread = next;
 
@@ -298,15 +300,38 @@ void threading::Thread::queue_apc(APCFunction func, void* userptr) {
     apc_queue.emplace_back(func, userptr);
 }
 
+static void do_apcs(threading::Thread* thread) {
+    for(auto& [f, userptr] : thread->apc_queue)
+        f(userptr);
+
+    thread->apc_queue.clear();
+}
+
+void threading::Thread::invoke_apcs() {
+    std::lock_guard guard{lock};
+
+    if(state != ThreadState::Running) {
+        return; // Queued APCs will get executed when the thread is scheduled in again
+    }
+
+    // I don't know if Self-APCs are useful, but I guess we can support them here
+    if(this == this_thread()) {
+        do_apcs(this);
+
+        return;
+    }
+
+    DEBUG_ASSERT(running_on_cpu);
+    get_cpu().lapic.ipi(running_on_cpu->lapic_id, threading::quantum_irq_vector); // Will schedule the thread out, so from the perspective of the thread they run "immediately"
+                                                                                  // TODO: More efficient APC dispatching, cannot do APC IPI because complex locking stuff    
+}
+
 extern "C" uint64_t thread_run_apcs() {
     auto* thread = this_thread();
 
     std::lock_guard guard{thread->lock};
 
-    for(auto& [f, userptr] : thread->apc_queue)
-        f(userptr);
-
-    thread->apc_queue.clear();
+    do_apcs(thread);
 
     return thread->apc_real_ret;
 }
