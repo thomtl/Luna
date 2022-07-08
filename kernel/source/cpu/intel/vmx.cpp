@@ -809,7 +809,7 @@ void vmx::Vm::check_guest_state() const {
     vm::RegisterState regs{};
     get_regs(regs, (uint64_t)vm::VmRegs::Control | (uint64_t)vm::VmRegs::Segment | (uint64_t)vm::VmRegs::General);
 
-    ASSERT(((regs.cr0 & msr::read(msr::ia32_vmx_cr0_fixed1)) | msr::read(msr::ia32_vmx_cr0_fixed0)) == regs.cr0);
+    ASSERT(((regs.cr0 & msr::read(msr::ia32_vmx_cr0_fixed1)) | (msr::read(msr::ia32_vmx_cr0_fixed0) & ~(1 << 31 | 1 << 0))) == regs.cr0);
     ASSERT(((regs.cr4 & msr::read(msr::ia32_vmx_cr4_fixed1)) | msr::read(msr::ia32_vmx_cr4_fixed0)) == regs.cr4);
 
     if(regs.cr0 & (1 << 31))
