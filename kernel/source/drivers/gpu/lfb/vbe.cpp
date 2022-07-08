@@ -60,7 +60,7 @@ struct RealModeCpu {
         uint32_t eflags;
     };
 
-    RealModeCpu(): cpu{1} {
+    RealModeCpu(): cpu{1, nullptr} {
         cpu.cpus[0].set(vm::VmCap::FullPIOAccess, true);
 
         for(size_t i = 0; i < 0xFFFF'FFFF; i += pmm::block_size)
