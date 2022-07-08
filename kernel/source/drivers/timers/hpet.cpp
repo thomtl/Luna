@@ -10,6 +10,20 @@
 constexpr uint64_t femto_per_milli = 1'000'000'000'000ull;
 constexpr uint64_t femto_per_nano = 1'000'000ull;
 
+static constinit IrqTicketLock lock;
+static constinit std::linked_list<hpet::Device> devices;
+static constinit std::vector<hpet::Comparator*> comparators;
+
+void hpet::init() {
+    acpi::Hpet* table = nullptr;
+    size_t i = 0;
+    while((table = acpi::get_table<acpi::Hpet>(i))) {
+        devices.emplace_back(table);
+
+        i++;
+    }
+}
+
 hpet::Device::Device(acpi::Hpet* table): table{table} {
     ASSERT(table->base.id == 0); // Assert it is in MMIO space
     regs = (volatile Regs*)(table->base.address + phys_mem_map);
@@ -19,6 +33,7 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
 
     period = regs->cap >> 32;
     ASSERT(period <= 0x05F5E100);
+    ASSERT(period > femto_per_nano);
 
     auto rev = regs->cap & 0xFF;
     ASSERT(rev != 0);
@@ -63,8 +78,10 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
                 auto& comparator = *(hpet::Comparator*)userptr;
                 auto& self = *comparator._device;
 
-                if(!comparator.f)
+                if(!comparator.f) {
+                    print("hpet: Spurious Interrupt\n");
                     return;
+                }
 
                 comparator.f(comparator.userptr);
                         
@@ -131,7 +148,7 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
             ASSERT(((regs->comparators[i].cmd >> 9) & 0x1F) == gsi); // If GSI was successfully set the read value should equal the written value
         }
 
-        timers::register_timer(&comparators[i]);
+        ::comparators.push_back(&comparators[i]);
     }
 
     start_timer();
@@ -152,34 +169,7 @@ void hpet::Device::poll_nsleep(uint64_t ns) {
 }
 
 uint64_t hpet::Device::time_ns() {
-    ASSERT(period > femto_per_nano);
-    return regs->main_counter * (period / femto_per_nano);
-}
-
-
-static std::linked_list<hpet::Device> devices;
-
-void hpet::init() {
-    acpi::Hpet* table = nullptr;
-    size_t i = 0;
-    while((table = acpi::get_table<acpi::Hpet>(i))) {
-        devices.emplace_back(table);
-
-        i++;
-    }
-}
-
-timers::HardwareTimerCapabilities hpet::Comparator::get_capabilities() {
-    timers::HardwareTimerCapabilities cap{};
-    cap.can_be_periodic = supports_periodic;
-    cap.period = _device->period;
-
-    cap.has_irq = true;
-    cap.has_time_ns = true;
-    cap.has_poll_ms = true;
-    cap.has_poll_ns = true;
-
-    return cap;
+    return (regs->main_counter * period) / femto_per_nano;
 }
 
 bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), void* userptr) {
@@ -214,14 +204,29 @@ bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), 
     return true;
 }
 
-void hpet::Comparator::poll_msleep(size_t ms) {
-    _device->poll_msleep(ms);
+void hpet::Comparator::cancel_timer() {
+    _device->regs->comparators[this->_i].cmd &= ~(1 << 2); // Stop generating IRQs
+    this->f = nullptr;
 }
 
-void hpet::Comparator::poll_nsleep(size_t ns) {
-    _device->poll_nsleep(ns);
+void hpet::poll_msleep(uint64_t ms) { devices.front().poll_msleep(ms); }
+void hpet::poll_nsleep(uint64_t ns) { devices.front().poll_nsleep(ns); }
+uint64_t hpet::time_ns() { return devices.front().time_ns(); }
+
+std::optional<uint32_t> hpet::start_timer_ms(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) { return start_timer_ns(periodic, ms * 1'000'000, f, userptr); }
+std::optional<uint32_t> hpet::start_timer_ns(bool periodic, uint64_t ns, void(*f)(void*), void* userptr) {
+    std::lock_guard guard{lock};
+    
+    for(size_t i = 0; i < comparators.size(); i++) {
+        if(comparators[i]->start_timer(periodic, ns, f, userptr))
+            return i;
+    }
+
+    return std::nullopt;
 }
 
-uint64_t hpet::Comparator::time_ns() {
-    return _device->time_ns();
+void hpet::cancel_timer(uint32_t i) { 
+    std::lock_guard guard{lock};
+    
+    comparators[i]->cancel_timer(); 
 }

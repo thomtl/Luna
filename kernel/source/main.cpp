@@ -9,6 +9,7 @@
 #include <Luna/cpu/regs.hpp>
 #include <Luna/cpu/idt.hpp>
 #include <Luna/cpu/smp.hpp>
+#include <Luna/cpu/tsc.hpp>
 
 #include <Luna/cpu/threads.hpp>
 
@@ -120,16 +121,19 @@ void kernel_main(const stivale2_struct* info) {
 
     cpu_data.lapic.init();
 
-    vm::init();
-
     acpi::init_tables(boot_info);
     ioapic::init();
+
     hpet::init();
+    tsc::init_per_cpu(); // TODO: Unify timer init?
+
     acpi::init_system();
 
-    smp::start_cpus(boot_info, kernel_main_ap);
+    smp::start_cpus(boot_info, kernel_main_ap);    
 
     pci::init();
+
+    vm::init();
 
     spawn([] {
         pci::handoff_bios();
@@ -173,6 +177,8 @@ void kernel_main_ap(stivale2_smp_info* info){
     simd::init();
 
     idt::load();
+
+    tsc::init_per_cpu();
 
     vm::init();
 

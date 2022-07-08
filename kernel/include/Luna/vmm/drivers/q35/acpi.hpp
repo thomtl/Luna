@@ -2,12 +2,11 @@
 
 #include <Luna/common.hpp>
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/cpu/tsc.hpp>
 #include <Luna/vmm/vm.hpp>
 
 #include <Luna/misc/log.hpp>
 #include <Luna/vmm/drivers/q35/smi.hpp>
-
-#include <Luna/drivers/timers/timers.hpp>
 
 
 namespace vm::q35::acpi {
@@ -35,7 +34,7 @@ namespace vm::q35::acpi {
     constexpr uint16_t apmc_en = (1 << 5);
 
     struct Driver final : public vm::AbstractPIODriver {
-        Driver(vm::Vm* vm, vm::q35::smi::Driver* smi_dev): vm{vm}, smi_dev{smi_dev}, start_ns{::timers::time_ns()} {
+        Driver(vm::Vm* vm, vm::q35::smi::Driver* smi_dev): vm{vm}, smi_dev{smi_dev}, start_ns{} {
             smi_dev->register_smi_cmd_callback([](smi::Driver* smi, void* self_ptr) {
                 auto& self = *(Driver*)self_ptr;
 
@@ -105,7 +104,7 @@ namespace vm::q35::acpi {
                 ret = pm1_control_val;
             } else if(reg == pm_tmr) {
                 ASSERT(size == 4);
-                auto time = timers::time_ns() - start_ns;
+                auto time = vm->cpus[0].get_guest_clock_ns();
 
                 auto ticks = (time * 3579545) / 1'000'000'000;
 

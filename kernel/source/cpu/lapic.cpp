@@ -1,7 +1,7 @@
 #include <Luna/cpu/lapic.hpp>
 #include <Luna/cpu/regs.hpp>
 #include <Luna/cpu/cpu.hpp>
-#include <Luna/drivers/timers/timers.hpp>
+#include <Luna/cpu/tsc.hpp>
 
 #include <Luna/mm/vmm.hpp>
 
@@ -80,7 +80,7 @@ void lapic::Lapic::calibrate_timer() {
     write(regs::timer_initial_count, ~0u);
 
     write(regs::lvt_timer, read(regs::lvt_timer) & ~(1 << 16)); // Clear timer mask
-    timers::poll_msleep(10);
+    tsc::poll_msleep(10);
     write(regs::lvt_timer, read(regs::lvt_timer) | (1 << 16)); // Set timer mask
 
     ticks_per_ms = (~0 - read(regs::timer_current_count)) / 10;

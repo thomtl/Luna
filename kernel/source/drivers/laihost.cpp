@@ -70,11 +70,11 @@ extern "C" {
     uint32_t laihost_pci_readd(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint32_t>(seg, bus, slot, func, offset); }
     
     void laihost_sleep(uint64_t ms) {
-        timers::poll_msleep(ms);
+        tsc::poll_msleep(ms);
     }
 
     uint64_t laihost_timer() {
-        return timers::time_ns() * 100; // 100ns increments
+        return tsc::time_ns() / 100; // 100ns increments
     }
 
     int laihost_sync_wait(lai_sync_state* state, unsigned int, int64_t) { // TODO: Use threads to actually implement this and wake, some stupid hardware relies on the timeout too instead of just unlocking its stuff

@@ -19,11 +19,8 @@ namespace cpu {
     constexpr uint32_t signature_intel_edx = 0x49656e69;
     constexpr uint32_t signature_intel_ecx = 0x6c65746e;
 
-
     bool cpuid(uint32_t leaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
     bool cpuid(uint32_t leaf, uint32_t subleaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
-
-    uint64_t rdtsc();
 
     void early_init(); // Cannot access per_cpu struct
     void init(); // Can access per_cpu struct
@@ -53,6 +50,10 @@ struct CpuData {
         uint16_t family;
         uint8_t model;
         uint8_t stepping;
+
+        struct {
+            uint64_t period_ns, period_ms;
+        } tsc;
 
         struct {
             void (*flush)(uintptr_t ptr);

@@ -3,7 +3,7 @@
 
 #include <Luna/cpu/regs.hpp>
 
-#include <Luna/drivers/timers/timers.hpp>
+#include <Luna/cpu/tsc.hpp>
 
 #include <Luna/misc/log.hpp>
 
@@ -175,9 +175,10 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
         std::lock_guard guard{old_thread->lock};
 
         old_thread->ctx.save(regs);
+        old_thread->running_on_cpu = nullptr;
+
         if(old_thread->state == threading::ThreadState::Running) {
             old_thread->state = threading::ThreadState::Idle;
-            old_thread->running_on_cpu = nullptr;
 
             std::lock_guard guard{scheduler_lock};
             expired_ptr->push_back(old_thread);

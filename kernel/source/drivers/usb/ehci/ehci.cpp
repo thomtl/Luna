@@ -1,7 +1,6 @@
 #include <Luna/drivers/usb/ehci/ehci.hpp>
 
 #include <Luna/drivers/pci.hpp>
-#include <Luna/drivers/timers/timers.hpp>
 #include <Luna/misc/log.hpp>
 
 

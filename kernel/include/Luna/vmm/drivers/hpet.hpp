@@ -2,12 +2,11 @@
 #pragma once
 
 #include <Luna/common.hpp>
+#include <Luna/cpu/tsc.hpp>
+
 #include <Luna/vmm/vm.hpp>
 
 #include <Luna/misc/log.hpp>
-
-#include <Luna/drivers/timers/timers.hpp>
-
 
 namespace vm::hpet {
     constexpr uintptr_t base = 0xFED0'0000;
@@ -131,7 +130,7 @@ namespace vm::hpet {
             if(!counter_running)
                 return counter_val;
 
-            auto time = timers::time_ns();
+            auto time = tsc::time_ns();
 
             counter_val += (time - last_update_time) / clk_period;
 
@@ -141,7 +140,7 @@ namespace vm::hpet {
         }
 
         void reset_counter() {
-            last_update_time = timers::time_ns();
+            last_update_time = tsc::time_ns();
         }
 
         void update_comparator(uint32_t id, uint64_t new_config) {

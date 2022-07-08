@@ -22,13 +22,6 @@ bool cpu::cpuid(uint32_t leaf, uint32_t subleaf, uint32_t& a, uint32_t& b, uint3
     return __get_cpuid_count(leaf, subleaf, &a, &b, &c, &d);
 }
 
-uint64_t cpu::rdtsc() {
-    uint32_t a, d;
-    asm volatile("rdtsc" : "=a"(a), "=d"(d));
-
-    return a | ((uint64_t)d << 32);
-}
-
 void cpu::early_init() {
     // NX Support
     {

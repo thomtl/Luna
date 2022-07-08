@@ -5,7 +5,7 @@
 namespace std {
     template<typename T>
     struct linked_list {
-        linked_list(): head{nullptr}, tail{nullptr}, length{0} {}
+        constexpr linked_list(): head{nullptr}, tail{nullptr}, length{0} {}
 
         template<typename... Args>
         T& emplace_back(Args&&... args) {
@@ -62,6 +62,9 @@ namespace std {
 
         const_iterator begin() const { return const_iterator{head}; }
         const_iterator end() const { return const_iterator{nullptr}; }
+
+        T& front() { return *begin(); }
+        const T& front() const { return *begin(); }
 
         const T& operator[](size_t index) const { 
             auto it = begin();
