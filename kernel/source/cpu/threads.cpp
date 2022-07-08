@@ -168,6 +168,8 @@ static void idle() {
 }
 
 static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
+    auto entry_time = tsc::time_ns();
+
     auto& cpu = get_cpu();
     auto* old_thread = cpu.current_thread;
     
@@ -176,6 +178,7 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
 
         old_thread->ctx.save(regs);
         old_thread->running_on_cpu = nullptr;
+        old_thread->cpu_time += (entry_time - old_thread->cpu_time_at_scheduled_in);
 
         if(old_thread->state == threading::ThreadState::Running) {
             old_thread->state = threading::ThreadState::Idle;
@@ -213,6 +216,8 @@ static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
     }
 
     rearm_preemption();
+
+    next->cpu_time_at_scheduled_in = tsc::time_ns();
 }
 
 void threading::start_on_cpu() {
@@ -290,6 +295,14 @@ void threading::Thread::pin_to_cpu(uint32_t id)  {
     lock.unlock();
 
     asm volatile("int %0" : : "i"(threading::quantum_irq_vector) : "memory"); // Yield
+}
+
+uint64_t threading::Thread::time_ns() {
+    return cpu_time + (tsc::time_ns() - cpu_time_at_scheduled_in);
+}
+
+uint64_t threading::Thread::time_ns_at(uint64_t count) {
+    return cpu_time + (tsc::time_ns_at(count) - cpu_time_at_scheduled_in);
 }
 
 

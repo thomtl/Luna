@@ -8,6 +8,13 @@
 #include <Luna/vmm/vm.hpp>
 
 namespace vmx {
+    struct Vm;
+} // namespace vmx
+
+
+extern "C" void vmx_do_host_rsp_update(vmx::Vm* vm, uint64_t rsp);
+
+namespace vmx {
     enum class PinBasedControls : uint32_t {
         ExtInt = (1 << 0),
         NMI = (1 << 3),
@@ -174,6 +181,9 @@ namespace vmx {
     constexpr uint64_t host_cr3 = 0x6c02;
     constexpr uint64_t host_cr4 = 0x6c04;
 
+    constexpr uint64_t host_rsp = 0x6c14;
+    constexpr uint64_t host_rip = 0x6c16;
+
     constexpr uint64_t host_es_sel = 0xC00;
     constexpr uint64_t host_cs_sel = 0xC02;
     constexpr uint64_t host_ss_sel = 0xC04;
@@ -283,14 +293,15 @@ namespace vmx {
 
     struct Vm final : public vm::AbstractVm {
         Vm(vm::AbstractMM* mm, vm::VCPU* vcpu);
-        bool run(vm::VmExit& exit);
+        bool run() override;
 
-        void set(vm::VmCap cap, bool value);
-        void get_regs(vm::RegisterState& regs, uint64_t flags) const;
-        void set_regs(const vm::RegisterState& regs, uint64_t flags);
-        simd::Context& get_guest_simd_context() { return guest_simd; }
+        void set(vm::VmCap cap, bool value) override;
+        void set(vm::VmCap cap, uint64_t value) override;
+        void get_regs(vm::RegisterState& regs, uint64_t flags) const override;
+        void set_regs(const vm::RegisterState& regs, uint64_t flags) override;
+        simd::Context& get_guest_simd_context() override { return guest_simd; }
 
-        void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0);
+        void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0) override;
 
         private:
         void vmclear();
@@ -303,10 +314,14 @@ namespace vmx {
         uintptr_t vmcs_pa;
         uintptr_t vmcs;
 
+        uint64_t saved_host_rsp;
+
         vm::AbstractMM* mm;
         vm::VCPU* vcpu;
 
         simd::Context host_simd, guest_simd;
         GprState guest_gprs;
+        
+        friend void ::vmx_do_host_rsp_update(vmx::Vm* vm, uint64_t rsp);
     };
 } // namespace vmx

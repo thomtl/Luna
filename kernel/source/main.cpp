@@ -220,7 +220,7 @@ void create_vm() {
     constexpr uintptr_t himem_start = 0x10'0000;
     constexpr size_t himem_size = 128 * 1024 * 1024; // 16MiB
 
-    vm::Vm vm{1};
+    vm::Vm vm{1, this_thread()};
     {
         auto* file = vfs::get_vfs().open("A:/luna/bios.bin");
         ASSERT(file);

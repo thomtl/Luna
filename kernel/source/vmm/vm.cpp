@@ -20,7 +20,7 @@ void vm::init() {
         PANIC("Unknown virtualization vendor");
 }
 
-vm::VCPU::VCPU(vm::Vm* vm, uint8_t id): vm{vm}, lapic{id} {
+vm::VCPU::VCPU(vm::Vm* vm, threading::Thread* thread, uint8_t id): vm{vm}, thread{thread}, time_spent_in_vm{0}, lapic{id} {
     switch (get_cpu().cpu.vm.vendor) {
         case CpuVendor::Intel:
             vcpu = new vmx::Vm{vm->mm, this};
@@ -107,378 +107,392 @@ bool vm::VCPU::run() {
         if(should_exit)
             return true;
         
-        vm::RegisterState regs{};
-        vm::VmExit exit{};
-
-        if(!vcpu->run(exit))
+        if(!vcpu->run())
             return false;
+    }
+}
 
-        switch (exit.reason) {
-        case VmExit::Reason::Vmcall:
-            if(hypercall_callback)
-                hypercall_callback(this, hypercall_userptr);
-            else // If no handler, exit
-                return true;
-            break;
 
-        case VmExit::Reason::MMUViolation: {
-            get_regs(regs);
+bool vm::VCPU::handle_vmexit(const VmExit& exit) {
+    vm::RegisterState regs{};
 
-            auto grip = regs.cs.base + regs.rip;
+    switch (exit.reason) {
+    case VmExit::Reason::Vmcall:
+        if(hypercall_callback)
+            hypercall_callback(this, hypercall_userptr);
+        else // If no handler, exit
+            return true;
+        break;
 
-            auto emulate_mmio = [&](AbstractMMIODriver* driver, uintptr_t gpa, uintptr_t base, size_t size) {
-                uint8_t instruction[max_x86_instruction_size];
-                mem_read(grip, {instruction, 15});
+    case VmExit::Reason::MMUViolation: {
+        get_regs(regs);
 
-                vm::emulate::emulate_instruction(this, gpa, {base, size}, instruction, regs, driver);
-                set_regs(regs);
-            };
+        auto grip = regs.cs.base + regs.rip;
 
-            if((exit.mmu.gpa & ~0xFFF) == (apicbase & ~0xFFF)) {
-                emulate_mmio(&lapic, exit.mmu.gpa, apicbase & ~0xFFF, 0x1000);
+        auto emulate_mmio = [&](AbstractMMIODriver* driver, uintptr_t gpa, uintptr_t base, size_t size) {
+            uint8_t instruction[max_x86_instruction_size];
+            mem_read(grip, {instruction, 15});
+
+            vm::emulate::emulate_instruction(this, gpa, {base, size}, instruction, regs, driver);
+            set_regs(regs);
+        };
+
+        if((exit.mmu.gpa & ~0xFFF) == (apicbase & ~0xFFF)) {
+            emulate_mmio(&lapic, exit.mmu.gpa, apicbase & ~0xFFF, 0x1000);
+            goto did_mmio;
+        }
+            
+        for(const auto& [base, driver] : vm->mmio_map) {
+            if(exit.mmu.gpa >= base && exit.mmu.gpa < (base + driver.second))  {
+                // Access is in an MMIO region
+                emulate_mmio(driver.first, exit.mmu.gpa, base, driver.second);
                 goto did_mmio;
             }
-            
-            for(const auto& [base, driver] : vm->mmio_map) {
-                if(exit.mmu.gpa >= base && exit.mmu.gpa < (base + driver.second))  {
-                    // Access is in an MMIO region
-                    emulate_mmio(driver.first, exit.mmu.gpa, base, driver.second);
-                    goto did_mmio;
-                }
+        }
+
+        // No MMIO region, so a page violation
+        print("vm: MMU Violation\n");
+        print("    gRIP: {:#x}, gPA: {:#x}\n", grip, exit.mmu.gpa);
+        print("    Access: {:s}{:s}{:s}, {:s}\n", exit.mmu.access.r ? "R" : "", exit.mmu.access.w ? "W" : "", exit.mmu.access.x ? "X" : "", exit.mmu.access.user ? "User" : "Supervisor");
+        if(exit.mmu.page.present)
+            print("    Page: {:s}{:s}{:s}, {:s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "", exit.mmu.page.user ? "User" : "Supervisor");
+        else
+            print("    Page: Not present\n");
+        if(exit.mmu.reserved_bits_set)
+            print("    Reserved bits set\n");
+        return false;
+
+        did_mmio:
+        break;
+    }
+
+    case VmExit::Reason::PIO: {
+        ASSERT(!exit.pio.rep); // TODO
+
+        auto mask_value = [&]<typename T>(T& value, uint8_t size) -> T {
+            switch(size) {
+                case 1: return value & 0xFF;
+                case 2: return value & 0xFFFF;
+                case 4: return value & 0xFFFF'FFFF;
+                default: PANIC("Unknown PIO Size");
+            }
+        };
+
+        auto driver = vm->pio_map.find(exit.pio.port);
+        if(exit.pio.write) {
+            uint64_t value = 0;
+            if(exit.pio.string) {
+                get_regs(regs); 
+                ASSERT(!(regs.efer & (1 << 10)));
+
+                auto addr = emulate::get_sreg(regs, static_cast<emulate::sreg>(exit.pio.segment_index)).base + mask_value(regs.rdi, exit.pio.address_size);
+
+                mem_read(addr, {(uint8_t*)&value, exit.pio.size});
+                value = mask_value(value, exit.pio.size);
+
+                if(regs.rflags & (1 << 10)) // Direction Flag
+                    regs.rdi -= exit.pio.size;
+                else
+                    regs.rdi += exit.pio.size;
+
+                set_regs(regs, VmRegs::General);
+            } else {
+                get_regs(regs, VmRegs::General); 
+                value = mask_value(regs.rax, exit.pio.size);
             }
 
-            // No MMIO region, so a page violation
-            print("vm: MMU Violation\n");
-            print("    gRIP: {:#x}, gPA: {:#x}\n", grip, exit.mmu.gpa);
-            print("    Access: {:s}{:s}{:s}, {:s}\n", exit.mmu.access.r ? "R" : "", exit.mmu.access.w ? "W" : "", exit.mmu.access.x ? "X" : "", exit.mmu.access.user ? "User" : "Supervisor");
-            if(exit.mmu.page.present)
-                print("    Page: {:s}{:s}{:s}, {:s}\n", exit.mmu.page.r ? "R" : "", exit.mmu.page.w ? "W" : "", exit.mmu.page.x ? "X" : "", exit.mmu.page.user ? "User" : "Supervisor");
+            if(driver != vm->pio_map.end())
+                driver->second->pio_write(exit.pio.port, value, exit.pio.size);
             else
-                print("    Page: Not present\n");
-            if(exit.mmu.reserved_bits_set)
-                print("    Reserved bits set\n");
-            return false;
-
-            did_mmio:
-            break;
-        }
-
-        case VmExit::Reason::PIO: {
-            get_regs(regs); 
-
-            ASSERT(!exit.pio.rep); // TODO
-
-            auto mask_value = [&]<typename T>(T& value, uint8_t size) -> T {
-                switch(size) {
-                    case 1: return value & 0xFF;
-                    case 2: return value & 0xFFFF;
-                    case 4: return value & 0xFFFF'FFFF;
-                    default: PANIC("Unknown PIO Size");
-                }
-            };
-
-            auto driver = vm->pio_map.find(exit.pio.port);
-            if(exit.pio.write) {
-                uint64_t value = 0;
-                if(exit.pio.string) {
-                    ASSERT(!(regs.efer & (1 << 10)));
-
-                    auto addr = emulate::get_sreg(regs, static_cast<emulate::sreg>(exit.pio.segment_index)).base + mask_value(regs.rdi, exit.pio.address_size);
-
-                    mem_read(addr, {(uint8_t*)&value, exit.pio.size});
-                    value = mask_value(value, exit.pio.size);
-
-                    if(regs.rflags & (1 << 10)) // Direction Flag
-                        regs.rdi -= exit.pio.size;
-                    else
-                        regs.rdi += exit.pio.size;
-
-                    set_regs(regs, VmRegs::General);
-                } else {
-                    value = mask_value(regs.rax, exit.pio.size);
-                }
-
-                if(driver != vm->pio_map.end())
-                    driver->second->pio_write(exit.pio.port, value, exit.pio.size);
-                else
-                    print("vcpu: Unhandled PIO write to port {:#x}\n", exit.pio.port);
-            } else {
-                ASSERT(!exit.pio.string);
-
-                uint64_t value = 0;
-                if(driver != vm->pio_map.end())
-                    value = driver->second->pio_read(exit.pio.port, exit.pio.size);
-                else
-                    print("vcpu: Unhandled PIO read to port {:#x}\n", exit.pio.port);
-                    
-                switch(exit.pio.size) {
-                    case 1: regs.rax &= ~0xFF; break;
-                    case 2: regs.rax &= ~0xFFFF; break;
-                    case 4: regs.rax &= ~0xFFFF'FFFF; break;
-                    default: PANIC("Unknown PIO Size");
-                }
-
-                regs.rax |= mask_value(value, exit.pio.size);
-
-                set_regs(regs);
-            }
-
-            break;
-        }
-
-        case VmExit::Reason::CPUID: {
-            get_regs(regs);
-
-            auto write_low32 = [&](uint64_t& reg, uint32_t val) { reg &= ~0xFFFF'FFFF; reg |= val; };
-
-            auto leaf = regs.rax & 0xFFFF'FFFF;
-            auto subleaf = regs.rcx & 0xFFFF'FFFF;
-
-            constexpr uint32_t luna_sig = 0x616E754C; // Luna in ASCII
-            
-            auto passthrough = [&]() {
-                uint32_t a, b, c, d;
-                ASSERT(cpu::cpuid(leaf, subleaf, a, b, c, d));
-
-                write_low32(regs.rax, a);
-                write_low32(regs.rbx, b);
-                write_low32(regs.rcx, c);
-                write_low32(regs.rdx, d);
-            };
-
-            auto zero_cpuid = [&]() {
-                write_low32(regs.rax, 0);
-                write_low32(regs.rbx, 0);
-                write_low32(regs.rcx, 0);
-                write_low32(regs.rdx, 0); 
-            };
-
-            auto os_support_bit = [&](uint64_t& reg, uint8_t cr4_bit, uint8_t bit) {
-                reg &= ~(1 << bit);
-
-                bool os = (regs.cr4 >> cr4_bit) & 1;
-                reg |= (os << bit);
-            };
-
-            if(leaf == 0) {
-                passthrough();
-            } else if(leaf == 1) {
-                passthrough();
-
-                regs.rcx |= (1u << 31); // Set Hypervisor Present bit
-
-                os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
-
-                regs.rcx &= ~(1u << 26); // TODO: Emulate VMX xsetbv
-            } else if(leaf == 6) {
-                zero_cpuid(); // No thermal / power management stuff
-            } else if(leaf == 7) {
-                if(subleaf == 0) {
-                    passthrough();
-
-                    os_support_bit(regs.rcx, 22, 4);
-                } else {
-                    print("vcpu: Unhandled CPUID 0x7 subleaf {:#x}\n", subleaf);
-                }
-            } else if(leaf == 0xD) {
-                passthrough(); // Subleaf isn't interesting
-            } else if(leaf == 0x4000'0000) {
-                write_low32(regs.rax, 0);
-                write_low32(regs.rbx, luna_sig);
-                write_low32(regs.rcx, luna_sig);
-                write_low32(regs.rdx, luna_sig);
-            } else if(leaf == 0x8000'0000) {
-                passthrough();
-            } else if(leaf == 0x8000'0001) {
-                passthrough();
-                os_support_bit(regs.rdx, 9, 24);
-            } else if(leaf == 0x8000'0002 || leaf == 0x8000'0003 || leaf == 0x8000'0004) { // CPU Brand string
-                passthrough();
-            } else if(leaf == 0x8000'0005) { // L1 and TLB id
-                passthrough();
-            } else if(leaf == 0x8000'0006) {
-                passthrough();
-            } else if(leaf == 0x8000'0007) {
-                passthrough();
-            } else if(leaf == 0x8000'0008) {
-                passthrough(); // TODO: Do we want this to be passthrough?
-                write_low32(regs.rcx, 0); // Clear out core info
-            } else if(leaf == 0x8000'000A) { // SVM Info
-                zero_cpuid(); // TODO: Nested Virt
-            } else if(leaf == 0x8000'001F) { // Secure Encryption
-                zero_cpuid();
-            } else {
-                print("vcpu: Unhandled CPUID: {:#x}:{}\n", leaf, subleaf);
-                zero_cpuid();
-            }
-
-            set_regs(regs);
-            break;
-        }
-
-        case VmExit::Reason::MSR: {
-            get_regs(regs);
-            auto index = regs.rcx & 0xFFFF'FFFF;
-            auto value = (regs.rax & 0xFFFF'FFFF) | (regs.rdx << 32);
-
-            auto write_low32 = [&](uint64_t& reg, uint32_t val) { reg &= ~0xFFFF'FFFF; reg |= val; };
-
-            if(index == msr::ia32_tsc) {
-                if(exit.msr.write)
-                    ia32_tsc = value;
-                else
-                    value = ia32_tsc;
-            } else if(index == msr::ia32_tsc_adjust) {
-                if(exit.msr.write) // Read/Write to clear
-                    ia32_tsc_adjust = 0;
-                else
-                    value = ia32_tsc_adjust;
-            } else if(index == msr::ia32_sysenter_cs) {
-                if(exit.msr.write)
-                    regs.sysenter_cs = value;
-                else
-                    value = regs.sysenter_cs;
-            } else if(index == msr::ia32_sysenter_eip) {
-                if(exit.msr.write)
-                    regs.sysenter_eip = value;
-                else
-                    value = regs.sysenter_eip;
-            } else if(index == msr::ia32_sysenter_esp) {
-                if(exit.msr.write)
-                    regs.sysenter_esp = value;
-                else
-                    value = regs.sysenter_esp;
-            } else if(index == msr::ia32_mtrr_cap) {
-                if(exit.msr.write)
-                    vcpu->inject_int(AbstractVm::InjectType::Exception, 13, true, 0); // Inject #GP(0)
-
-                value = (1 << 10) | (1 << 8) | 8; // WC valid, Fixed MTRRs valid, 8 Variable MTRRs
-            } else if(index == msr::ia32_apic_base) {
-                if(exit.msr.write) {
-                    apicbase = value;
-                    lapic.update_apicbase(apicbase);
-                } else {
-                    value = apicbase;
-                }
-            } else if(index == msr::ia32_bios_sign_id) {
-                if(exit.msr.write) {
-                    ASSERT(value == 0); // TODO, CPUID should write the rev
-                } else {
-                    value = 0; // No microcode loaded
-                }
-            } else if(index == msr::ia32_arch_capabilities) {
-                if(exit.msr.write)
-                    PANIC("Read only");
-                else
-                    value = 0;
-            } else if(index >= 0x200 && index <= 0x2FF) {
-                if(index == msr::ia32_pat) {
-                    if(exit.msr.write)
-                        regs.pat = value;
-                    else
-                        value = regs.pat;
-                } else {
-                    update_mtrr(exit.msr.write, index, value);
-                }
-            } else if(index == msr::ia32_xss) {
-                if(exit.msr.write)
-                    ia32_xss = value;
-                else
-                    value = ia32_xss;
-            } else if(index == msr::ia32_efer) {
-                if(exit.msr.write)
-                    regs.efer = value | efer_constraint;
-                else
-                    value = regs.efer;
-            } else if(index == msr::syscfg) {
-                if(exit.msr.write)
-                    PANIC("TODO: SYSCFG write");
-                else
-                    value = 0;
-            } else if(index == msr::osvw_id_length) {
-                if(exit.msr.write)
-                    PANIC("Read only");
-                else
-                    value = 0;
-            } else {
-                if(exit.msr.write) {
-                    print("vcpu: Unhandled wrmsr({:#x}, {:#x})\n", index, value);
-                } else {
-                    print("vcpu: Unhandled rdmsr({:#x})\n", index);
-                    value = 0;
-                }
-            }
-            
-            if(!exit.msr.write) {
-                write_low32(regs.rax, value & 0xFFFF'FFFF);
-                write_low32(regs.rdx, value >> 32);
-            }
-
-            set_regs(regs);
-            break;
-        }
-
-        case VmExit::Reason::RSM: {
-            if(is_in_smm)
-                handle_rsm();
-            else
-                vcpu->inject_int(vm::AbstractVm::InjectType::Exception, 6); // Inject a UD
-            break;
-        }
-
-        case VmExit::Reason::Hlt: {
-            print("vm: HLT\n");
-            return false;
-        }
-
-        case VmExit::Reason::CrMov: {
-            get_regs(regs);
+                print("vcpu: Unhandled PIO write to port {:#x}\n", exit.pio.port);
+        } else {
+            ASSERT(!exit.pio.string);
+            get_regs(regs, VmRegs::General);
 
             uint64_t value = 0;
+            if(driver != vm->pio_map.end())
+                value = driver->second->pio_read(exit.pio.port, exit.pio.size);
+            else
+                print("vcpu: Unhandled PIO read to port {:#x}\n", exit.pio.port);
+                    
+            switch(exit.pio.size) {
+                case 1: regs.rax &= ~0xFF; break;
+                case 2: regs.rax &= ~0xFFFF; break;
+                case 4: regs.rax &= ~0xFFFF'FFFF; break;
+                default: PANIC("Unknown PIO Size");
+            }
 
-            if(exit.cr.write)
-                value = vm::emulate::read_r64(regs, (vm::emulate::r64)exit.cr.gpr, 4);
+            regs.rax |= mask_value(value, exit.pio.size);
+
+            set_regs(regs, VmRegs::General);
+        }
+
+        break;
+    }
+
+    case VmExit::Reason::CPUID: {
+        get_regs(regs);
+
+        auto write_low32 = [&](uint64_t& reg, uint32_t val) { reg &= ~0xFFFF'FFFF; reg |= val; };
+
+        auto leaf = regs.rax & 0xFFFF'FFFF;
+        auto subleaf = regs.rcx & 0xFFFF'FFFF;
+
+        constexpr uint32_t luna_sig = 0x616E754C; // Luna in ASCII
             
-            if(exit.cr.cr == 0) {
-                if(exit.cr.write) {
-                    regs.cr0 = value | cr0_constraint;
-                } else {
-                    PANIC("TODO");
-                }
-            } else if(exit.cr.cr == 3) {
-                if(exit.cr.write) {
-                    regs.cr3 = value;
-                } else {
-                    value = regs.cr3;
-                }
-            } else if(exit.cr.cr == 4) {
-                if(exit.cr.write) {
-                    regs.cr4 = value | cr4_constraint;
-                } else {
-                    PANIC("TODO");
-                }
+        auto passthrough = [&]() {
+            uint32_t a, b, c, d;
+            ASSERT(cpu::cpuid(leaf, subleaf, a, b, c, d));
+
+            write_low32(regs.rax, a);
+            write_low32(regs.rbx, b);
+            write_low32(regs.rcx, c);
+            write_low32(regs.rdx, d);
+        };
+
+        auto zero_cpuid = [&]() {
+            write_low32(regs.rax, 0);
+            write_low32(regs.rbx, 0);
+            write_low32(regs.rcx, 0);
+            write_low32(regs.rdx, 0); 
+        };
+
+        auto os_support_bit = [&](uint64_t& reg, uint8_t cr4_bit, uint8_t bit) {
+            reg &= ~(1 << bit);
+
+            bool os = (regs.cr4 >> cr4_bit) & 1;
+            reg |= (os << bit);
+        };
+
+        if(leaf == 0) {
+            passthrough();
+        } else if(leaf == 1) {
+            passthrough();
+
+            regs.rcx |= (1u << 31); // Set Hypervisor Present bit
+
+            os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
+
+            regs.rcx &= ~(1u << 26); // TODO: Emulate VMX xsetbv
+        } else if(leaf == 6) {
+            zero_cpuid(); // No thermal / power management stuff
+        } else if(leaf == 7) {
+            if(subleaf == 0) {
+                passthrough();
+
+                os_support_bit(regs.rcx, 22, 4);
+            } else {
+                print("vcpu: Unhandled CPUID 0x7 subleaf {:#x}\n", subleaf);
+            }
+        } else if(leaf == 0xD) {
+            passthrough(); // Subleaf isn't interesting
+        } else if(leaf == 0x4000'0000) {
+            write_low32(regs.rax, 0x4000'0000);
+            write_low32(regs.rbx, luna_sig);
+            write_low32(regs.rcx, luna_sig);
+            write_low32(regs.rdx, luna_sig);
+        } else if(leaf == 0x8000'0000) {
+            passthrough();
+        } else if(leaf == 0x8000'0001) {
+            passthrough();
+            os_support_bit(regs.rdx, 9, 24);
+        } else if(leaf == 0x8000'0002 || leaf == 0x8000'0003 || leaf == 0x8000'0004) { // CPU Brand string
+            passthrough();
+        } else if(leaf == 0x8000'0005) { // L1 and TLB id
+            passthrough();
+        } else if(leaf == 0x8000'0006) {
+            passthrough();
+        } else if(leaf == 0x8000'0007) {
+            passthrough();
+        } else if(leaf == 0x8000'0008) {
+            passthrough(); // TODO: Do we want this to be passthrough?
+            write_low32(regs.rcx, 0); // Clear out core info
+        } else if(leaf == 0x8000'000A) { // SVM Info
+            zero_cpuid(); // TODO: Nested Virt
+        } else if(leaf == 0x8000'001F) { // Secure Encryption
+            zero_cpuid();
+        } else {
+            print("vcpu: Unhandled CPUID: {:#x}:{}\n", leaf, subleaf);
+            zero_cpuid();
+        }
+
+        set_regs(regs);
+        break;
+    }
+
+    case VmExit::Reason::MSR: {
+        get_regs(regs);
+        auto index = regs.rcx & 0xFFFF'FFFF;
+        auto value = (regs.rax & 0xFFFF'FFFF) | (regs.rdx << 32);
+
+        auto write_low32 = [&](uint64_t& reg, uint32_t val) { reg &= ~0xFFFF'FFFF; reg |= val; };
+
+        if(index == msr::ia32_tsc) {
+            if(exit.msr.write) {
+                auto delta = value - (host_tsc_at_vmexit + guest_tsc_offset); // delta = new_gTSC - old_gTSC = new_gTSC - (hTSC + offset)
+                ia32_tsc_adjust += delta;
+
+                adjust_guest_tsc(delta);
+            } else {
+                value = host_tsc_at_vmexit + guest_tsc_offset; // gTSC = hTSC + off
+            }
+        } else if(index == msr::ia32_tsc_adjust) {
+            if(exit.msr.write) {
+                auto delta = value - ia32_tsc_adjust;
+                ia32_tsc_adjust += delta;
+
+                adjust_guest_tsc(delta);
+            } else {
+                value = ia32_tsc_adjust;
+            }
+        } else if(index == msr::ia32_sysenter_cs) {
+            if(exit.msr.write)
+                regs.sysenter_cs = value;
+            else
+                value = regs.sysenter_cs;
+        } else if(index == msr::ia32_sysenter_eip) {
+            if(exit.msr.write)
+                regs.sysenter_eip = value;
+            else
+                value = regs.sysenter_eip;
+        } else if(index == msr::ia32_sysenter_esp) {
+            if(exit.msr.write)
+                regs.sysenter_esp = value;
+            else
+                value = regs.sysenter_esp;
+        } else if(index == msr::ia32_mtrr_cap) {
+            if(exit.msr.write) {
+                vcpu->inject_int(AbstractVm::InjectType::Exception, 13, true, 0); // Inject #GP(0)
+                return 0;
+            }
+
+            value = (1 << 10) | (1 << 8) | 8; // WC valid, Fixed MTRRs valid, 8 Variable MTRRs
+        } else if(index == msr::ia32_apic_base) {
+            if(exit.msr.write) {
+                apicbase = value;
+                lapic.update_apicbase(apicbase);
+            } else {
+                value = apicbase;
+            }
+        } else if(index == msr::ia32_bios_sign_id) {
+            if(exit.msr.write) {
+                ASSERT(value == 0); // TODO, CPUID should write the rev
+            } else {
+                value = 0; // No microcode loaded
+            }
+        } else if(index == msr::ia32_arch_capabilities) {
+            if(exit.msr.write)
+                PANIC("Read only");
+            else
+                value = 0;
+        } else if(index >= 0x200 && index <= 0x2FF) {
+            if(index == msr::ia32_pat) {
+                if(exit.msr.write)
+                    regs.pat = value;
+                else
+                    value = regs.pat;
+            } else {
+                update_mtrr(exit.msr.write, index, value);
+            }
+        } else if(index == msr::ia32_xss) {
+            if(exit.msr.write)
+                ia32_xss = value;
+            else
+                value = ia32_xss;
+        } else if(index == msr::ia32_efer) {
+            if(exit.msr.write)
+                regs.efer = value | efer_constraint;
+            else
+                value = regs.efer;
+        } else if(index == msr::syscfg) {
+            if(exit.msr.write)
+                PANIC("TODO: SYSCFG write");
+            else
+                value = 0;
+        } else if(index == msr::osvw_id_length) {
+            if(exit.msr.write)
+                PANIC("Read only");
+            else
+                value = 0;
+        } else {
+            if(exit.msr.write) {
+                print("vcpu: Unhandled wrmsr({:#x}, {:#x})\n", index, value);
+            } else {
+                print("vcpu: Unhandled rdmsr({:#x})\n", index);
+                value = 0;
+            }
+        }
+            
+        if(!exit.msr.write) {
+            write_low32(regs.rax, value & 0xFFFF'FFFF);
+            write_low32(regs.rdx, value >> 32);
+        }
+
+        set_regs(regs);
+        break;
+    }
+
+    case VmExit::Reason::RSM: {
+        if(is_in_smm)
+            handle_rsm();
+        else
+            vcpu->inject_int(vm::AbstractVm::InjectType::Exception, 6); // Inject a UD
+        break;
+    }
+
+    case VmExit::Reason::Hlt: {
+        print("vm: HLT\n");
+        return false;
+    }
+
+    case VmExit::Reason::CrMov: {
+        get_regs(regs);
+
+        uint64_t value = 0;
+
+        if(exit.cr.write)
+            value = vm::emulate::read_r64(regs, (vm::emulate::r64)exit.cr.gpr, 4);
+            
+        if(exit.cr.cr == 0) {
+            if(exit.cr.write) {
+                regs.cr0 = value | cr0_constraint;
             } else {
                 PANIC("TODO");
             }
-
-            if(!exit.cr.write)
-                vm::emulate::write_r64(regs, (vm::emulate::r64)exit.cr.gpr, value, 4);
-
-            set_regs(regs);
-            break;
-        }
-
-        default:
-            print("vcpu: Exit due to {:s}\n", exit.reason_to_string(exit.reason));
-            if(exit.instruction_len != 0) {
-                print("         Opcode: ");
-                for(size_t i = 0; i < exit.instruction_len; i++)
-                    print("{:#x} ", (uint64_t)exit.instruction[i]);
-                print("\n");
+        } else if(exit.cr.cr == 3) {
+            if(exit.cr.write) {
+                regs.cr3 = value;
+            } else {
+                value = regs.cr3;
             }
-            break;
+        } else if(exit.cr.cr == 4) {
+            if(exit.cr.write) {
+                regs.cr4 = value | cr4_constraint;
+            } else {
+                PANIC("TODO");
+            }
+        } else {
+            PANIC("TODO");
         }
-    } 
+
+        if(!exit.cr.write)
+            vm::emulate::write_r64(regs, (vm::emulate::r64)exit.cr.gpr, value, 4);
+
+        set_regs(regs);
+        break;
+    }
+
+    default:
+        print("vcpu: Exit due to {:s}\n", exit.reason_to_string(exit.reason));
+        if(exit.instruction_len != 0) {
+            print("         Opcode: ");
+            for(size_t i = 0; i < exit.instruction_len; i++)
+                print("{:#x} ", (uint64_t)exit.instruction[i]);
+            print("\n");
+        }
+        break;
+    }
+
     return true;
 }
 
@@ -921,7 +935,13 @@ void vm::VCPU::mem_write(uintptr_t gva, std::span<uint8_t> buf) {
     }
 }
 
-vm::Vm::Vm(uint8_t n_cpus) {
+void vm::VCPU::adjust_guest_tsc(int64_t diff) {
+    guest_tsc_offset += diff;
+
+    vcpu->set(VmCap::TSCOffset, guest_tsc_offset);
+}
+
+vm::Vm::Vm(uint8_t n_cpus, threading::Thread* thread) {
     switch (get_cpu().cpu.vm.vendor) {
         case CpuVendor::Intel:
             mm = vmx::create_ept();
@@ -936,7 +956,7 @@ vm::Vm::Vm(uint8_t n_cpus) {
 
     ASSERT(n_cpus > 0); // Make sure there's at least 1 VCPU
     for(uint8_t i = 0; i < n_cpus; i++)
-        cpus.emplace_back(this, i);
+        cpus.emplace_back(this, thread, i);
 }
 
 void vm::Vm::set_irq(uint8_t irq, bool level) {

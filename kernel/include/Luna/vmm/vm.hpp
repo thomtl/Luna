@@ -113,7 +113,7 @@ namespace vm {
         virtual uint8_t get_levels() const = 0;
     };
 
-    enum class VmCap { FullPIOAccess, SMMEntryCallback, SMMLeaveCallback, HypercallCallback };
+    enum class VmCap { FullPIOAccess, SMMEntryCallback, SMMLeaveCallback, HypercallCallback, TSCOffset };
     namespace VmRegs {
         enum {
             General = (1 << 0),
@@ -127,6 +127,7 @@ namespace vm {
         virtual ~AbstractVm() {}
 
         virtual void set(VmCap cap, bool v) = 0;
+        virtual void set(VmCap cap, uint64_t v) = 0;
         virtual void get_regs(vm::RegisterState& regs, uint64_t flags) const = 0;
         virtual void set_regs(const vm::RegisterState& regs, uint64_t flags) = 0;
         
@@ -135,7 +136,7 @@ namespace vm {
         enum class InjectType { ExtInt, NMI, Exception, SoftwareInt };
         virtual void inject_int(InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0) = 0;
 
-        virtual bool run(VmExit& exit) = 0;
+        virtual bool run() = 0;
     };
 
     struct Vm;
@@ -146,7 +147,9 @@ namespace vm {
     };
 
     struct VCPU {
-        VCPU(Vm* vm, uint8_t id);
+        VCPU(Vm* vm, threading::Thread* thread, uint8_t id);
+        bool run();
+
 
         void exit();
         
@@ -162,8 +165,6 @@ namespace vm {
         void dma_write(uintptr_t gpa, std::span<uint8_t> buf);
         void dma_read(uintptr_t gpa, std::span<uint8_t> buf);
 
-
-        
         PageWalkInfo walk_guest_paging(uintptr_t gva);
 
         void mem_write(uintptr_t gva, std::span<uint8_t> buf);
@@ -171,9 +172,13 @@ namespace vm {
 
         void map(uintptr_t hpa, uintptr_t gpa, uint64_t flags);
         void protect(uintptr_t gpa, uint64_t flags);
-        bool run();
 
         void update_mtrr(bool write, uint32_t index, uint64_t& val);
+
+        uint64_t get_guest_clock_ns() const { return time_spent_in_vm; }
+
+        bool handle_vmexit(const VmExit& exit);
+        void adjust_guest_tsc(int64_t diff);
 
         struct {
             struct {
@@ -188,9 +193,11 @@ namespace vm {
             uint8_t default_type;
         } mtrr;
         uint64_t apicbase;
-        uint64_t ia32_tsc, ia32_tsc_adjust;
+        uint64_t ia32_tsc_adjust;
         uint64_t smbase;
         uint64_t ia32_xss;
+
+        uint64_t guest_tsc_offset = 0, host_tsc_at_vmexit = 0;
 
         bool is_in_smm, should_exit;
 
@@ -198,6 +205,8 @@ namespace vm {
 
         Vm* vm;
         AbstractVm* vcpu;
+        threading::Thread* thread;
+        uint64_t time_spent_in_vm = 0; // ns
 
         irqs::lapic::Driver lapic;
 
@@ -207,7 +216,7 @@ namespace vm {
     };
 
     struct Vm {
-        Vm(uint8_t n_cpus);
+        Vm(uint8_t n_cpus, threading::Thread* thread);
 
         void set_irq(uint8_t irq, bool level);
 

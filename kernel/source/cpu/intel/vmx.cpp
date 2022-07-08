@@ -1,11 +1,14 @@
 #include <Luna/cpu/intel/vmx.hpp>
 
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/cpu/tsc.hpp>
 #include <Luna/cpu/regs.hpp>
 
 #include <Luna/cpu/gdt.hpp>
 #include <Luna/cpu/idt.hpp>
 #include <Luna/cpu/tss.hpp>
+
+#include <Luna/cpu/threads.hpp>
 
 #include <Luna/misc/log.hpp>
 #include <Luna/misc/debug.hpp>
@@ -15,10 +18,22 @@
 
 #include <Luna/vmm/emulate.hpp>
 
+#include <std/bit.hpp>
+
 extern "C" {
-    uint64_t vmx_vmlaunch(vmx::GprState* gprs); // These functions return rflags after vmlaunch or vmresume
-    uint64_t vmx_vmresume(vmx::GprState* gprs);
+    uint64_t vmx_vmenter(vmx::Vm* vm, vmx::GprState* gprs, bool do_resume); // These functions return rflags after vmlaunch or vmresume
+    extern uintptr_t vmx_do_vmexit[]; // Actually a function, but it cannot be called in the normal sense, we just need the address
 }
+
+    // Cannot be a member function because its called from assembly
+    extern "C" void vmx_do_host_rsp_update(vmx::Vm* vm, uint64_t rsp) {
+        if(rsp != vm->saved_host_rsp) {
+            vm->write(vmx::host_rsp, rsp);
+            vm->saved_host_rsp = rsp;
+        }
+    }
+
+//constexpr uintptr_t vmx_do_vmexit_addr = (uintptr_t)&vmx_do_vmexit;
 
 constexpr const char* vm_instruction_errors[] = {
     "Reserved",
@@ -278,6 +293,7 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     write(host_cr4, cr4::read());
     write(host_pat_full, msr::read(msr::ia32_pat));
     write(host_efer_full, msr::read(msr::ia32_efer));
+    write(host_rip, (uint64_t)vmx_do_vmexit);
 }
 
 void vmx::Vm::set(vm::VmCap cap, bool value) {
@@ -287,10 +303,21 @@ void vmx::Vm::set(vm::VmCap cap, bool value) {
             write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) & ~(uint32_t)ProcBasedControls::VMExitOnPIO);
         else
             write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) | (uint32_t)ProcBasedControls::VMExitOnPIO);
+    } else {
+        PANIC("Unknown VmCap\n");
     }
 }
 
-bool vmx::Vm::run(vm::VmExit& exit) {
+void vmx::Vm::set(vm::VmCap cap, uint64_t value) {
+    //vmptrld();
+    if(cap == vm::VmCap::TSCOffset) {
+        write(tsc_offset, value);
+    } else {
+        PANIC("Unknown VmCap\n");
+    }
+}
+
+bool vmx::Vm::run() {
     vmptrld();
 
     #define SAVE_REG(reg) \
@@ -324,23 +351,19 @@ bool vmx::Vm::run(vm::VmExit& exit) {
 
         vmptrld();
 
-        write(tsc_offset, -cpu::rdtsc() + vcpu->ia32_tsc);
-
         host_simd.store();
         guest_simd.load();
 
-        uint64_t rflags = 0;
-        if(!launched) {
-            rflags = vmx_vmlaunch(&guest_gprs);
-            launched = true;
-        } else {
-            rflags = vmx_vmresume(&guest_gprs);
-        }
+        vcpu->adjust_guest_tsc(vcpu->host_tsc_at_vmexit - tsc::rdtsc()); // On first entry this will be 0 - tsc, so it will adjust the guest's TSC to 0
+        auto tsc_at_entry = tsc::rdtsc();
+        auto rflags = vmx_vmenter(this, &guest_gprs, launched);
+        vcpu->host_tsc_at_vmexit = tsc::rdtsc();
+        vcpu->time_spent_in_vm += tsc::time_ns_at(vcpu->host_tsc_at_vmexit - tsc_at_entry);
+
+        launched = true;
 
         guest_simd.store();
         host_simd.load();
-
-        vcpu->ia32_tsc = cpu::rdtsc() + read(tsc_offset);
 
         // VM Exits restore the GDT and IDT Limit to 0xFFFF for some reason, so fix them
         get_cpu().gdt_table.set();
@@ -358,8 +381,9 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             return false;
         }
 
-        auto next_instruction = [&]() { write(guest_rip, read(guest_rip) + exit.instruction_len); };
+        vm::VmExit exit{};
 
+        auto next_instruction = [&]() { write(guest_rip, read(guest_rip) + exit.instruction_len); };
         auto basic_reason = (VMExitReasons)(read(vm_exit_reason) & 0xFFFF);
         if(basic_reason == VMExitReasons::Exception) {
             InterruptionInfo info{.raw = (uint32_t)read(vm_exit_interruption_info)};
@@ -380,8 +404,6 @@ bool vmx::Vm::run(vm::VmExit& exit) {
                         exit.instruction[2] = 0xD9;
 
                         next_instruction();
-
-                        return true;
                     } else if(instruction[0] == 0x0F && instruction[1] == 0xAA) {
                         exit.reason = vm::VmExit::Reason::RSM;
 
@@ -390,8 +412,6 @@ bool vmx::Vm::run(vm::VmExit& exit) {
                         exit.instruction[1] = 0xAA;
 
                         next_instruction();
-
-                        return true;
                     } else {
                         print("vmx: #UD: gRIP: {:#x} : ", grip);
 
@@ -399,16 +419,21 @@ bool vmx::Vm::run(vm::VmExit& exit) {
                             print("{:x} ", instruction[i]);
 
                         print("\n");
+                        return false;
                     }
+                } else {
+                    auto type = info.type, vector = info.vector;
+                    print("vmx: Interruption: Type: {}, Vector: {}\n", type, vector);
+                    print("{:#x}\n", read(guest_cr4));
+                    return false;
                 }
-
-                auto type = info.type, vector = info.vector;
-                print("vmx: Interruption: Type: {}, Vector: {}\n", type, vector);
-                print("{:#x}\n", read(guest_cr4));
-                return false;
-            }
+            } else {
+                print("vmx: Unknown Interruption type: {:#x}\n", uint32_t{info.type});
+                PANIC("TODO");
+            } 
         } else if(basic_reason == VMExitReasons::ExtInt) {
-            
+            // CPU does not acknowledge the interrupt, so it should have occurred just after the sti
+            continue;
         } else if(basic_reason == VMExitReasons::TripleFault) {
             print("vmx: Guest Triple Fault\n");
 
@@ -421,8 +446,6 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.instruction[1] = 0xA2;
 
             next_instruction();
-
-            return true;
         } else if(basic_reason == VMExitReasons::Hlt) {
             exit.reason = vm::VmExit::Reason::Hlt;
 
@@ -430,8 +453,6 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.instruction[0] = 0xF4;
 
             next_instruction();
-
-            return true;
         } else if(basic_reason == VMExitReasons::MovToCr) {
             exit.reason = vm::VmExit::Reason::CrMov;
 
@@ -459,8 +480,6 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             }
 
             next_instruction();
-
-            return true;
         } else if(basic_reason == VMExitReasons::Vmcall) {
             exit.reason = vm::VmExit::Reason::Vmcall;
 
@@ -470,8 +489,6 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.instruction[2] = 0xC1;
 
             next_instruction();
-
-            return true;
         } else if(basic_reason == VMExitReasons::PIO) {
             IOQualification info{.raw = read(vm_exit_qualification)};
             PIOStringOpInfo address{.raw = (uint32_t)read(vm_exit_instruction_info)};
@@ -500,12 +517,9 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.pio.write = !info.dir;
 
             if(info.string)
-                print("WAtch out weird stuffs\n");
+                print("Watch out weird stuffs\n");
 
             next_instruction();
-
-            return true;
-
         } else if(basic_reason == VMExitReasons::Rdmsr) {
             exit.reason = vm::VmExit::Reason::MSR;
 
@@ -516,8 +530,6 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.instruction[1] = 0x32;
 
             next_instruction();
-
-            return true;
         } else if(basic_reason == VMExitReasons::Wrmsr) {
             exit.reason = vm::VmExit::Reason::MSR;
 
@@ -528,8 +540,6 @@ bool vmx::Vm::run(vm::VmExit& exit) {
             exit.instruction[1] = 0x30;
 
             next_instruction();
-
-            return true;
         } else if(basic_reason == VMExitReasons::InvalidGuestState) {
             print("vmx: VM-Entry Failure due to invalid guest state\n");
             print("     Qualification: {}\n", read(vm_exit_qualification));

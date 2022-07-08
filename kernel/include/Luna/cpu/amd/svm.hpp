@@ -199,14 +199,15 @@ namespace svm {
     struct Vm final : public vm::AbstractVm {
         Vm(vm::AbstractMM* mm, vm::VCPU* vcpu);
         ~Vm();
-        bool run(vm::VmExit& exit);
+        bool run() override;
 
-        void set(vm::VmCap cap, bool value);
-        void get_regs(vm::RegisterState& regs, uint64_t flags) const;
-        void set_regs(const vm::RegisterState& regs, uint64_t flags);
-        simd::Context& get_guest_simd_context() { return guest_simd; }
+        void set(vm::VmCap cap, bool value) override;
+        void set(vm::VmCap cap, uint64_t value) override;
+        void get_regs(vm::RegisterState& regs, uint64_t flags) const override;
+        void set_regs(const vm::RegisterState& regs, uint64_t flags) override;
+        simd::Context& get_guest_simd_context() override { return guest_simd; }
 
-        void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0);
+        void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0) override;
 
         private:
         uintptr_t vmcb_pa;

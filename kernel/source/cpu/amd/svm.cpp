@@ -1,5 +1,7 @@
 #include <Luna/cpu/amd/svm.hpp>
 #include <Luna/cpu/cpu.hpp>
+#include <Luna/cpu/tsc.hpp>
+#include <Luna/cpu/threads.hpp>
 
 #include <std/string.hpp>
 
@@ -154,9 +156,19 @@ void svm::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool e
 void svm::Vm::set(vm::VmCap cap, bool value) {
     if(cap == vm::VmCap::FullPIOAccess)
         vmcb->icept_io = (value ? 0 : 1);
+    else
+        PANIC("Unknown VmCap");
 }
 
-bool svm::Vm::run(vm::VmExit& exit) {
+void svm::Vm::set(vm::VmCap cap, uint64_t value) {
+    if(cap == vm::VmCap::TSCOffset) {
+        vmcb->tsc_offset = value;
+    } else {
+        PANIC("Unknown VmCap\n");
+    }
+}
+
+bool svm::Vm::run() {
     while(true) {
         asm("clgi");
 
@@ -165,12 +177,14 @@ bool svm::Vm::run(vm::VmExit& exit) {
         auto kgs_base = msr::read(msr::kernel_gs_base);
         auto pat = msr::read(msr::ia32_pat);
 
-        vmcb->tsc_offset = -cpu::rdtsc() + vcpu->ia32_tsc;
-
         host_simd.store();
         guest_simd.load();
 
+        vcpu->adjust_guest_tsc(vcpu->host_tsc_at_vmexit - tsc::rdtsc()); // On first entry this will be 0 - tsc, so it will adjust the guest's TSC to 0
+        auto tsc_at_entry = tsc::rdtsc();
         svm_vmrun(&guest_gprs, vmcb_pa);
+        vcpu->host_tsc_at_vmexit = tsc::rdtsc();
+        vcpu->time_spent_in_vm += tsc::time_ns_at(vcpu->host_tsc_at_vmexit - tsc_at_entry);
 
         msr::write(msr::fs_base, fs_base);
         msr::write(msr::gs_base, gs_base);
@@ -180,12 +194,12 @@ bool svm::Vm::run(vm::VmExit& exit) {
         guest_simd.store();
         host_simd.load();
 
-        vcpu->ia32_tsc = cpu::rdtsc() + vmcb->tsc_offset;
-
         auto& cpu_data = get_cpu();
         cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table, cpu_data.tss_sel));
 
         asm("stgi");
+
+        vm::VmExit exit{};
 
         auto next_instruction = [&]() { vmcb->rip += exit.instruction_len; };
 
@@ -209,8 +223,6 @@ bool svm::Vm::run(vm::VmExit& exit) {
                     exit.instruction[2] = 0xC1;
 
                     next_instruction();
-
-                    return true;
                 } else {
                     print("svm: Guest #UD, gRIP: {:#x}\n     ", grip);
                     for(size_t i = 0; i < 15; i++)
@@ -234,8 +246,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
             exit.instruction[1] = 0xA2;
 
             next_instruction();
-
-            return true;
+            break;
         }
 
         case 0x73: { // RSM
@@ -246,8 +257,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
             exit.instruction[1] = 0xAA;
 
             next_instruction();
-
-            return true;
+            break;
         }
 
         case 0x7B: { // Port IO
@@ -266,8 +276,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
             exit.pio.write = !info.dir;
 
             vmcb->rip = vmcb->exitinfo2;
-
-            return true;
+            break;
         }
 
         case 0x7C: { // MSR
@@ -280,8 +289,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
             exit.instruction[1] = exit.msr.write ? 0x30 : 0x32;
 
             next_instruction();
-
-            return true;
+            break;
         }
 
         case 0x81: { // VMMCALL
@@ -293,8 +301,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
             exit.instruction[2] = 0xD9;
 
             next_instruction();
-
-            return true;
+            break;
         }
         
         case 0x400: { // Nested Page Fault
@@ -318,8 +325,7 @@ bool svm::Vm::run(vm::VmExit& exit) {
 
             exit.mmu.gpa = addr;
             exit.mmu.reserved_bits_set = info.reserved_bit_set;
-
-            return true;
+            break;
         }
 
         
@@ -328,6 +334,9 @@ bool svm::Vm::run(vm::VmExit& exit) {
             print("svm: Unknown exitcode {:#x}\n", code);
             PANIC("SVM unknown exitcode");
         }
+
+        if(!vcpu->handle_vmexit(exit))
+            return false;
     }
 }
 
