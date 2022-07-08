@@ -24,7 +24,7 @@ namespace gui {
         }
 
         void putc(const char c) { root->get<0>().putc(c); }
-        void flush() { root->get<0>().update(); update_scrollbar(); }
+        void flush() { root->get<0>().update(); update_scrollbar(); request_redraw(); }
 
         private:
         void update_scrollbar() {
