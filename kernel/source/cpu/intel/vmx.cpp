@@ -496,7 +496,7 @@ bool vmx::Vm::run() {
             exit.reason = vm::VmExit::Reason::PIO;
 
             exit.instruction_len = read(vm_exit_instruction_len);
-
+            
             auto grip = read(guest_cs_base) + read(guest_rip);
             vcpu->mem_read(grip, {exit.instruction});
             
@@ -567,12 +567,13 @@ bool vmx::Vm::run() {
 
             exit.mmu.gpa = addr;
             exit.mmu.reserved_bits_set = false;
-
-            return true;
         } else {
             print("vmx: Unknown VMExit Reason: {:d}\n", (uint64_t)basic_reason);
             PANIC("Unknown exit reason");
         }
+
+        if(!vcpu->handle_vmexit(exit))
+            return false;
     }
 }
 
