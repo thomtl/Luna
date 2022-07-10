@@ -336,7 +336,7 @@ void create_vm() {
     (void)pit_dev;
 
     auto* file = vfs::get_vfs().open("A:/disk.bin");
-    auto* nvme_dev = new vm::nvme::Driver{&vm, pci_host_bridge, 16, 0, file};
+    auto* nvme_dev = new vm::nvme::Driver{&vm, pci_host_bridge, 6, 0, file};
     (void)nvme_dev;
 
     auto* vgabios = vfs::get_vfs().open("A:/luna/vgabios.bin");

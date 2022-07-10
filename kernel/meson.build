@@ -79,6 +79,7 @@ main_sources = files(
     'source/net/udp.cpp',
 
     'source/vmm/drivers/gpu/edid.cpp',
+    'source/vmm/drivers/nvme.cpp',
     
     'source/vmm/emulate.cpp',
     'source/vmm/vm.cpp',
