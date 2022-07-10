@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Luna/common.hpp>
+#include <Luna/cpu/cpu.hpp>
 #include <Luna/drivers/acpi.hpp>
 
 #include <std/array.hpp>
@@ -41,6 +42,8 @@ namespace hpet {
         bool is_periodic;
         void(*f)(void*);
         void* userptr;
+
+        IrqTicketLock lock;
 
         friend struct Device;
     };

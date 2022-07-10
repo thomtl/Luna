@@ -78,10 +78,10 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
                 auto& comparator = *(hpet::Comparator*)userptr;
                 auto& self = *comparator._device;
 
-                if(!comparator.f) {
-                    print("hpet: Spurious Interrupt\n");
+                std::lock_guard guard{comparator.lock};
+
+                if(!comparator.f)
                     return;
-                }
 
                 comparator.f(comparator.userptr);
                         
@@ -121,6 +121,8 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
 
                     for(size_t i = 0; i < self.n_comparators; i++) {
                         if(irq & (1 << i)) {
+                            std::lock_guard guard{self.comparators[i].lock};
+
                             if(!self.comparators[i].f)
                                 return;
 
@@ -173,6 +175,8 @@ uint64_t hpet::Device::time_ns() {
 }
 
 bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), void* userptr) {
+    std::lock_guard guard{lock};
+
     if(!supports_periodic && periodic)
         return false;
 
@@ -187,6 +191,7 @@ bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), 
 
     auto& reg = _device->regs->comparators[this->_i];
     reg.cmd &= ~((1 << 6) | (1 << 3) | (1 << 2));
+    _device->regs->irq_status = (1 << this->_i);
 
     auto delta = (ns * femto_per_nano) / _device->period; // Order of multiplication alone does matter here due to integer division
 
@@ -205,6 +210,8 @@ bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), 
 }
 
 void hpet::Comparator::cancel_timer() {
+    std::lock_guard guard{lock};
+
     _device->regs->comparators[this->_i].cmd &= ~(1 << 2); // Stop generating IRQs
     this->f = nullptr;
 }
