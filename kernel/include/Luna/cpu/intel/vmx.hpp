@@ -94,6 +94,7 @@ namespace vmx {
         Exception = 0,
         ExtInt = 1,
         TripleFault = 2,
+        IRQWindow = 7,
         CPUID = 10,
         Hlt = 12,
         Vmcall = 18,

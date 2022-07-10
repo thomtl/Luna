@@ -206,7 +206,7 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     }
 
     {
-        uint32_t min = (uint32_t)ProcBasedControls::VMExitOnHlt | (uint32_t)ProcBasedControls::VMExitOnPIO \
+        uint32_t min = (uint32_t)ProcBasedControls::VMExitOnPIO \
                      | (uint32_t)ProcBasedControls::SecondaryControlsEnable \
                      | (uint32_t)ProcBasedControls::VMExitOnCr8Store \
                      | (uint32_t)ProcBasedControls::VMExitOnRdpmc \
@@ -347,6 +347,18 @@ bool vmx::Vm::run() {
 
     bool launched = false;
     while(true) {
+        ASSERT(vcpu->vm->irq_listeners.size() == 1); // TODO
+        auto& irq_dev = vcpu->vm->irq_listeners[0];
+        if(irq_dev->read_irq_pin() && !(read(guest_rflags) & (1 << 9)))
+            write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) | (uint64_t)ProcBasedControls::IRQWindowExiting);
+
+        if(irq_dev->read_irq_pin() && (read(guest_rflags) & (1 << 9))) {
+            write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) & ~(uint64_t)ProcBasedControls::IRQWindowExiting);
+            auto vector = irq_dev->read_irq_vector();
+
+            inject_int(vm::AbstractVm::InjectType::ExtInt, vector, false);
+        }
+        
         asm("cli");
 
         vmptrld();
@@ -433,6 +445,9 @@ bool vmx::Vm::run() {
             } 
         } else if(basic_reason == VMExitReasons::ExtInt) {
             // CPU does not acknowledge the interrupt, so it should have occurred just after the sti
+            continue;
+        } else if(basic_reason == VMExitReasons::IRQWindow) {
+            // Will be handled at top of loop
             continue;
         } else if(basic_reason == VMExitReasons::TripleFault) {
             print("vmx: Guest Triple Fault\n");
@@ -578,11 +593,16 @@ bool vmx::Vm::run() {
 }
 
 void vmx::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code, uint32_t error) {
+    using enum vm::AbstractVm::InjectType;
+
+    if(!(read(guest_rflags) & (1 << 9)) && type == ExtInt)
+        return;
+
     uint8_t type_val = 0;
     switch (type) {
-        case vm::AbstractVm::InjectType::Exception: type_val = 3; break; 
-        case vm::AbstractVm::InjectType::NMI: type_val = 2; break;
-        case vm::AbstractVm::InjectType::ExtInt: type_val = 0; break;
+        case Exception: type_val = 3; break; 
+        case NMI: type_val = 2; break;
+        case ExtInt: type_val = 0; break;
         default:
             PANIC("Unsupported Injection type"); // TODO: Support software ints
     }
@@ -597,6 +617,10 @@ void vmx::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool e
         write(vm_entry_exception_error_code, error);
 
     write(vm_entry_interruption_info, info);
+
+    // If Guest is HLTed, set it to active again
+    if(read(guest_activity_state) == 1)
+        write(guest_activity_state, 0);
 }
 
 void vmx::Vm::get_regs(vm::RegisterState& regs, uint64_t flags) const {

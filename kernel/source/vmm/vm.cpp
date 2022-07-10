@@ -106,7 +106,7 @@ bool vm::VCPU::run() {
     while(true) {
         if(should_exit)
             return true;
-        
+
         if(!vcpu->run())
             return false;
     }

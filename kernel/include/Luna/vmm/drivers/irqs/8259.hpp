@@ -57,9 +57,13 @@ namespace vm::irqs::pic {
                         if(value != (icw1_init | icw1_icw4))
                             print("pic: Unknown PIC init command: {:#x}\n", value);
                     } else if(value & 0x8) {
-                        if(value & 0x2)
+                        if(value & 0x2) {
                             dev.reg_read_select = value & 1;
-                        else
+
+                            value &= ~0x2;
+                        }
+                        
+                        if(value)
                             print("pic: Unknown PIC OCW3 command: {:#x}\n", value);
                     } else {
                         auto cmd = value >> 5;
@@ -73,8 +77,12 @@ namespace vm::irqs::pic {
                                 dev.isr &= ~(1 << irq);
                                 update_irq();
                             }
+                        } else if(cmd == 3) {
+                            auto irq = value & 7;
+                            dev.isr &= ~(1 << irq);
+                            update_irq();
                         } else {
-                            print("pic: Unknown CMD {:#x}\n", value);
+                            print("pic: Unknown CMD {:#x}\n", cmd);
                         }
                     }
                 } else if(reg == data) {
@@ -146,11 +154,6 @@ namespace vm::irqs::pic {
         }
 
         private:
-        void inject_irq(int device, uint8_t irq) {
-            print("pic: Raising IRQ{}\n", irq + device * 8);
-            vm->cpus[0].vcpu->inject_int(vm::AbstractVm::InjectType::ExtInt, pics[device].vector + irq); // PIC always sends IRQs to CPU 0
-        }
-
         uint8_t get_priority(int dev, uint8_t mask) {
             if(mask == 0)
                 return 8;
@@ -180,15 +183,12 @@ namespace vm::irqs::pic {
         void update_irq() {    
             auto irq2 = get_irq(1);
             if(irq2 >= 0) {
-                ack(1, irq2);
-                inject_irq(1, irq2); // TODO: Emulate cascade irq correctly
+                set_irq1(0, 2, 1);
+                set_irq1(0, 2, 0);
             }
+            auto irq1 = get_irq(0);
 
-            auto irq = get_irq(0);
-            if(irq >= 0) {
-                ack(0, irq);
-                inject_irq(0, irq);
-            }
+            irq_output = (irq1 >= 0);
         }
 
         int set_irq1(int device, uint8_t irq, bool level) {
@@ -227,6 +227,34 @@ namespace vm::irqs::pic {
                 dev.irr &= ~(1 << irq);
         }
 
+        bool read_irq_pin() override { return irq_output; }
+
+        uint8_t read_irq_vector() override {    
+            uint8_t ret = 0;
+
+            auto irq = get_irq(0);
+            if(irq >= 0) {
+                ack(0, irq);
+                if(irq == 2) {
+                    auto irq2 = get_irq(1);
+                    if(irq2 >= 0)
+                        ack(1, irq2);
+                    else
+                        irq2 = 7; // Slave Spurious IRQ
+
+                    ret = pics[1].vector + irq2;
+                } else {
+                    ret = pics[0].vector + irq;
+                }
+            } else {
+                print("pic: Spurious IRQ\n");
+                ret = pics[0].vector + 7;
+            }
+            update_irq();
+
+            return ret;
+        }
+
         struct {
             uint8_t vector;
             bool icw4;
@@ -234,5 +262,7 @@ namespace vm::irqs::pic {
             uint8_t elcr, elcr_mask, last_irr;
         } pics[2];
         vm::Vm* vm;
+
+        bool irq_output;
     };
 } // namespace vm::irqs::pic

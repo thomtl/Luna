@@ -170,6 +170,12 @@ void svm::Vm::set(vm::VmCap cap, uint64_t value) {
 
 bool svm::Vm::run() {
     while(true) {
+        ASSERT(vcpu->vm->irq_listeners.size() == 1); // TODO
+        auto& irq_dev = vcpu->vm->irq_listeners[0];
+        if(irq_dev->read_irq_pin()) {
+            inject_int(vm::AbstractVm::InjectType::ExtInt, irq_dev->read_irq_vector(), false);
+        }
+
         asm("clgi");
 
         auto fs_base = msr::read(msr::fs_base);

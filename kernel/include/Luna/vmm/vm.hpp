@@ -149,8 +149,6 @@ namespace vm {
     struct VCPU {
         VCPU(Vm* vm, threading::Thread* thread, uint8_t id);
         bool run();
-
-
         void exit();
         
         void set(VmCap cap, bool value);
@@ -209,6 +207,8 @@ namespace vm {
         uint64_t time_spent_in_vm = 0; // ns
 
         irqs::lapic::Driver lapic;
+
+        bool irq_pin;
 
         void (*smm_entry_callback)(VCPU*, void*); void* smm_entry_userptr;
         void (*smm_leave_callback)(VCPU*, void*); void* smm_leave_userptr;
