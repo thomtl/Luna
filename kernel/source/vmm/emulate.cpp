@@ -147,6 +147,10 @@ void vm::emulate::emulate_instruction(vm::VCPU* vcpu, uintptr_t gpa, std::pair<u
 
                     driver->mmio_write(gpa, v, 1);*/
                 }
+            } else if(mod.mod == 2) {
+                read32();
+                auto v = read_r64(regs, (vm::emulate::r64)mod.reg, 1);
+                driver->mmio_write(gpa, v, 1);
             } else {
                 print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
                 PANIC("Unknown");
@@ -212,6 +216,10 @@ void vm::emulate::emulate_instruction(vm::VCPU* vcpu, uintptr_t gpa, std::pair<u
                     auto v = driver->mmio_read(gpa, 1);
                     write_r64(regs, (vm::emulate::r64)mod.reg, v, 1);
                 }
+            } else if(mod.mod == 2) {
+                read32();
+                auto v = driver->mmio_read(gpa, 1);
+                write_r64(regs, (vm::emulate::r64)mod.reg, v, 1);
             } else {
                 print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
                 PANIC("Unknown");
@@ -400,6 +408,11 @@ void vm::emulate::emulate_instruction(vm::VCPU* vcpu, uintptr_t gpa, std::pair<u
 
                     driver->mmio_write(gpa, v, operand_size);
                 }
+            } else if(mod.mod == 2) {
+                read32(); // Offset
+                auto v = readN(operand_size);
+
+                driver->mmio_write(gpa, v, operand_size);
             } else {
                 print("Unknown MODR/M: {:#x}\n", (uint16_t)mod.mod);
                 PANIC("Unknown");
