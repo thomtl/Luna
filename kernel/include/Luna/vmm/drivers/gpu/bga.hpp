@@ -25,10 +25,15 @@ namespace vm::gpu::bga {
         constexpr size_t yres = dispi + (2 * 2);
         constexpr size_t bpp = dispi + (3 * 2);
         constexpr size_t enable = dispi + (4 * 2);
+        constexpr size_t bank = dispi + (5 * 2);
+        constexpr size_t vwidth = dispi + (6 * 2);
+        constexpr size_t vheight = dispi + (7 * 2);
+        constexpr size_t x_offset = dispi + (8 * 2);
+        constexpr size_t y_offset = dispi + (9 * 2);
         constexpr size_t video_memory_64k = dispi + (0xa * 2);
     } // namespace regs
 
-    constexpr size_t max_x = 512, max_y = 512;
+    constexpr size_t max_x = 800, max_y = 600;
     
 
     struct Driver final : public vm::AbstractMMIODriver, vm::pci::PCIDriver {
@@ -53,12 +58,7 @@ namespace vm::gpu::bga {
         void register_mmio_driver(Vm* vm) { ASSERT(this->vm == vm); }
 
         void mmio_write(uintptr_t addr, uint64_t value, [[maybe_unused]] uint8_t size) {
-            /*if(addr >= bar0 && addr < (bar0 + lfb_size)) {
-                auto off = addr - bar0;
-                if(off <= (curr_mode.x * curr_mode.y * (curr_mode.bpp / 8))) {
-                    window->get_fb()[off / 4] = value;
-                }
-            } else*/ if(addr == (bar2 + 0x400)) {
+            if(addr == (bar2 + 0x400)) {
                 // Some kind of sync register?
             } else if(addr == bar2 + regs::xres) {
                 ASSERT(value <= max_x);
@@ -69,6 +69,20 @@ namespace vm::gpu::bga {
             } else if(addr == bar2 + regs::bpp) {
                 ASSERT(value == 32);
                 mode.bpp = value;
+            } else if(addr == bar2 + regs::bank) {
+                ASSERT(value == 0);
+            } else if(addr == bar2 + regs::vwidth) {
+                ASSERT(value == mode.x); // TODO
+
+                virtual_width = value;
+                virtual_height = lfb_size / (value * (mode.bpp / 8));
+            } else if(addr == bar2 + regs::vheight) {
+                if(virtual_height != value)
+                    PANIC("vbe: Virtual Height mismatch");
+            } else if(addr == bar2 + regs::x_offset) {
+                ASSERT(value == 0);
+            } else if(addr == bar2 + regs::y_offset) {
+                ASSERT(value == 0);
             } else if(addr == bar2 + regs::enable) {
                 mode.enabled = value & 1;
                 if(curr_mode.enabled == false && mode.enabled == true) {
@@ -93,21 +107,14 @@ namespace vm::gpu::bga {
                     });
 
                     curr_mode = mode;
-                } else {
-                    PANIC("TODO"); // kill thread somehow
-                }
+                } else { }
             } else {
-                print("bga: Unhandled MMIO Write {:#x} <- {:#x}\n", addr, value);
+                print("bga: Unhandled MMIO Write {:#x} <- {:#x}, bar2_addr: {:#x}\n", addr, value, addr - bar2);
             }
         }
 
         uint64_t mmio_read(uintptr_t addr, [[maybe_unused]] uint8_t size) {
-            /*if(addr >= bar0 && addr < (bar0 + lfb_size)) {
-                auto off = addr - bar0;
-                if(off <= (curr_mode.x * curr_mode.y * (curr_mode.bpp / 8))) {
-                    return window->get_fb()[off / 4];
-                }
-            } else*/ if(addr >= bar2 && addr < (bar2 + edid_size) && size == 1) {
+            if(addr >= bar2 && addr < (bar2 + edid_size) && size == 1) {
                 auto i = addr - bar2;
                 if(i < 128) // We only have the base EDID block
                     return ((uint8_t*)&edid)[i];
@@ -118,7 +125,7 @@ namespace vm::gpu::bga {
             } else if(addr == bar2 + regs::id) {
                 return 0xB0C5; // ID5
             } else
-                print("bga: Unhandled MMIO Read {:#x}\n", addr);
+                print("bga: Unhandled MMIO Read {:#x}, bar2_reg: {:#x}\n", addr, addr - bar2);
 
             return 0;
         }
@@ -170,5 +177,7 @@ namespace vm::gpu::bga {
             size_t x, y, bpp;
             bool enabled;
         } curr_mode, mode;
+
+        size_t virtual_width, virtual_height;
     };
 } // namespace vm::gpu::bga
