@@ -102,7 +102,11 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
             mouse.is_dragging = false;
         } else {
             auto new_pos = mouse.pos + mouse.dragging_offset;
-            new_pos.clamp(Vec2i{decoration_side_width, decoration_top_width + 20}, size - mouse.dragging_window->get_rect().size - Vec2i{decoration_side_width, decoration_side_width});
+            if(new_pos.y < (20 + decoration_top_width))
+                new_pos.y = 20 + decoration_top_width;
+
+            if(new_pos.x < decoration_side_width)
+                new_pos.x = decoration_side_width;
 
             mouse.dragging_window->set_pos(new_pos);
         }
@@ -143,8 +147,27 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
     for(auto* window : windows) {
         // Draw decorations
         auto is_focussed = (window == focused_window);
-        auto rect = window->get_rect();
+        auto absolute_rect = window->get_rect();
         auto decoration_colour = is_focussed ? focussed_decoration_colour : unfocussed_decoration_colour;
+
+        Rect rect = absolute_rect;
+        bool clipped_right = false, clipped_bottom = false;
+        if(!absolute_rect.is_within({{0,0}, size})) {
+            Vec2i clipped_pos{clamp(absolute_rect.pos.x, 0, size.x), clamp(absolute_rect.pos.y, 20, size.y)};
+
+            Vec2i clipped_size = absolute_rect.size;
+            if((clipped_pos.x + absolute_rect.size.x) >= size.x) {
+                clipped_size.x = size.x - clipped_pos.x;
+                clipped_right = true;
+            }
+
+            if((clipped_pos.y + absolute_rect.size.y) >= size.y) {
+                clipped_size.y = size.y - clipped_pos.y;
+                clipped_bottom = true;
+            }
+
+            rect = Rect{clipped_pos, clipped_size};
+        }
 
         if(is_focussed && rect.collides_with(mouse.pos))
             window->send_event(WindowEvent{.type = WindowEvent::Type::MouseOver, .pos = mouse.pos - rect.pos});
@@ -153,9 +176,12 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
             window->send_event(WindowEvent{.type = WindowEvent::Type::MouseClick});
 
         draw::rect(fb_canvas, rect.pos - Vec2i{decoration_side_width, 0}, Vec2i{decoration_side_width, rect.size.y}, decoration_colour); // Left bar
-        draw::rect(fb_canvas, rect.pos + Vec2i{rect.size.x, 0}, Vec2i{decoration_side_width, rect.size.y}, decoration_colour); // Right bar
 
-        draw::rect(fb_canvas, rect.pos + Vec2i{-decoration_side_width, rect.size.y}, Vec2i{rect.size.x + 2 * decoration_side_width, decoration_side_width}, decoration_colour); // Bottom bar
+        if(!clipped_right)
+            draw::rect(fb_canvas, rect.pos + Vec2i{rect.size.x, 0}, Vec2i{decoration_side_width, rect.size.y}, decoration_colour); // Right bar
+
+        if(!clipped_bottom)
+            draw::rect(fb_canvas, rect.pos + Vec2i{-decoration_side_width, rect.size.y}, Vec2i{rect.size.x + 2 * decoration_side_width, decoration_side_width}, decoration_colour); // Bottom bar
 
         Rect top_bar{rect.pos - Vec2i{decoration_side_width, decoration_top_width}, Vec2i{rect.size.x + 2 * decoration_side_width, decoration_top_width}};
         draw::rect(fb_canvas, top_bar, decoration_colour); // Top bar

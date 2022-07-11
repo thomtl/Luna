@@ -2,8 +2,11 @@
 #include <std/algorithm.hpp>
 
 void gui::draw::rect(gui::NonOwningCanvas& canvas, Vec2i pos, Vec2i size, Colour colour) {
-    for(int64_t y = 0; y < size.y; y++)
-        std::fill_n(canvas.fb.data() + pos.x + (pos.y + y) * canvas.pitch, size.x, colour);
+    if((pos.x + size.x) > canvas.size.x)
+        size.x = canvas.size.x - pos.x;
+
+    for(int64_t y = pos.y; y < (pos.y + size.y) && y < canvas.size.y; y++)
+        std::fill_n(canvas.fb.data() + pos.x + y * canvas.pitch, size.x, colour);
 }
 
 void gui::draw::rect(gui::NonOwningCanvas& canvas, Rect rect, Colour colour) {

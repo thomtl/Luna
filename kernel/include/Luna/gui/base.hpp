@@ -64,8 +64,12 @@ namespace gui {
         Vec2i pos;
         Vec2i size;
 
-        bool collides_with(Vec2i x) const {
+        bool collides_with(const Vec2i& x) const {
             return (x.x >= pos.x && x.x <= (pos.x + size.x)) && (x.y >= pos.y && x.y <= (pos.y + size.y));
+        }
+
+        bool is_within(const Rect& super) const {
+            return ((pos.x + size.x) < (super.pos.x + super.size.x)) && (pos.x > super.pos.x) && (pos.y > super.pos.y) && ((pos.y + size.y) < (super.pos.y + super.size.y));
         }
     };
 
