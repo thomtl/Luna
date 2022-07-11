@@ -274,6 +274,10 @@ bool vm::VCPU::handle_vmexit(const VmExit& exit) {
             os_support_bit(regs.rcx, 18, 27); // Only set OSXSAVE bit if actually enabled by OS
 
             regs.rcx &= ~(1u << 26); // TODO: Emulate VMX xsetbv
+        } else if(leaf == 2) {
+            passthrough(); // Passthrough CPU cache info to guest
+        } else if(leaf == 4) {
+            passthrough();
         } else if(leaf == 6) {
             zero_cpuid(); // No thermal / power management stuff
         } else if(leaf == 7) {
@@ -281,9 +285,13 @@ bool vm::VCPU::handle_vmexit(const VmExit& exit) {
                 passthrough();
 
                 os_support_bit(regs.rcx, 22, 4);
+            } else if(subleaf == 1) {
+                passthrough();
             } else {
                 print("vcpu: Unhandled CPUID 0x7 subleaf {:#x}\n", subleaf);
             }
+        } else if(leaf == 0xB) {
+            passthrough();
         } else if(leaf == 0xD) {
             passthrough(); // Subleaf isn't interesting
         } else if(leaf == 0x4000'0000) {
