@@ -12,14 +12,36 @@
 namespace gui {
     struct RawWindow;
 
+    enum class KeyOp { Press, Repeat, Unpress };
+    enum class KeyCodes : uint32_t {
+        Unknown = 0,
+        A, B, C, D, E, F, G, H, I, J, K, L, M, 
+        N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+        _0, _1, _2, _3, _4, _5, _6, _7, _8, _9,
+        Enter, Tab, Escape, Delete, Space, BackSpace,
+        Minus, Plus, Star, Equals, 
+        BraceOpen, BraceClose, ParenOpen, ParenClose, BackSlash, Tilde, Semicolon, Comma, Dot, Slash,
+        F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
+        F13, F14, F15, F16, F17, F18, F19, F20, F21, F22, F23, F24,
+        CapsLock, NumLock, ScrollLock, PrntScrn, Pause, Insert, Home, PageUp,
+        End, PageDown, RightArrow, LeftArrow, DownArrow, UpArrow,
+        LeftShift, RightShift, LeftControl, RightControl, LeftAlt, RightAlt, LeftGUI, RightGUI,
+    };
+    char keycode_to_char(const KeyCodes& c);
+
     struct CompositorEvent {
-        enum class Type { MouseUpdate, WindowRedraw };
+        enum class Type { MouseUpdate, KeyboardUpdate, WindowRedraw };
         Type type;
         union {
             struct {
-                Vec2i pos;
+                Vec2i pos = {0, 0};
                 bool left_button_down;
             } mouse;
+
+            struct {
+                KeyOp op;
+                KeyCodes key;
+            } keyboard;
 
             struct {
                 RawWindow* window;
@@ -28,9 +50,22 @@ namespace gui {
     };
 
     struct WindowEvent {
-        enum class Type { Focus, Unfocus, MouseOver, MouseClick };
+        enum class Type { Focus, Unfocus, MouseOver, MouseClick, KeyboardOp };
         Type type;
-        Vec2i pos = {0, 0};
+        union {
+            struct {
+                Vec2i pos = {0, 0};
+            } mouse;
+
+            struct {
+                KeyOp op;
+                KeyCodes code;
+            } keyboard;
+
+            struct {
+
+            } none;
+        };
     };
 
     struct RawWindow {
@@ -50,6 +85,7 @@ namespace gui {
         virtual void handle_mouse_over(const Vec2i&) { }
         virtual void handle_mouse_click() { }
         virtual void handle_mouse_exit() { }
+        virtual void handle_keyboard_op(KeyOp, KeyCodes) { }
         
 
         // Public API
@@ -93,10 +129,13 @@ namespace gui {
                             handle_unfocus();
                             break;
                         case MouseOver:
-                            handle_mouse_over(event.pos);
+                            handle_mouse_over(event.mouse.pos);
                             break;
                         case MouseClick:
                             handle_mouse_click();
+                            break;
+                        case KeyboardOp:
+                            handle_keyboard_op(event.keyboard.op, event.keyboard.code);
                             break;
                     }
                 });

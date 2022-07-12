@@ -1,10 +1,46 @@
 #include <Luna/gui/gui.hpp>
 #include <Luna/gui/framework.hpp>
 
+#include <Luna/gui/windows/demo_window.hpp>
+
 #include <Luna/gui/bmp_parser.hpp>
 #include <Luna/fs/vfs.hpp>
 
 using namespace gui;
+
+char gui::keycode_to_char(const KeyCodes& code) {
+    using enum KeyCodes;
+
+    switch(code) {
+        case A: return 'a';
+        case B: return 'b';
+        case C: return 'c';
+        case D: return 'd';
+        case E: return 'e';
+        case F: return 'f';
+        case G: return 'g';
+        case H: return 'h';
+        case I: return 'i';
+        case J: return 'j';
+        case K: return 'k';
+        case L: return 'l';
+        case M: return 'm';
+        case N: return 'n';
+        case O: return 'o';
+        case P: return 'p';
+        case Q: return 'q';
+        case R: return 'r';
+        case S: return 's';
+        case T: return 't';
+        case U: return 'u';
+        case V: return 'v';
+        case W: return 'w';
+        case X: return 'x';
+        case Y: return 'y';
+        case Z: return 'z';
+        default: return '?';
+    }
+}
 
 std::optional<Image> gui::read_image(const char* path) {
     auto* file = vfs::get_vfs().open(path);
@@ -77,6 +113,12 @@ void Desktop::start_gui() {
                         redraw = true;
                         break;
 
+                    case KeyboardUpdate:
+                        if(focused_window)
+                            focused_window->send_event(gui::WindowEvent{.type = gui::WindowEvent::Type::KeyboardOp, .keyboard = {.op = event.keyboard.op, .code = event.keyboard.key}});
+                        redraw = true;
+                        break;
+
                     case WindowRedraw:
                         redraw = true;
                         break;
@@ -133,10 +175,10 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
             windows.push_back(window);
 
             if(focused_window)
-                focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Unfocus});
+                focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Unfocus, .none = {}});
 
             focused_window = window;
-            focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Focus});
+            focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Focus, .none = {}});
 
             break; // Iterators invalidated
         }
@@ -170,10 +212,10 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
         }
 
         if(is_focussed && rect.collides_with(mouse.pos))
-            window->send_event(WindowEvent{.type = WindowEvent::Type::MouseOver, .pos = mouse.pos - rect.pos});
+            window->send_event(WindowEvent{.type = WindowEvent::Type::MouseOver, .mouse = {.pos = mouse.pos - rect.pos}});
 
         if(is_focussed && mouse_click)
-            window->send_event(WindowEvent{.type = WindowEvent::Type::MouseClick});
+            window->send_event(WindowEvent{.type = WindowEvent::Type::MouseClick, .none = {}});
 
         draw::rect(fb_canvas, rect.pos - Vec2i{decoration_side_width, 0}, Vec2i{decoration_side_width, rect.size.y}, decoration_colour); // Left bar
 
