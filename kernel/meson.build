@@ -50,6 +50,7 @@ main_sources = files(
 
     'source/drivers/usb/ehci/ehci.cpp',
     'source/drivers/usb/hid/boot_mouse.cpp',
+    'source/drivers/usb/hid/boot_keyboard.cpp',
     'source/drivers/usb/serial/ch341.cpp',
     'source/drivers/usb/xhci/xhci.cpp',
     'source/drivers/usb/usb.cpp',

@@ -64,7 +64,7 @@ test_guest:
 # AMD IOMMU: -device amd-iommu
 QEMU_FLAGS := -enable-kvm -cpu host,+invtsc -device intel-iommu,aw-bits=48 -machine q35 -global hpet.msi=true -smp 4 -m 512M -hda luna.hdd -serial file:/dev/stdout -monitor stdio -no-reboot -no-shutdown \
 			  -device ich9-intel-hda -device hda-output \
-			  -device qemu-xhci -device usb-mouse
+			  -device qemu-xhci -device usb-mouse -device usb-kbd
 
 run: kernel assets bios test_guest
 	qemu-system-x86_64 ${QEMU_FLAGS}
