@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Luna/common.hpp>
+#include <Luna/gui/gui.hpp>
 
 namespace vm {
     struct Vm;
@@ -28,5 +29,11 @@ namespace vm {
         virtual void irq_set(uint8_t vector, bool level) = 0;
         virtual bool read_irq_pin() = 0;
         virtual uint8_t read_irq_vector() = 0;
+    };
+
+    struct AbstractKeyboardListener {
+        virtual ~AbstractKeyboardListener() {}
+
+        virtual void handle_key_op(gui::KeyOp op, gui::KeyCodes code) = 0;
     };
 } // namespace vm

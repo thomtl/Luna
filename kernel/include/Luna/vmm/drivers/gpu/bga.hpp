@@ -9,6 +9,8 @@
 #include <Luna/vmm/drivers/pci/pci_driver.hpp>
 #include <Luna/vmm/drivers/gpu/edid.hpp>
 
+#include <Luna/vmm/drivers/ps2.hpp>
+
 #include <Luna/gui/windows/fb_window.hpp>
 
 namespace vm::gpu::bga {
@@ -37,7 +39,7 @@ namespace vm::gpu::bga {
     
 
     struct Driver final : public vm::AbstractMMIODriver, vm::pci::PCIDriver {
-        Driver(vm::Vm* vm, pci::HostBridge* bridge, vfs::File* vgabios, uint8_t slot): PCIDriver{vm}, vm{vm} {
+        Driver(vm::Vm* vm, pci::HostBridge* bridge, vfs::File* vgabios, uint8_t slot, vm::AbstractKeyboardListener* keyboard): PCIDriver{vm}, vm{vm}, keyboard{keyboard} {
             bridge->register_pci_driver(pci::DeviceID{0, 0, slot, 0}, this);
             pci_set_option_rom(vgabios);
             pci_init_bar(0, lfb_size, true);
@@ -86,7 +88,7 @@ namespace vm::gpu::bga {
             } else if(addr == bar2 + regs::enable) {
                 mode.enabled = value & 1;
                 if(curr_mode.enabled == false && mode.enabled == true) {
-                    window = new gui::FbWindow{{(int32_t)mode.x, (int32_t)mode.y}, fb.data(), "VM Screen"};
+                    window = new gui::FbWindow{{(int32_t)mode.x, (int32_t)mode.y}, fb.data(), "VM Screen", [](void* userptr, gui::KeyOp op, gui::KeyCodes code) { ((Driver*)userptr)->keyboard->handle_key_op(op, code); }, this};
                     gui::get_desktop().add_window(window);
 
                     
@@ -167,6 +169,8 @@ namespace vm::gpu::bga {
         vm::Vm* vm;
         gui::FbWindow* window;
         std::span<uint8_t> fb;
+
+        vm::AbstractKeyboardListener* keyboard;
 
         bool mmio_enabled = false;
         uint32_t bar0, bar2;

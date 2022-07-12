@@ -81,6 +81,7 @@ main_sources = files(
 
     'source/vmm/drivers/gpu/edid.cpp',
     'source/vmm/drivers/nvme.cpp',
+    'source/vmm/drivers/ps2.cpp',
     
     'source/vmm/emulate.cpp',
     'source/vmm/vm.cpp',
