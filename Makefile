@@ -13,16 +13,25 @@ configure:
 	cp misc/seabios-config.ini build/seabios/.config
 	make -C build/seabios -j8
 
-	git clone https://github.com/torvalds/linux --branch v5.17 --depth 1 build/linux
-	cp misc/linux-config.ini build/linux/.config
-	make -C build/linux -j8
-
-	dd if=/dev/zero of=luna.hdd bs=4M count=16
+	dd if=/dev/zero of=luna.hdd bs=4M count=32
 	parted -s luna.hdd mklabel msdos
 	parted -s luna.hdd mkpart primary 2048s 100%
 
 	./build/limine/limine-deploy luna.hdd
 
+
+	git clone https://github.com/torvalds/linux --branch v5.17 --depth 1 build/linux
+	cp misc/linux-config.ini build/linux/.config
+	make -C build/linux -j8
+
+	git clone https://github.com/qookei/image_create build/image_create
+
+	mkdir -p build/linux_sysroot/boot/grub
+
+	wget http://tinycorelinux.net/13.x/x86/release/distribution_files/core.gz -O build/linux_sysroot/boot/core.gz
+	cp build/linux/arch/x86/boot/bzImage build/linux_sysroot/boot/vmlinuz
+	echo "set default=0\nset timeout=0\nmenuentry \"Linux\" {\n linux /boot/vmlinuz nokaslr debug root=/dev/nvme0n1p1 earlyprintk=serial,ttyS0,9600\n initrd /boot/core.gz\n}" > build/linux_sysroot/boot/grub/grub.cfg
+	build/image_create/image_create.sh -o build/linux-guest.iso -t ext4 -p mbr -s 64M -l grub -b -c build/linux_sysroot
 	
 kernel:
 	ninja -C build/kernel
@@ -56,7 +65,6 @@ bios:
 	echfs-utils -m -p0 luna.hdd import build/seabios/out/vgabios.bin luna/vgabios.bin
 
 test_guest:
-	./misc/create_linux_guest.sh
 	echfs-utils -m -p0 luna.hdd import build/linux-guest.iso disk.bin
 
 # -cpu qemu64,level=11,+la57 To enable 5 Level Paging, does not work with KVM
