@@ -229,7 +229,10 @@ CompletionEntry Driver::nvm_queue_handle(const SubmissionEntry& cmd) {
     CompletionEntry c{};
 
     auto opcode = cmd.opcode;
-    if(opcode == 2) { // Read
+    if(opcode == 1) { // Write
+        print("nvme: TODO: Don't ignore writes\n");
+        c.status = 0;
+    } else if(opcode == 2) { // Read
         auto lba = cmd.cmd_data[0] | ((uint64_t)cmd.cmd_data[1] << 32);
         auto n_lbas = (cmd.cmd_data[2] & 0xFFFF) + 1;
 
