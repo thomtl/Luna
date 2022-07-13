@@ -1,8 +1,6 @@
 #include <Luna/gui/gui.hpp>
 #include <Luna/gui/framework.hpp>
 
-#include <Luna/gui/windows/demo_window.hpp>
-
 #include <Luna/gui/bmp_parser.hpp>
 #include <Luna/fs/vfs.hpp>
 
