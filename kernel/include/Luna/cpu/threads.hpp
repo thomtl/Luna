@@ -40,7 +40,7 @@ namespace threading {
     constexpr size_t quantum_time = 10; // ms
 
     struct Thread {
-        Thread(): state(ThreadState::Idle), stack(0x4000), ctx(), cpu_time{0}, cpu_time_at_scheduled_in{0}, cpu_pin({.is_pinned = false, .cpu_id = 0}) {}
+        Thread(): state(ThreadState::Idle), stack(0x16000), ctx(), cpu_time{0}, cpu_time_at_scheduled_in{0}, cpu_pin({.is_pinned = false, .cpu_id = 0}) {}
 
         void pin_to_this_cpu();
         void pin_to_cpu(uint32_t id);
