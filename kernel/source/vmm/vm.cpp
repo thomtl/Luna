@@ -304,6 +304,7 @@ bool vm::VCPU::handle_vmexit(const VmExit& exit) {
         } else if(leaf == 0x8000'0001) {
             passthrough();
             os_support_bit(regs.rdx, 9, 24);
+            regs.rcx &= ~(1 << 2); // Clear SVM
         } else if(leaf == 0x8000'0002 || leaf == 0x8000'0003 || leaf == 0x8000'0004) { // CPU Brand string
             passthrough();
         } else if(leaf == 0x8000'0005) { // L1 and TLB id
@@ -317,6 +318,8 @@ bool vm::VCPU::handle_vmexit(const VmExit& exit) {
             write_low32(regs.rcx, 0); // Clear out core info
         } else if(leaf == 0x8000'000A) { // SVM Info
             zero_cpuid(); // TODO: Nested Virt
+        } else if(leaf == 0x8000'001D) {
+            passthrough(); // Cache info
         } else if(leaf == 0x8000'001F) { // Secure Encryption
             zero_cpuid();
         } else {

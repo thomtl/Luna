@@ -210,7 +210,7 @@ namespace svm {
         void inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code = false, uint32_t error = 0) override;
 
         private:
-        uintptr_t vmcb_pa;
+        uintptr_t vmcb_pa, host_save_vmcb_pa;
         volatile Vmcb* vmcb;
 
         simd::Context host_simd, guest_simd;

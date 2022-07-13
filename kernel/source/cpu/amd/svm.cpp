@@ -64,6 +64,9 @@ svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     vmcb_pa = pmm::alloc_block();
     ASSERT(vmcb_pa);
 
+    host_save_vmcb_pa = pmm::alloc_block();
+    ASSERT(host_save_vmcb_pa);
+
     vmcb = (Vmcb*)(vmcb_pa + phys_mem_map);
     memset((void*)vmcb, 0, pmm::block_size);
 
@@ -75,20 +78,21 @@ svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     vmcb->icept_vmmcall = 1;
     vmcb->icept_vmload = 1;
     vmcb->icept_vmsave = 1;
+    vmcb->icept_stgi = 1;
+    vmcb->icept_clgi = 1;
 
     vmcb->icept_intr = 1;
+    vmcb->icept_vintr = 1;
     vmcb->icept_nmi = 1;
     vmcb->icept_smi = 1;
 
     vmcb->icept_task_switch = 1;
 
-    vmcb->icept_hlt = 1;
+    //vmcb->icept_hlt = 1;
     vmcb->icept_cpuid = 1;
     //vmcb->icept_invlpg = 1;
     vmcb->icept_rdpmc = 1;
     vmcb->icept_invd = 1;
-    vmcb->icept_stgi = 1;
-    vmcb->icept_clgi = 1;
     vmcb->icept_skinit = 1;
     //vmcb->icept_xsetbv = 1;
     //vmcb->icept_wbinvd = 1;
@@ -124,6 +128,7 @@ svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
 
 svm::Vm::~Vm() {
     pmm::free_block(vmcb_pa);
+    pmm::free_block(host_save_vmcb_pa);
     for(size_t i = 0; i < io_bitmap_size; i++)
         pmm::free_block(io_bitmap_pa + (i * pmm::block_size));
 
@@ -135,11 +140,12 @@ extern "C" void svm_vmrun(svm::GprState* guest_gprs, uint64_t vmcb_pa);
 
 void svm::Vm::inject_int(vm::AbstractVm::InjectType type, uint8_t vector, bool error_code, uint32_t error) {
     uint8_t type_val = 0;
+    using enum vm::AbstractVm::InjectType;
     switch (type) {
-        case vm::AbstractVm::InjectType::ExtInt: type_val = 0; break;
-        case vm::AbstractVm::InjectType::NMI: type_val = 2; break;
-        case vm::AbstractVm::InjectType::Exception: type_val = 3; break;
-        case vm::AbstractVm::InjectType::SoftwareInt: type_val = 4; break;
+        case ExtInt: type_val = 0; break;
+        case NMI: type_val = 2; break;
+        case Exception: type_val = 3; break;
+        case SoftwareInt: type_val = 4; break;
     }
     uint64_t v = 0;
     v |= vector; // Vector
@@ -172,16 +178,22 @@ bool svm::Vm::run() {
     while(true) {
         ASSERT(vcpu->vm->irq_listeners.size() == 1); // TODO
         auto& irq_dev = vcpu->vm->irq_listeners[0];
-        if(irq_dev->read_irq_pin()) {
-            inject_int(vm::AbstractVm::InjectType::ExtInt, irq_dev->read_irq_vector(), false);
+        if(irq_dev->read_irq_pin() && !vmcb->v_irq) {
+            //inject_int(vm::AbstractVm::InjectType::ExtInt, irq_dev->read_irq_vector(), false);
+
+            //auto vector = irq_dev->read_irq_vector();
+            vmcb->v_intr_vector = 0;//vector;
+            //vmcb->v_intr_priority = 0xF;//(vector >> 4) & 0xF;
+            vmcb->v_ignore_tpr = 1;
+            vmcb->v_irq = 1;
+            //vmcb->v_tpr = 0xF;
+
+            //print("Injecting vINTR\n");
         }
 
         asm("clgi");
 
-        auto fs_base = msr::read(msr::fs_base);
-        auto gs_base = msr::read(msr::gs_base);
-        auto kgs_base = msr::read(msr::kernel_gs_base);
-        auto pat = msr::read(msr::ia32_pat);
+        asm volatile("vmsave" : : "a"(host_save_vmcb_pa) : "memory");
 
         host_simd.store();
         guest_simd.load();
@@ -190,18 +202,16 @@ bool svm::Vm::run() {
         auto tsc_at_entry = tsc::rdtsc();
         svm_vmrun(&guest_gprs, vmcb_pa);
         vcpu->host_tsc_at_vmexit = tsc::rdtsc();
-        vcpu->time_spent_in_vm += tsc::time_ns_at(vcpu->host_tsc_at_vmexit - tsc_at_entry);
 
-        msr::write(msr::fs_base, fs_base);
-        msr::write(msr::gs_base, gs_base);
-        msr::write(msr::kernel_gs_base, kgs_base);
-        msr::write(msr::ia32_pat, pat);
+        asm volatile("vmload" : : "a"(host_save_vmcb_pa) : "memory");
+
+        vcpu->time_spent_in_vm += tsc::time_ns_at(vcpu->host_tsc_at_vmexit - tsc_at_entry);
 
         guest_simd.store();
         host_simd.load();
 
-        auto& cpu_data = get_cpu();
-        cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table, cpu_data.tss_sel));
+        //auto& cpu_data = get_cpu();
+        //cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table, cpu_data.tss_sel));
 
         asm("stgi");
 
@@ -229,6 +239,7 @@ bool svm::Vm::run() {
                     exit.instruction[2] = 0xC1;
 
                     next_instruction();
+                    break;
                 } else {
                     print("svm: Guest #UD, gRIP: {:#x}\n     ", grip);
                     for(size_t i = 0; i < 15; i++)
@@ -242,7 +253,21 @@ bool svm::Vm::run() {
             return false;
         }
         case 0x60: // External Interrupt
-            break;
+            continue;
+
+        case 0x64: {// vINTR
+            auto& listener = vcpu->vm->irq_listeners[0];
+            DEBUG_ASSERT((vmcb->rflags & (1 << 9)) && (listener->read_irq_pin()));
+
+            auto v = listener->read_irq_vector();
+            inject_int(vm::AbstractVm::InjectType::ExtInt, v);
+
+            //static int  i = 0;
+            //print("Injecting IRQ {}\n", i++);
+
+            vmcb->v_irq = 0;
+            continue;
+        }
 
         case 0x72: { // CPUID
             exit.reason = vm::VmExit::Reason::CPUID;
@@ -333,7 +358,6 @@ bool svm::Vm::run() {
             exit.mmu.reserved_bits_set = info.reserved_bit_set;
             break;
         }
-
         
         default:
             (void)exit;

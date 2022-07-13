@@ -3,40 +3,32 @@ section .text
 
 global svm_vmrun
 svm_vmrun:
-    push rax
+    push rbp ; Save Callee Saved Registers
     push rbx
-    push rcx
-    push rdx
-    push rdi
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
     push r12
     push r13
     push r14
     push r15
 
-    mov rax, dr0
-    push rax
-    mov rax, dr1
-    push rax
-    mov rax, dr2
-    push rax
-    mov rax, dr3
-    push rax
+    ;mov rax, dr0
+    ;push rax
+    ;mov rax, dr1
+    ;push rax
+    ;mov rax, dr2
+    ;push rax
+    ;mov rax, dr3
+    ;push rax
 
     push rsi
 
-    mov rax, qword [rdi + (14 * 8)]
-    mov dr0, rax
-    mov rax, qword [rdi + (15 * 8)]
-    mov dr1, rax
-    mov rax, qword [rdi + (16 * 8)]
-    mov dr2, rax
-    mov rax, qword [rdi + (17 * 8)]
-    mov dr3, rax
+    ;mov rax, qword [rdi + (14 * 8)]
+    ;mov dr0, rax
+    ;mov rax, qword [rdi + (15 * 8)]
+    ;mov dr1, rax
+    ;mov rax, qword [rdi + (16 * 8)]
+    ;mov dr2, rax
+    ;mov rax, qword [rdi + (17 * 8)]
+    ;mov dr3, rax
 
     ; Restore guest GPR state
     mov rbx, qword [rdi + (0 * 8)]
@@ -79,14 +71,14 @@ svm_vmrun:
     mov qword [rdi + (12 * 8)], r14
     mov qword [rdi + (13 * 8)], r15
 
-    mov rax, dr0
-    mov qword [rdi + (14 * 8)], rax
-    mov rax, dr1
-    mov qword [rdi + (15 * 8)], rax
-    mov rax, dr2
-    mov qword [rdi + (16 * 8)], rax
-    mov rax, dr3
-    mov qword [rdi + (17 * 8)], rax
+    ;mov rax, dr0
+    ;mov qword [rdi + (14 * 8)], rax
+    ;mov rax, dr1
+    ;mov qword [rdi + (15 * 8)], rax
+    ;mov rax, dr2
+    ;mov qword [rdi + (16 * 8)], rax
+    ;mov rax, dr3
+    ;mov qword [rdi + (17 * 8)], rax
 
     pop r8
     pop r9
@@ -94,28 +86,20 @@ svm_vmrun:
 
     pop rsi
 
-    pop rax
-    mov dr3, rax
-    pop rax
-    mov dr2, rax
-    pop rax
-    mov dr1, rax
-    pop rax
-    mov dr0, rax
+    ;pop rax
+    ;mov dr3, rax
+    ;pop rax
+    ;mov dr2, rax
+    ;pop rax
+    ;mov dr1, rax
+    ;pop rax
+    ;mov dr0, rax
 
-    pop r15
+    pop r15 ; Restore Callee Saved Registers
     pop r14
     pop r13
     pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rbp
-    pop rdi
-    pop rdx
-    pop rcx
     pop rbx
-    pop rax
+    pop rbp
     
     ret
