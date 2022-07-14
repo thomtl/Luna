@@ -50,9 +50,7 @@ svm_vmrun:
 
     mov rax, qword [rsp + 8] ; Mov VMCB into rax
 
-    vmload
     vmrun
-    vmsave
 
     push rdi
     mov rdi, qword [rsp + 0x8] ; Restore rdi from stack

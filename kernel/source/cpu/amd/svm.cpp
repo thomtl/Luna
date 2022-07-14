@@ -82,7 +82,6 @@ svm::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     vmcb->icept_clgi = 1;
 
     vmcb->icept_intr = 1;
-    vmcb->icept_vintr = 1;
     vmcb->icept_nmi = 1;
     vmcb->icept_smi = 1;
 
@@ -178,17 +177,23 @@ bool svm::Vm::run() {
     while(true) {
         ASSERT(vcpu->vm->irq_listeners.size() == 1); // TODO
         auto& irq_dev = vcpu->vm->irq_listeners[0];
-        if(irq_dev->read_irq_pin() && !vmcb->v_irq) {
-            //inject_int(vm::AbstractVm::InjectType::ExtInt, irq_dev->read_irq_vector(), false);
+        if(irq_dev->read_irq_pin() && !vmcb->v_irq && !(vmcb->rflags & (1 << 9))) {
+            vmcb->icept_vintr = 1;
 
-            //auto vector = irq_dev->read_irq_vector();
-            vmcb->v_intr_vector = 0;//vector;
-            //vmcb->v_intr_priority = 0xF;//(vector >> 4) & 0xF;
-            vmcb->v_ignore_tpr = 1;
+            vmcb->v_intr_vector = 0;
+            vmcb->v_intr_priority = 0xF;
+            //vmcb->v_ignore_tpr = 1;
             vmcb->v_irq = 1;
-            //vmcb->v_tpr = 0xF;
+        }
 
-            //print("Injecting vINTR\n");
+        if(irq_dev->read_irq_pin() && (vmcb->rflags & (1 << 9))) {
+            auto v = irq_dev->read_irq_vector();
+            inject_int(vm::AbstractVm::InjectType::ExtInt, v);
+
+            if(vmcb->v_irq) {
+                vmcb->v_irq = 0;
+                vmcb->icept_vintr = false;
+            }
         }
 
         asm("clgi");
@@ -199,10 +204,14 @@ bool svm::Vm::run() {
         guest_simd.load();
 
         vcpu->adjust_guest_tsc(vcpu->host_tsc_at_vmexit - tsc::rdtsc()); // On first entry this will be 0 - tsc, so it will adjust the guest's TSC to 0
+
+        asm volatile("vmload" : : "a"(vmcb_pa) : "memory");
+
         auto tsc_at_entry = tsc::rdtsc();
         svm_vmrun(&guest_gprs, vmcb_pa);
         vcpu->host_tsc_at_vmexit = tsc::rdtsc();
 
+        asm volatile("vmsave" : : "a"(vmcb_pa) : "memory");
         asm volatile("vmload" : : "a"(host_save_vmcb_pa) : "memory");
 
         vcpu->time_spent_in_vm += tsc::time_ns_at(vcpu->host_tsc_at_vmexit - tsc_at_entry);
@@ -253,21 +262,12 @@ bool svm::Vm::run() {
             return false;
         }
         case 0x60: // External Interrupt
+            DEBUG_ASSERT(vmcb->icept_intr);
             continue;
 
-        case 0x64: {// vINTR
-            auto& listener = vcpu->vm->irq_listeners[0];
-            DEBUG_ASSERT((vmcb->rflags & (1 << 9)) && (listener->read_irq_pin()));
-
-            auto v = listener->read_irq_vector();
-            inject_int(vm::AbstractVm::InjectType::ExtInt, v);
-
-            //static int  i = 0;
-            //print("Injecting IRQ {}\n", i++);
-
-            vmcb->v_irq = 0;
+        case 0x64: // vINTR
+            DEBUG_ASSERT(vmcb->icept_vintr);
             continue;
-        }
 
         case 0x72: { // CPUID
             exit.reason = vm::VmExit::Reason::CPUID;
