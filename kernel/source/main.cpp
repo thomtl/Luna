@@ -98,7 +98,7 @@ void kernel_main(const stivale2_struct* info) {
     idt::init_table();
     idt::load();
 
-    auto& kernel_vmm = vmm::KernelVmm::get_instance();
+    auto& kernel_vmm = vmm::get_kernel_context();
     for(size_t i = 0; i < 0x8000'0000; i += pmm::block_size)
         kernel_vmm.map(i, i + kernel_vbase, paging::mapPagePresent | paging::mapPageWrite | paging::mapPageExecute);
 
@@ -162,7 +162,7 @@ void kernel_main_ap(stivale2_smp_info* info){
 
     cpu::early_init();
     msr::write(msr::ia32_pat, msr::pat::default_pat);
-    vmm::KernelVmm::get_instance().set();
+    vmm::get_kernel_context().set();
 
     auto& cpu_data = allocate_cpu_data();
     

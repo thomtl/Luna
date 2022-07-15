@@ -154,7 +154,7 @@ namespace vm::gpu::bga {
             }
 
             //vm->mmio_map[bar0] = {this, lfb_size};
-            auto& kvmm = vmm::KernelVmm::get_instance();
+            auto& kvmm = vmm::get_kernel_context();
             for(size_t i = 0; i < lfb_size; i += 0x1000)
                 vm->mm->map(kvmm.get_phys((uintptr_t)fb.data() + i), bar0 + i, paging::mapPagePresent | paging::mapPageWrite);
             

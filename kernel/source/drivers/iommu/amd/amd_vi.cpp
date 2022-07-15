@@ -13,7 +13,7 @@
 amd_vi::IOMMUEngine::IOMMUEngine(const amd_vi::IVHDInfo& ivhd): segment{ivhd.segment}, domain_ids{n_domains}, ivhd{ivhd} {
     auto regs_pa = ivhd.base;
     auto regs_va = regs_pa + phys_mem_map;
-    vmm::KernelVmm::get_instance().map(regs_pa, regs_va, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::get_kernel_context().map(regs_pa, regs_va, paging::mapPagePresent | paging::mapPageWrite);
     regs = (volatile IOMMUEngineRegs*)regs_va;
 
     {

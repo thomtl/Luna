@@ -36,7 +36,7 @@ vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* r
     queue_pa = pmm::alloc_block();
     ASSERT(queue_pa);
     auto queue_va = queue_pa + phys_mem_map;
-    vmm::KernelVmm::get_instance().map(queue_pa, queue_va, paging::mapPagePresent | paging::mapPageWrite); // Hardware access to the IQ is always snooped
+    vmm::get_kernel_context().map(queue_pa, queue_va, paging::mapPagePresent | paging::mapPageWrite); // Hardware access to the IQ is always snooped
 
     queue = (uint8_t*)queue_va;
 
@@ -92,7 +92,7 @@ void vt_d::InvalidationQueue::submit_sync(const uint8_t* cmd) {
 
 vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     auto va = drhd->mmio_base + phys_mem_map;
-    vmm::KernelVmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::get_kernel_context().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
 
     regs = (RemappingEngineRegs*)va;
     fault_recording_regs = (FaultRecordingRegister*)(va + (16 * ((regs->capabilities >> 24) & 0x3FF)));
@@ -250,7 +250,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     ASSERT(root_block);
 
     auto root_table_va = root_block + phys_mem_map;
-    vmm::KernelVmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
+    vmm::get_kernel_context().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
 
     root_table = (RootTable*)root_table_va;
     memset((void*)root_table, 0, pmm::block_size);
@@ -440,7 +440,7 @@ sl_paging::Context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
         if(!pa)
             PANIC("Couldn't allocate IOMMU context table");
         auto va = pa + phys_mem_map;
-        vmm::KernelVmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
+        vmm::get_kernel_context().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
         memset((void*)va, 0, pmm::block_size);
         flush_cache((void*)va, pmm::block_size);
 

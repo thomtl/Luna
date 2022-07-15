@@ -25,7 +25,7 @@ rtl81x9::Nic::Nic(pci::Device& device, uint16_t did): mm{&device}, regs{nullptr}
         auto bar = device.read_bar(i);
         if(bar.base != 0 && bar.type == pci::Bar::Type::Mmio) {
             auto va = bar.base + phys_mem_map;
-            vmm::KernelVmm::get_instance().map(bar.base, va, paging::mapPagePresent | paging::mapPageWrite);
+            vmm::get_kernel_context().map(bar.base, va, paging::mapPagePresent | paging::mapPageWrite);
 
             regs = (volatile Regs*)va;
             break;

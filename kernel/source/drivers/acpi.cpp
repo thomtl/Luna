@@ -29,7 +29,7 @@ static bool do_checksum(const acpi::SDTHeader* header) {
 }
 
 static acpi::SDTHeader* map_table(uintptr_t pa) {
-    auto& vmm = vmm::KernelVmm::get_instance();
+    auto& vmm = vmm::get_kernel_context();
 
     vmm.map(pa, pa + phys_mem_map, paging::mapPagePresent);
     auto* header = (acpi::SDTHeader*)(pa + phys_mem_map);
@@ -86,7 +86,7 @@ acpi::SDTHeader* acpi::get_table(const char* sig, size_t index) {
 static void init_ec();
 
 void acpi::init_tables(const stivale2::Parser& parser) {
-    auto& vmm = vmm::KernelVmm::get_instance();
+    auto& vmm = vmm::get_kernel_context();
 
     auto rsdp_phys = (uintptr_t)parser.acpi_rsdp();
     vmm.map(rsdp_phys, rsdp_phys + phys_mem_map, paging::mapPagePresent);

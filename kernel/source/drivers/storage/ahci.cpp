@@ -16,7 +16,7 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
 
     device->set_privileges(pci::privileges::Dma | pci::privileges::Mmio);
 
-    vmm::KernelVmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::get_kernel_context().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
     regs = (volatile Hba*)(bar.base + phys_mem_map);
 
     print("ahci: Version {}.{}.{}\n", regs->ghcr.vs >> 16, (regs->ghcr.vs >> 8) & 0xFF, regs->ghcr.vs & 0xFF);
@@ -365,7 +365,7 @@ static void handoff_bios(pci::Device& dev) {
     ASSERT(bar.type == pci::Bar::Type::Mmio);
     ASSERT(bar.base != 0);
 
-    vmm::KernelVmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::get_kernel_context().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
     auto* regs = (volatile ahci::Hba*)(bar.base + phys_mem_map);
 
     if(regs->ghcr.vs >= ahci::make_version(1, 2, 0)) {

@@ -46,7 +46,7 @@ uintptr_t sl_paging::Context::create_table(){
     if(!pa)
         PANIC("Couldn't allocate block for sl_paging structures");
     auto va = pa + phys_mem_map;
-    vmm::KernelVmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
+    vmm::get_kernel_context().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
 
     memset((void*)va, 0, pmm::block_size);
     if(!coherent)

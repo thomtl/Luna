@@ -42,7 +42,7 @@ extern "C" {
     void* laihost_map(uintptr_t addr, size_t bytes) {
         size_t n_pages = div_ceil(bytes, pmm::block_size);
 
-        auto& vmm = vmm::KernelVmm::get_instance();
+        auto& vmm = vmm::get_kernel_context();
 
         for(size_t i = 0; i < n_pages; i++)
             vmm.map(addr + (i * pmm::block_size), addr + (i * pmm::block_size) + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);

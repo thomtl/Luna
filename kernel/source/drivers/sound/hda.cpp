@@ -80,7 +80,7 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
         self.handle_irq();
     }, .is_irq = true, .should_iret = true, .userptr = this});
 
-    vmm::KernelVmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc);
+    vmm::get_kernel_context().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc);
 
     regs = (volatile Regs*)(bar.base + phys_mem_map);
 

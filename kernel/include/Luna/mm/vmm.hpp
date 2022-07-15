@@ -9,16 +9,5 @@ namespace vmm
     bool is_canonical(uintptr_t addr);
     paging::Context create_context();
 
-    class KernelVmm {
-        public:
-        static paging::Context& get_instance(){
-            return _instance();
-        }
-
-        KernelVmm(const KernelVmm&) = delete;
-        void operator=(const KernelVmm&) = delete;
-        private:
-        KernelVmm() = delete;
-        static paging::Context& _instance();
-    };
+    paging::Context& get_kernel_context();
 } // namespace vmm

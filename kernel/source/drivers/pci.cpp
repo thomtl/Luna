@@ -15,7 +15,7 @@ static std::vector<pci::Device> devices;
 static uintptr_t get_mcfg_device_addr(const acpi::Mcfg::Allocation& allocation, uint8_t bus, uint8_t slot, uint8_t func) {
     auto pa = allocation.base + (((bus - allocation.start_bus) << 20) | (slot << 15) | (func << 12));
     auto va = pa + phys_mem_map;
-    vmm::KernelVmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::get_kernel_context().map(pa, va, paging::mapPagePresent | paging::mapPageWrite);
 
     return va;
 }
@@ -385,7 +385,7 @@ static void install_msix(pci::Device& device, uint16_t index, uint8_t vector) {
     auto base = table_bar.base + device.msix.table.offset;
     ASSERT(base && table_bar.type == pci::Bar::Type::Mmio);
 
-    vmm::KernelVmm::get_instance().map(base, base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc); // TODO: How should this interact with device drivers?
+    vmm::get_kernel_context().map(base, base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc); // TODO: How should this interact with device drivers?
     volatile auto* table = (pci::msix::Entry*)(base + phys_mem_map);
 
     pci::msi::Data data{};

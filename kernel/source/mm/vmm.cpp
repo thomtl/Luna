@@ -29,9 +29,9 @@ paging::Context vmm::create_context(){
     return paging::Context{paging_levels};
 }
 
-static std::lazy_initializer<paging::Context> instance;
+static constinit std::lazy_initializer<paging::Context> instance;
 
-paging::Context& vmm::KernelVmm::_instance() {
+paging::Context& vmm::get_kernel_context() {
     if(!instance)
         instance.init(paging_levels);
 
