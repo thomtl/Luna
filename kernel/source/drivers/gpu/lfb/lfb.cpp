@@ -11,7 +11,7 @@ lfb::Gpu::Gpu(stivale2::Parser& boot) {
     mode.pitch = tag->framebuffer_pitch;
 
     auto pa = tag->framebuffer_addr;
-    auto& kvmm = vmm::kernel_vmm::get_instance();
+    auto& kvmm = vmm::KernelVmm::get_instance();
     for(size_t i = 0; i < (mode.height * mode.pitch); i += pmm::block_size)
         kvmm.map(pa + i, pa + i + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wc);
 }

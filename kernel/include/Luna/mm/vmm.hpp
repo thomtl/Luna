@@ -7,18 +7,18 @@ namespace vmm
 {
     void init_bsp();
     bool is_canonical(uintptr_t addr);
-    paging::context create_context();
+    paging::Context create_context();
 
-    class kernel_vmm {
+    class KernelVmm {
         public:
-        static paging::context& get_instance(){
+        static paging::Context& get_instance(){
             return _instance();
         }
 
-        kernel_vmm(const kernel_vmm&) = delete;
-        void operator=(const kernel_vmm&) = delete;
+        KernelVmm(const KernelVmm&) = delete;
+        void operator=(const KernelVmm&) = delete;
         private:
-        kernel_vmm() = delete;
-        static paging::context& _instance();
+        KernelVmm() = delete;
+        static paging::Context& _instance();
     };
 } // namespace vmm

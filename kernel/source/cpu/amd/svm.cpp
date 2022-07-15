@@ -37,8 +37,8 @@ void svm::init() {
     svm.asid_manager.init(svm.n_asids);
 }
 
-npt::context* svm::create_npt() {
-    return new npt::context{4};
+npt::Context* svm::create_npt() {
+    return new npt::Context{4};
 }
 
 bool svm::is_supported() {
@@ -346,7 +346,7 @@ bool svm::Vm::run() {
             exit.mmu.access.x = info.execute;
             exit.mmu.access.user = info.user;
 
-            auto page = static_cast<npt::context*>(mm)->get_page(addr); // This downcast should be safe
+            auto page = static_cast<npt::Context*>(mm)->get_page(addr); // This downcast should be safe
 
             exit.mmu.page.present = info.present;
             exit.mmu.page.r = page.present;

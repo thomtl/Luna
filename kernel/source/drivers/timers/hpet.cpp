@@ -75,7 +75,7 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
             auto vector = idt::allocate_vector();
             timer.vector = vector;
 
-            idt::set_handler(vector, idt::handler{.f = [](uint8_t, idt::regs*, void* userptr){
+            idt::set_handler(vector, idt::Handler{.f = [](uint8_t, idt::Regs*, void* userptr){
                 auto& comparator = *(hpet::Comparator*)userptr;
                 auto& self = *comparator._device;
 
@@ -116,7 +116,7 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
                 ASSERT(gsi != ~0u);
 
                 gsi_vector = gsi + 0x20;
-                idt::set_handler(gsi_vector, idt::handler{.f = [](uint8_t, idt::regs*, void* userptr){
+                idt::set_handler(gsi_vector, idt::Handler{.f = [](uint8_t, idt::Regs*, void* userptr){
                     auto& self = *(hpet::Device*)userptr;
                     auto irq = self.regs->irq_status;
 

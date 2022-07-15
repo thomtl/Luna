@@ -5,9 +5,9 @@
 
 #include <Luna/misc/debug.hpp>
 
-static idt::handler handlers[idt::n_table_entries] = {};
-static idt::entry table[idt::n_table_entries] = {};
-static idt::pointer table_pointer{};
+static idt::Handler handlers[idt::n_table_entries] = {};
+static idt::Entry table[idt::n_table_entries] = {};
+static idt::Pointer table_pointer{};
 
 extern "C" void* isr_array_begin;
 extern "C" void* isr_array_end;
@@ -20,10 +20,10 @@ void idt::init_table() {
     size_t n_irqs = (isr_array_end_addr - isr_array_begin_addr) / sizeof(void*);
 
     for(size_t i = 0; i < n_irqs; i++)
-        table[i] = entry{isrs[i], gdt::kcode};
+        table[i] = Entry{isrs[i], gdt::kcode_sel};
 
     table_pointer.table = (uint64_t)&table;
-    table_pointer.size = (sizeof(entry) * idt::n_table_entries) - 1;
+    table_pointer.size = (sizeof(Entry) * idt::n_table_entries) - 1;
 
     for(size_t i = 0; i < 32; i++)
         handlers[i].is_reserved = true; // Reserve Exceptions
@@ -35,7 +35,7 @@ void idt::load() {
     table_pointer.load();
 }
 
-void idt::set_handler(uint8_t vector, const handler& h) {
+void idt::set_handler(uint8_t vector, const Handler& h) {
     handlers[vector] = h;
     handlers[vector].is_reserved = true;
 }
@@ -94,7 +94,7 @@ struct {
     {.mnemonic = "-", .message = "Reserved"},
 };
 
-extern "C" void isr_handler(idt::regs* regs) {
+extern "C" void isr_handler(idt::Regs* regs) {
     auto int_number = regs->int_num & 0xFF;
 
     auto& handler = handlers[int_number];

@@ -35,7 +35,7 @@ void lapic::Lapic::init() {
     mmio_base = mmio_base_pa + phys_mem_map;
 
     if(!x2apic)
-        vmm::kernel_vmm::get_instance().map(mmio_base_pa, mmio_base, paging::mapPagePresent | paging::mapPageWrite);
+        vmm::KernelVmm::get_instance().map(mmio_base_pa, mmio_base, paging::mapPagePresent | paging::mapPageWrite);
 
     uint32_t id = 0;
     if(x2apic)

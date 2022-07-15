@@ -31,10 +31,10 @@ namespace io_paging
     };
     static_assert(sizeof(page_table) == pmm::block_size);
 
-    class context {
+    class Context {
         public:
-        context(uint8_t levels);
-        ~context();
+        Context(uint8_t levels);
+        ~Context();
 
         void map(uintptr_t pa, uintptr_t iova, uint64_t flags);
         uintptr_t unmap(uintptr_t iova);

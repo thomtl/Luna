@@ -139,7 +139,7 @@ xhci::HCI::HCI(pci::Device& dev): device{&dev}, mm{&dev} {
         auto vector = idt::allocate_vector();
         dev.enable_irq(0, vector);
 
-        idt::set_handler(vector, idt::handler{.f = [](uint8_t, idt::regs*, void* userptr){
+        idt::set_handler(vector, idt::Handler{.f = [](uint8_t, idt::Regs*, void* userptr){
             auto& self = *(HCI*)userptr;
             self.handle_irq();
         }, .is_irq = true, .should_iret = true, .userptr = this});

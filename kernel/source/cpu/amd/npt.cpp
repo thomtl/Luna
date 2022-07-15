@@ -36,7 +36,7 @@ static void clean_table(uintptr_t pa, uint8_t level) {
     delete_table(pa);
 }
 
-npt::context::context(uint8_t levels): levels{levels} {
+npt::Context::Context(uint8_t levels): levels{levels} {
     ASSERT(levels == 4 || levels == 5);
 
     const auto [pa, _] = create_table();
@@ -46,14 +46,14 @@ npt::context::context(uint8_t levels): levels{levels} {
     ASSERT(asid != ~0u);
 }
 
-npt::context::~context(){
+npt::Context::~Context(){
     if(root_pa)
         clean_table(root_pa, levels);
 
     get_cpu().cpu.svm.asid_manager->free(asid);
 }
 
-npt::page_entry* npt::context::walk(uintptr_t va, bool create_new_tables) {
+npt::page_entry* npt::Context::walk(uintptr_t va, bool create_new_tables) {
     auto get_index = [va](size_t i){ return (va >> ((9 * (i - 1)) + 12)) & 0x1FF; };
     auto get_level_or_create = [create_new_tables](page_table* prev, size_t i) -> page_table* {
         auto& entry = (*prev)[i];
@@ -84,7 +84,7 @@ npt::page_entry* npt::context::walk(uintptr_t va, bool create_new_tables) {
     return &pml1[get_index(1)];
 }
 
-void npt::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
+void npt::Context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     auto& page = *walk(va, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
     page.present = (flags & paging::mapPagePresent) ? 1 : 0;
@@ -96,7 +96,7 @@ void npt::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     svm::invlpga(asid, va);
 }
 
-void npt::context::protect(uintptr_t va, uint64_t flags) {
+void npt::Context::protect(uintptr_t va, uint64_t flags) {
     auto* page = walk(va, false);
     if(!page)
         return;
@@ -108,7 +108,7 @@ void npt::context::protect(uintptr_t va, uint64_t flags) {
     svm::invlpga(asid, va);
 }
 
-uintptr_t npt::context::unmap(uintptr_t va) {
+uintptr_t npt::Context::unmap(uintptr_t va) {
     auto* entry = walk(va, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return 0; // Page does not exist
@@ -129,7 +129,7 @@ uintptr_t npt::context::unmap(uintptr_t va) {
     return ret;
 }
 
-uintptr_t npt::context::get_phys(uintptr_t va) {
+uintptr_t npt::Context::get_phys(uintptr_t va) {
     uintptr_t off = va & 0xFFF;
     auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
@@ -138,7 +138,7 @@ uintptr_t npt::context::get_phys(uintptr_t va) {
     return (entry->frame << 12) + off;
 }
 
-npt::page_entry npt::context::get_page(uintptr_t va) {
+npt::page_entry npt::Context::get_page(uintptr_t va) {
     auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return {}; // Page does not exist
@@ -146,6 +146,6 @@ npt::page_entry npt::context::get_page(uintptr_t va) {
     return *entry;
 }
 
-uintptr_t npt::context::get_root_pa() const {
+uintptr_t npt::Context::get_root_pa() const {
     return root_pa;
 }

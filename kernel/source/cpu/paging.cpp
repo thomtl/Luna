@@ -32,18 +32,18 @@ static void clean_table(uintptr_t pa, uint8_t level) {
     delete_table(pa);
 }
 
-paging::context::context(uint8_t levels): levels{levels} {
+paging::Context::Context(uint8_t levels): levels{levels} {
     ASSERT(levels == 4 || levels == 5);
 
     const auto [pa, _] = create_table();
     root_pa = pa;
 }
 
-paging::context::~context(){
+paging::Context::~Context(){
     clean_table(root_pa, levels);
 }
 
-paging::page_entry* paging::context::walk(uintptr_t va, bool create_new_tables) {
+paging::page_entry* paging::Context::walk(uintptr_t va, bool create_new_tables) {
     auto get_index = [va](size_t i){ return (va >> ((9 * (i - 1)) + 12)) & 0x1FF; };
     auto get_level_or_create = [create_new_tables](page_table* prev, size_t i) -> page_table* {
         auto& entry = (*prev)[i];
@@ -74,7 +74,7 @@ paging::page_entry* paging::context::walk(uintptr_t va, bool create_new_tables) 
     return &pml1[get_index(1)];
 }
 
-void paging::context::map(uintptr_t pa, uintptr_t va, uint64_t flags, uint8_t cache) {
+void paging::Context::map(uintptr_t pa, uintptr_t va, uint64_t flags, uint8_t cache) {
     auto& page = *walk(va, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
     page.writeable = (flags & mapPageWrite) ? 1 : 0;
@@ -91,7 +91,7 @@ void paging::context::map(uintptr_t pa, uintptr_t va, uint64_t flags, uint8_t ca
     asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }
 
-void paging::context::set_caching(uintptr_t va, uint8_t cache) {
+void paging::Context::set_caching(uintptr_t va, uint8_t cache) {
     auto* page = walk(va, false);
     if(!page)
         return;
@@ -103,7 +103,7 @@ void paging::context::set_caching(uintptr_t va, uint8_t cache) {
     asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }
 
-uintptr_t paging::context::unmap(uintptr_t va) {
+uintptr_t paging::Context::unmap(uintptr_t va) {
     auto* entry = walk(va, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return 0; // Page does not exist
@@ -124,7 +124,7 @@ uintptr_t paging::context::unmap(uintptr_t va) {
     return ret;
 }
 
-uintptr_t paging::context::get_phys(uintptr_t va) {
+uintptr_t paging::Context::get_phys(uintptr_t va) {
     uintptr_t off = va & 0xFFF;
     auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
@@ -133,7 +133,7 @@ uintptr_t paging::context::get_phys(uintptr_t va) {
     return (entry->frame << 12) + off;
 }
 
-paging::page_entry paging::context::get_page(uintptr_t va) {
+paging::page_entry paging::Context::get_page(uintptr_t va) {
     auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return {}; // Page does not exist
@@ -141,10 +141,10 @@ paging::page_entry paging::context::get_page(uintptr_t va) {
     return *entry;
 }
 
-uintptr_t paging::context::get_root_pa() const {
+uintptr_t paging::Context::get_root_pa() const {
     return root_pa;
 }
 
-void paging::context::set() const {
+void paging::Context::set() const {
     asm volatile("mov %0, %%cr3" : : "r"(get_root_pa()) : "memory");
 }

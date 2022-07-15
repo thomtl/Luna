@@ -5,7 +5,7 @@
 
 namespace gdt
 {
-    struct [[gnu::packed]] pointer {
+    struct [[gnu::packed]] Pointer {
         uint16_t size;
         uint64_t table;
 
@@ -18,10 +18,10 @@ namespace gdt
         }
     };
 
-    constexpr uint16_t kcode = 0x8;
-    constexpr uint16_t kdata = 0x10;
+    constexpr uint16_t kcode_sel = 0x8;
+    constexpr uint16_t kdata_sel = 0x10;
 
-    struct table {
+    struct Table {
         void init(){
             entries[i++] = 0;
 
@@ -61,12 +61,12 @@ namespace gdt
             }
         }
 
-        void set(){
-            pointer p{.size = (table_entries * sizeof(uint64_t)) - 1, .table = (uint64_t)&entries};
+        void set() const {
+            Pointer p{.size = (table_entries * sizeof(uint64_t)) - 1, .table = (uint64_t)&entries};
             p.load();
         }
 
-        void flush() {
+        void flush() const {
             asm volatile (R"(
                 mov %%rsp, %%rax
                 push $0x10
@@ -82,7 +82,7 @@ namespace gdt
                 mov %%ax, %%ss
                 mov %%ax, %%fs
                 mov %%ax, %%gs
-                )" : : : "rax", "memory");
+            )" : : : "rax", "memory");
         }
 
         private:

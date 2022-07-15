@@ -456,7 +456,7 @@ namespace amd_vi {
         bool queue_command(const uint8_t* cmd, size_t size);
         void completion_wait();
 
-        io_paging::context& get_translation(const DeviceID& device);
+        io_paging::Context& get_translation(const DeviceID& device);
         void invalidate_iotlb_addr(const DeviceID& device, uintptr_t iova);
 
         volatile IOMMUEngineRegs* regs;
@@ -466,7 +466,7 @@ namespace amd_vi {
         uint16_t max_device_id;
         std::bitmap domain_ids;
 
-        std::unordered_map<uint16_t, io_paging::context*> page_map;
+        std::unordered_map<uint16_t, io_paging::Context*> page_map;
         std::unordered_map<uint16_t, uint16_t> domain_id_map;
 
         std::unordered_map<uint16_t, uint16_t> alias_map;

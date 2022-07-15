@@ -36,7 +36,7 @@ vt_d::InvalidationQueue::InvalidationQueue(volatile vt_d::RemappingEngineRegs* r
     queue_pa = pmm::alloc_block();
     ASSERT(queue_pa);
     auto queue_va = queue_pa + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(queue_pa, queue_va, paging::mapPagePresent | paging::mapPageWrite); // Hardware access to the IQ is always snooped
+    vmm::KernelVmm::get_instance().map(queue_pa, queue_va, paging::mapPagePresent | paging::mapPageWrite); // Hardware access to the IQ is always snooped
 
     queue = (uint8_t*)queue_va;
 
@@ -92,7 +92,7 @@ void vt_d::InvalidationQueue::submit_sync(const uint8_t* cmd) {
 
 vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     auto va = drhd->mmio_base + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::KernelVmm::get_instance().map(drhd->mmio_base, va, paging::mapPagePresent | paging::mapPageWrite);
 
     regs = (RemappingEngineRegs*)va;
     fault_recording_regs = (FaultRecordingRegister*)(va + (16 * ((regs->capabilities >> 24) & 0x3FF)));
@@ -232,7 +232,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
         regs->fault_event_upper_address = msi_upper_addr.raw;
     }
 
-    idt::set_handler(vector, idt::handler{.f = []([[maybe_unused]] uint8_t, [[maybe_unused]] idt::regs* regs, void* userptr) {
+    idt::set_handler(vector, idt::Handler{.f = [](uint8_t, idt::Regs*, void* userptr) {
         auto& self = *(vt_d::RemappingEngine*)userptr;
         self.handle_irq(); 
     }, .is_irq = true, .should_iret = false, .userptr = this});
@@ -250,7 +250,7 @@ vt_d::RemappingEngine::RemappingEngine(vt_d::Drhd* drhd): drhd{drhd} {
     ASSERT(root_block);
 
     auto root_table_va = root_block + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
+    vmm::KernelVmm::get_instance().map(root_block, root_table_va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
 
     root_table = (RootTable*)root_table_va;
     memset((void*)root_table, 0, pmm::block_size);
@@ -433,14 +433,14 @@ void vt_d::RemappingEngine::invalidate_iotlb_addr(uint16_t domain_id, uintptr_t 
     }
 }
 
-sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID device) {
+sl_paging::Context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID device) {
     auto* root_entry = &root_table->entries[device.bus];
     if(!root_entry->present) {
         auto pa = pmm::alloc_block();
         if(!pa)
             PANIC("Couldn't allocate IOMMU context table");
         auto va = pa + phys_mem_map;
-        vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
+        vmm::KernelVmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
         memset((void*)va, 0, pmm::block_size);
         flush_cache((void*)va, pmm::block_size);
 
@@ -460,7 +460,7 @@ sl_paging::context& vt_d::RemappingEngine::get_device_translation(vt_d::SourceID
             PANIC("No Domain IDs left");
         domain_ids.set(domain_id);
 
-        auto* context = new sl_paging::context{secondary_page_levels, page_snoop, coherent};
+        auto* context = new sl_paging::Context{secondary_page_levels, page_snoop, coherent};
 
         domain_id_map[device.raw] = domain_id;
         page_map[device.raw] = context;

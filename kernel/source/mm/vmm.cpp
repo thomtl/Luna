@@ -25,13 +25,13 @@ bool vmm::is_canonical(uintptr_t addr) {
     }
 }
 
-paging::context vmm::create_context(){
-    return paging::context{paging_levels};
+paging::Context vmm::create_context(){
+    return paging::Context{paging_levels};
 }
 
-static std::lazy_initializer<paging::context> instance;
+static std::lazy_initializer<paging::Context> instance;
 
-paging::context& vmm::kernel_vmm::_instance() {
+paging::Context& vmm::KernelVmm::_instance() {
     if(!instance)
         instance.init(paging_levels);
 

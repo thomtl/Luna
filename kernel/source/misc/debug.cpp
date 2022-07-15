@@ -45,7 +45,7 @@ void debug::poison_addr(uint8_t n, uintptr_t addr, uint8_t flags) {
 
     asm volatile("mov %0, %%dr7" : : "r"(dr7) : "memory");
 
-    idt::set_handler(1, idt::handler{.f = []([[maybe_unused]] uint8_t, [[maybe_unused]] idt::regs* regs, [[maybe_unused]] void* userptr) {
+    idt::set_handler(1, idt::Handler{.f = [](uint8_t, idt::Regs* regs, void*) {
         uint64_t dr6 = 0;
         asm volatile("mov %%dr6, %0" : "=r"(dr6) : : "memory");
 

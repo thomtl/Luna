@@ -68,7 +68,7 @@ constexpr const char* vm_instruction_errors[] = {
 };
 
 bool vmx::is_supported() {
- uint32_t a, b, c, d;
+    uint32_t a, b, c, d;
     ASSERT(cpu::cpuid(1, a, b, c, d));
 
     if((c & (1 << 5)) == 0)
@@ -101,7 +101,7 @@ uint64_t vmx::get_cr4_constraint() {
 }
 
 void vmx::init() {
-     uint32_t a, b, c, d;
+    uint32_t a, b, c, d;
     ASSERT(cpu::cpuid(1, a, b, c, d));
 
     if((c & (1 << 5)) == 0)
@@ -168,8 +168,8 @@ void vmx::init() {
     ASSERT(ept & (1 << 25)); // Assert single context invept is supported
 }
 
-ept::context* vmx::create_ept() {
-    return new ept::context{get_cpu().cpu.vmx.ept_levels};
+ept::Context* vmx::create_ept() {
+    return new ept::Context{get_cpu().cpu.vmx.ept_levels};
 }
 
 vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
@@ -273,17 +273,17 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
     //write(guest_intr_status, 0); // Only do if we use Virtual-Interrupt Delivery
     //write(guest_pml_index, 0); // Only do if we do PMLs
 
-    write(host_tr_base, (uint64_t)&get_cpu().tss_table); // We don't have a TSS
+    write(host_tr_base, (uint64_t)&get_cpu().tss_table);
 
     {
-        gdt::pointer gdtr{};
+        gdt::Pointer gdtr{};
         gdtr.store();
 
         write(host_gdtr_base, gdtr.table);
     }
 
     {
-        idt::pointer idtr{};
+        idt::Pointer idtr{};
         idtr.store();
 
         write(host_idtr_base, idtr.table);

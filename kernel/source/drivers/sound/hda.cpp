@@ -75,12 +75,12 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
 
     auto vector = idt::allocate_vector();
     device.enable_irq(0, vector);
-    idt::set_handler(vector, idt::handler{.f = [](uint8_t, idt::regs*, void* userptr){
+    idt::set_handler(vector, idt::Handler{.f = [](uint8_t, idt::Regs*, void* userptr){
         auto& self = *(HDAController*)userptr;
         self.handle_irq();
     }, .is_irq = true, .should_iret = true, .userptr = this});
 
-    vmm::kernel_vmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc);
+    vmm::KernelVmm::get_instance().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc);
 
     regs = (volatile Regs*)(bar.base + phys_mem_map);
 

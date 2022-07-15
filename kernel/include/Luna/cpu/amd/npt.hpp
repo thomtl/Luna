@@ -33,13 +33,13 @@ namespace npt {
     };
     static_assert(sizeof(page_table) == pmm::block_size);
 
-    class context final : public vm::AbstractMM {
+    class Context final : public vm::AbstractMM {
         public:
-        context() = default;
-        context(uint8_t levels);
-        ~context();
+        Context() = default;
+        Context(uint8_t levels);
+        ~Context();
 
-        context& operator=(context&& other)  {
+        Context& operator=(Context&& other)  {
             asid = std::move(other.asid);
             levels = std::move(other.levels);
             root_pa = std::move(other.root_pa);

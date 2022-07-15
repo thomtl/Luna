@@ -11,7 +11,7 @@
 
 namespace idt
 {
-    struct regs; // Forward decl
+    struct Regs; // Forward decl
 } // namespace idt
 
 
@@ -30,8 +30,8 @@ namespace threading {
 
     // ACCESSED FROM ASSEMBLY, DO NOT CHANGE WITHOUT CHANGING THREADING.ASM
     struct [[gnu::packed]] ThreadContext {
-        void save(const idt::regs* regs);
-        void restore(idt::regs* regs) const;
+        void save(const idt::Regs* regs);
+        void restore(idt::Regs* regs) const;
 
         uint64_t rax, rbx, rcx, rdx, rsi, rdi, rbp, r8, r9, r10, r11, r12, r13, r14, r15;
         uint64_t rsp, rip, rflags;

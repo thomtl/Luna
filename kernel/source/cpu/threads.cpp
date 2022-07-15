@@ -167,7 +167,7 @@ static void idle() {
     __builtin_trap();
 }
 
-static void quantum_irq_handler(uint8_t, idt::regs* regs, void*) {
+static void quantum_irq_handler(uint8_t, idt::Regs* regs, void*) {
     auto entry_time = tsc::time_ns();
 
     auto& cpu = get_cpu();
@@ -228,7 +228,7 @@ void threading::start_on_cpu() {
 
     auto& cpu = get_cpu();
 
-    idt::set_handler(quantum_irq_vector, idt::handler{.f = quantum_irq_handler, .is_irq = true, .should_iret = true, .userptr = nullptr});
+    idt::set_handler(quantum_irq_vector, idt::Handler{.f = quantum_irq_handler, .is_irq = true, .should_iret = true, .userptr = nullptr});
     
     cpu.thread_kill_stack.init((size_t)0x1000);
     cpu.current_thread = nullptr;
@@ -238,7 +238,7 @@ void threading::start_on_cpu() {
 }
 
 
-void threading::ThreadContext::save(const idt::regs* regs) {
+void threading::ThreadContext::save(const idt::Regs* regs) {
     rax = regs->rax;
     rbx = regs->rbx;
     rcx = regs->rcx;
@@ -261,7 +261,7 @@ void threading::ThreadContext::save(const idt::regs* regs) {
     rflags = regs->rflags;
 }
 
-void threading::ThreadContext::restore(idt::regs* regs) const {
+void threading::ThreadContext::restore(idt::Regs* regs) const {
     regs->rax = rax;
     regs->rbx = rbx;
     regs->rcx = rcx;

@@ -34,18 +34,18 @@ static void clean_table(uintptr_t pa, uint8_t level) {
     delete_table(pa);
 }
 
-ept::context::context(uint8_t levels): levels{levels} {
+ept::Context::Context(uint8_t levels): levels{levels} {
     ASSERT(levels == 4 || levels == 5);
 
     const auto [pa, _] = create_table();
     root_pa = pa;
 }
 
-ept::context::~context(){
+ept::Context::~Context(){
     clean_table(root_pa, levels);
 }
 
-ept::page_entry* ept::context::walk(uintptr_t va, bool create_new_tables) {
+ept::page_entry* ept::Context::walk(uintptr_t va, bool create_new_tables) {
     auto get_index = [va](size_t i){ return (va >> ((9 * (i - 1)) + 12)) & 0x1FF; };
     auto get_level_or_create = [create_new_tables](page_table* prev, size_t i) -> page_table* {
         auto& entry = (*prev)[i];
@@ -76,7 +76,7 @@ ept::page_entry* ept::context::walk(uintptr_t va, bool create_new_tables) {
     return &pml1[get_index(1)];
 }
 
-void ept::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
+void ept::Context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     auto& page = *walk(va, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
     page.r = (flags & paging::mapPagePresent) ? 1 : 0;
@@ -88,7 +88,7 @@ void ept::context::map(uintptr_t pa, uintptr_t va, uint64_t flags) {
     invept();
 }
 
-void ept::context::protect(uintptr_t va, uint64_t flags) {
+void ept::Context::protect(uintptr_t va, uint64_t flags) {
     auto* page = walk(va, false);
     if(!page)
         return;
@@ -100,7 +100,7 @@ void ept::context::protect(uintptr_t va, uint64_t flags) {
     invept();
 }
 
-uintptr_t ept::context::unmap(uintptr_t va) {
+uintptr_t ept::Context::unmap(uintptr_t va) {
     auto* entry = walk(va, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return 0; // Page does not exist
@@ -116,7 +116,7 @@ uintptr_t ept::context::unmap(uintptr_t va) {
     return ret;
 }
 
-uintptr_t ept::context::get_phys(uintptr_t va) {
+uintptr_t ept::Context::get_phys(uintptr_t va) {
     auto off = va & 0xFFF;
     auto* entry = walk(va, false); // Since we're just getting stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
@@ -125,11 +125,11 @@ uintptr_t ept::context::get_phys(uintptr_t va) {
     return (entry->frame << 12) + off;
 }
 
-uintptr_t ept::context::get_root_pa() const {
+uintptr_t ept::Context::get_root_pa() const {
     return root_pa;
 }
 
-void ept::context::invept() {
+void ept::Context::invept() {
     // invept mode 1 was already guaranteed to be supported by vmx::init()
     struct {
         uint64_t eptp;

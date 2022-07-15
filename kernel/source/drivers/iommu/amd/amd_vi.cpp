@@ -13,7 +13,7 @@
 amd_vi::IOMMUEngine::IOMMUEngine(const amd_vi::IVHDInfo& ivhd): segment{ivhd.segment}, domain_ids{n_domains}, ivhd{ivhd} {
     auto regs_pa = ivhd.base;
     auto regs_va = regs_pa + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(regs_pa, regs_va, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::KernelVmm::get_instance().map(regs_pa, regs_va, paging::mapPagePresent | paging::mapPageWrite);
     regs = (volatile IOMMUEngineRegs*)regs_va;
 
     {
@@ -128,7 +128,7 @@ amd_vi::IOMMUEngine::IOMMUEngine(const amd_vi::IVHDInfo& ivhd): segment{ivhd.seg
 
         auto vector = idt::allocate_vector();
 
-        idt::set_handler(vector, {.f = [](uint8_t, idt::regs*, void* userptr){
+        idt::set_handler(vector, {.f = [](uint8_t, idt::Regs*, void* userptr){
             auto& self = *(IOMMUEngine*)userptr;
             auto status = self.regs->iommu_status;
             while(status & (1 << 1)) {
@@ -518,7 +518,7 @@ void amd_vi::IOMMUEngine::completion_wait() {
     cmd_ring.need_sync = false;
 }
 
-io_paging::context& amd_vi::IOMMUEngine::get_translation(const amd_vi::DeviceID& device) {
+io_paging::Context& amd_vi::IOMMUEngine::get_translation(const amd_vi::DeviceID& device) {
     if(device.raw > max_device_id)
         PANIC("Trying to access device table over max device id");
 
@@ -533,7 +533,7 @@ io_paging::context& amd_vi::IOMMUEngine::get_translation(const amd_vi::DeviceID&
 
         domain_id_map[device.raw] = domain_id;
 
-        auto* context = new io_paging::context{page_levels};
+        auto* context = new io_paging::Context{page_levels};
         page_map[device.raw] = context;
 
         entry.translation_info_valid = 1;

@@ -392,7 +392,7 @@ namespace vt_d {
     class RemappingEngine {
         public:
         RemappingEngine(Drhd* drhd);
-        sl_paging::context& get_device_translation(SourceID device);
+        sl_paging::Context& get_device_translation(SourceID device);
 
         void map(vt_d::SourceID device, uintptr_t pa, uintptr_t iova, uint64_t flags);
         uintptr_t unmap(vt_d::SourceID device, uintptr_t iova);
@@ -428,7 +428,7 @@ namespace vt_d {
         size_t n_domain_ids, n_fault_recording_regs;
 
         std::bitmap domain_ids;
-        std::unordered_map<uint16_t, sl_paging::context*> page_map;
+        std::unordered_map<uint16_t, sl_paging::Context*> page_map;
         std::unordered_map<uint16_t, uint16_t> domain_id_map;
 
         std::lazy_initializer<InvalidationQueue> iq;

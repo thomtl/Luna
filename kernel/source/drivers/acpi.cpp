@@ -29,7 +29,7 @@ static bool do_checksum(const acpi::SDTHeader* header) {
 }
 
 static acpi::SDTHeader* map_table(uintptr_t pa) {
-    auto& vmm = vmm::kernel_vmm::get_instance();
+    auto& vmm = vmm::KernelVmm::get_instance();
 
     vmm.map(pa, pa + phys_mem_map, paging::mapPagePresent);
     auto* header = (acpi::SDTHeader*)(pa + phys_mem_map);
@@ -86,7 +86,7 @@ acpi::SDTHeader* acpi::get_table(const char* sig, size_t index) {
 static void init_ec();
 
 void acpi::init_tables(const stivale2::Parser& parser) {
-    auto& vmm = vmm::kernel_vmm::get_instance();
+    auto& vmm = vmm::KernelVmm::get_instance();
 
     auto rsdp_phys = (uintptr_t)parser.acpi_rsdp();
     vmm.map(rsdp_phys, rsdp_phys + phys_mem_map, paging::mapPagePresent);
@@ -123,7 +123,7 @@ void acpi::init_tables(const stivale2::Parser& parser) {
     
 }
 
-static void handle_sci([[maybe_unused]] uint8_t, [[maybe_unused]] idt::regs*, [[maybe_unused]] void*) {
+static void handle_sci([[maybe_unused]] uint8_t, [[maybe_unused]] idt::Regs*, [[maybe_unused]] void*) {
     print("acpi: Unhandled SCI, Event: {:#x}\n", lai_get_sci_event());
 }
 
@@ -141,7 +141,7 @@ void acpi::init_system() {
     if(!madt.has_legacy_pic()) // If no PIC sci_int is a GSI so we need to map it, it is Level, Active Low
         ioapic::set(sci_int, sci_int + 0x20, ioapic::regs::DeliveryMode::Fixed, ioapic::regs::DestinationMode::Physical, 0x8 | 0x2, get_cpu().lapic_id);
 
-    idt::set_handler(sci_int + 0x20, idt::handler{.f = handle_sci, .is_irq = true, .should_iret = true, .userptr = nullptr});
+    idt::set_handler(sci_int + 0x20, idt::Handler{.f = handle_sci, .is_irq = true, .should_iret = true, .userptr = nullptr});
     ioapic::unmask(sci_int);
 
     lai_enable_acpi(1);

@@ -40,10 +40,10 @@ namespace paging
         mapPageUser = (1 << 3),
     };
 
-    class context {
+    class Context {
         public:
-        context(uint8_t levels);
-        ~context();
+        Context(uint8_t levels);
+        ~Context();
 
         void map(uintptr_t pa, uintptr_t va, uint64_t flags, uint8_t caching = msr::pat::write_back);
         void set_caching(uintptr_t va, uint8_t caching);

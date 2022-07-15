@@ -279,7 +279,7 @@ namespace vmx {
     constexpr uint64_t vm_exit_qualification = 0x6400;
 
     void init();
-    ept::context* create_ept();
+    ept::Context* create_ept();
     bool is_supported();
 
     uint64_t get_cr0_constraint();

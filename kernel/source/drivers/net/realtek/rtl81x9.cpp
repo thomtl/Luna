@@ -13,7 +13,7 @@ rtl81x9::Nic::Nic(pci::Device& device, uint16_t did): mm{&device}, regs{nullptr}
     auto vector = idt::allocate_vector();
     device.enable_irq(0, vector);
 
-    idt::set_handler(vector, idt::handler{.f = [](uint8_t, idt::regs*, void* userptr) {
+    idt::set_handler(vector, idt::Handler{.f = [](uint8_t, idt::Regs*, void* userptr) {
         auto& self = *(Nic*)userptr;
 
         self.handle_irq();
@@ -25,7 +25,7 @@ rtl81x9::Nic::Nic(pci::Device& device, uint16_t did): mm{&device}, regs{nullptr}
         auto bar = device.read_bar(i);
         if(bar.base != 0 && bar.type == pci::Bar::Type::Mmio) {
             auto va = bar.base + phys_mem_map;
-            vmm::kernel_vmm::get_instance().map(bar.base, va, paging::mapPagePresent | paging::mapPageWrite);
+            vmm::KernelVmm::get_instance().map(bar.base, va, paging::mapPagePresent | paging::mapPageWrite);
 
             regs = (volatile Regs*)va;
             break;

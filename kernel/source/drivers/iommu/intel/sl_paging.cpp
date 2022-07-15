@@ -30,23 +30,23 @@ static void clean_table(uintptr_t pa, uint8_t level) {
     delete_table(pa);
 }
 
-sl_paging::context::context(uint8_t levels, bool snoop, bool coherent): levels{levels}, snoop{snoop}, coherent{coherent} {
+sl_paging::Context::Context(uint8_t levels, bool snoop, bool coherent): levels{levels}, snoop{snoop}, coherent{coherent} {
     ASSERT(levels == 3 || levels == 4 || levels == 5);
 
     auto pa = create_table();
     root_pa = pa;
 }
 
-sl_paging::context::~context(){
+sl_paging::Context::~Context(){
     clean_table(root_pa, levels);
 }
 
-uintptr_t sl_paging::context::create_table(){
+uintptr_t sl_paging::Context::create_table(){
     auto pa = pmm::alloc_block();
     if(!pa)
         PANIC("Couldn't allocate block for sl_paging structures");
     auto va = pa + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
+    vmm::KernelVmm::get_instance().map(pa, va, paging::mapPagePresent | paging::mapPageWrite, msr::pat::wb);
 
     memset((void*)va, 0, pmm::block_size);
     if(!coherent)
@@ -54,7 +54,7 @@ uintptr_t sl_paging::context::create_table(){
     return pa;
 }
 
-sl_paging::page_entry* sl_paging::context::walk(uintptr_t iova, bool create_new_tables) {
+sl_paging::page_entry* sl_paging::Context::walk(uintptr_t iova, bool create_new_tables) {
     auto get_index = [iova](size_t i){ return (iova >> ((9 * (i - 1)) + 12)) & 0x1FF; };
     auto get_level_or_create = [this, create_new_tables](page_table* prev, size_t i) -> page_table* {
         auto* entry = &prev->entries[i];
@@ -87,9 +87,7 @@ sl_paging::page_entry* sl_paging::context::walk(uintptr_t iova, bool create_new_
     return &pml1[get_index(1)];
 }
 
-#include <Luna/misc/log.hpp>
-
-void sl_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
+void sl_paging::Context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
     auto* page = walk(iova, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
     if(snoop)
@@ -104,7 +102,7 @@ void sl_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
         cpu::cache_flush((void*)page, sizeof(page_entry));
 }
 
-uintptr_t sl_paging::context::unmap(uintptr_t iova) {
+uintptr_t sl_paging::Context::unmap(uintptr_t iova) {
     auto* entry = walk(iova, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return 0; // Page does not exist
@@ -123,7 +121,7 @@ uintptr_t sl_paging::context::unmap(uintptr_t iova) {
     return old;
 }
 
-sl_paging::page_entry sl_paging::context::get_entry(uintptr_t iova) {
+sl_paging::page_entry sl_paging::Context::get_entry(uintptr_t iova) {
     auto* entry = walk(iova, false);
     if(!entry)
         return {}; // Page does not exist
@@ -131,6 +129,6 @@ sl_paging::page_entry sl_paging::context::get_entry(uintptr_t iova) {
     return *entry;
 }
 
-uintptr_t sl_paging::context::get_root_pa() const {
+uintptr_t sl_paging::Context::get_root_pa() const {
     return root_pa;
 }

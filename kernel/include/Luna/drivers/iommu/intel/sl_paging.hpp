@@ -36,10 +36,10 @@ namespace sl_paging
     };
     static_assert(sizeof(page_table) == pmm::block_size);
 
-    class context {
+    class Context {
         public:
-        context(uint8_t levels, bool snoop, bool coherent);
-        ~context();
+        Context(uint8_t levels, bool snoop, bool coherent);
+        ~Context();
 
         void map(uintptr_t pa, uintptr_t iova, uint64_t flags);
         uintptr_t unmap(uintptr_t iova);

@@ -47,7 +47,7 @@ namespace iovmm {
                     auto base = region.base;
                     region.base += aligned_len;
 
-                    auto& kvmm = vmm::kernel_vmm::get_instance();
+                    auto& kvmm = vmm::KernelVmm::get_instance();
                     uintptr_t host_region = hmm::alloc(len, pmm::block_size); // Will do its own alignment internally
                     ASSERT(((uintptr_t)host_region & (pmm::block_size - 1)) == 0);
                     for(size_t i = 0; i < aligned_len; i += pmm::block_size)

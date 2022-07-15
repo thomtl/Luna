@@ -30,7 +30,7 @@ uint64_t ioapic::Ioapic::read_entry(uint32_t i) {
 
 ioapic::Ioapic::Ioapic(uintptr_t pa, uint32_t gsi_base): gsi_base{gsi_base} {
     mmio_base = pa + phys_mem_map;
-    vmm::kernel_vmm::get_instance().map(pa, mmio_base, paging::mapPagePresent | paging::mapPageWrite);
+    vmm::KernelVmm::get_instance().map(pa, mmio_base, paging::mapPagePresent | paging::mapPageWrite);
 
     n_redirection_entries = ((read(regs::version) >> 16) & 0xFF) + 1;
 

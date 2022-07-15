@@ -34,16 +34,16 @@ static void clean_table(uintptr_t pa, uint8_t level) {
     delete_table(pa);
 }
 
-io_paging::context::context(uint8_t levels): levels{levels} {
+io_paging::Context::Context(uint8_t levels): levels{levels} {
     const auto [pa, _] = create_table();
     root_pa = pa;
 }
 
-io_paging::context::~context(){
+io_paging::Context::~Context(){
     clean_table(root_pa, levels);
 }
 
-io_paging::page_entry* io_paging::context::walk(uintptr_t iova, bool create_new_tables) {
+io_paging::page_entry* io_paging::Context::walk(uintptr_t iova, bool create_new_tables) {
     auto get_index = [iova](size_t i){ return (iova >> ((9 * (i - 1)) + 12)) & 0x1FF; };
     auto get_level_or_create = [create_new_tables](page_table* prev, size_t i, size_t level) -> page_table* {
         auto& entry = (*prev)[i];
@@ -76,7 +76,7 @@ io_paging::page_entry* io_paging::context::walk(uintptr_t iova, bool create_new_
     return &pml1[get_index(1)];
 }
 
-void io_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
+void io_paging::Context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
     auto& page = *walk(iova, true); // We want to create new tables, so this is guaranteed to return a valid pointer
 
     page.present = 1;
@@ -87,7 +87,7 @@ void io_paging::context::map(uintptr_t pa, uintptr_t iova, uint64_t flags) {
     page.frame = (pa >> 12);
 }
 
-uintptr_t io_paging::context::unmap(uintptr_t iova) {
+uintptr_t io_paging::Context::unmap(uintptr_t iova) {
     auto* entry = walk(iova, false); // Since we're unmapping stuff it wouldn't make sense to make new tables, so we can get null as valid result
     if(!entry)
         return 0; // Page does not exist
@@ -102,7 +102,7 @@ uintptr_t io_paging::context::unmap(uintptr_t iova) {
     return pa;
 }
 
-io_paging::page_entry io_paging::context::get_page(uintptr_t iova) {
+io_paging::page_entry io_paging::Context::get_page(uintptr_t iova) {
     auto* entry = walk(iova, false);
     if(!entry)
         return {};
@@ -110,6 +110,6 @@ io_paging::page_entry io_paging::context::get_page(uintptr_t iova) {
     return *entry;
 }
 
-uintptr_t io_paging::context::get_root_pa() const {
+uintptr_t io_paging::Context::get_root_pa() const {
     return root_pa;
 }

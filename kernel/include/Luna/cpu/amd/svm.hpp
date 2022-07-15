@@ -190,7 +190,7 @@ namespace svm {
     };
 
     void init();
-    npt::context* create_npt();
+    npt::Context* create_npt();
     bool is_supported();
 
     uint64_t get_cr0_constraint();

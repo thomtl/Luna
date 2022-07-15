@@ -35,10 +35,10 @@ namespace ept {
     };
     static_assert(sizeof(page_table) == pmm::block_size);
 
-    class context : public vm::AbstractMM {
+    class Context : public vm::AbstractMM {
         public:
-        context(uint8_t levels);
-        ~context();
+        Context(uint8_t levels);
+        ~Context();
 
         void map(uintptr_t pa, uintptr_t va, uint64_t flags);
         void protect(uintptr_t va, uint64_t flags);
