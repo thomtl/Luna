@@ -27,6 +27,7 @@ namespace vm {
         virtual ~AbstractIRQListener() {}
 
         virtual void irq_set(uint8_t vector, bool level) = 0;
+        
         virtual bool read_irq_pin() = 0;
         virtual uint8_t read_irq_vector() = 0;
     };

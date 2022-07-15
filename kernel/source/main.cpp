@@ -48,8 +48,8 @@
 #include <Luna/vmm/drivers/q35/acpi.hpp>
 #include <Luna/vmm/drivers/q35/smi.hpp>
 
+#include <Luna/vmm/drivers/irqs/pic.hpp>
 #include <Luna/vmm/drivers/irqs/lapic.hpp>
-#include <Luna/vmm/drivers/irqs/8259.hpp>
 #include <Luna/vmm/drivers/irqs/ioapic.hpp>
 
 #include <Luna/vmm/drivers/gpu/bga.hpp>
