@@ -1,5 +1,6 @@
 #include <Luna/drivers/acpi.hpp>
 
+#include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/idt.hpp>
 
 #include <Luna/drivers/ioapic.hpp>

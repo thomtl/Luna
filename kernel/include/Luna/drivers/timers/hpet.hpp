@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Luna/common.hpp>
-#include <Luna/cpu/cpu.hpp>
 #include <Luna/drivers/acpi.hpp>
 
 #include <std/array.hpp>

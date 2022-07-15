@@ -2,6 +2,7 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/mm/vmm.hpp>
 
+#include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/tsc.hpp>
 
 #include <Luna/misc/log.hpp>

@@ -1,8 +1,6 @@
 #include <Luna/mm/hmm.hpp>
 #include <Luna/mm/vmm.hpp>
 
-#include <Luna/cpu/cpu.hpp>
-
 #include <std/string.hpp>
 #include <std/mutex.hpp>
 

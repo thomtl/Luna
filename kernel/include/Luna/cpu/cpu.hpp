@@ -15,10 +15,6 @@ namespace threading {
 
 
 namespace cpu {
-    constexpr uint32_t signature_intel_ebx = 0x756e6547;
-    constexpr uint32_t signature_intel_edx = 0x49656e69;
-    constexpr uint32_t signature_intel_ecx = 0x6c65746e;
-
     bool cpuid(uint32_t leaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
     bool cpuid(uint32_t leaf, uint32_t subleaf, uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d);
 
@@ -86,50 +82,3 @@ struct CpuData {
 };
 
 CpuData& get_cpu();
-
-struct TicketLock {
-    constexpr TicketLock(): serving{0}, next_ticket{0} {}
-
-    void lock() {
-        auto ticket = __atomic_fetch_add(&next_ticket, 1, __ATOMIC_SEQ_CST);
-        while(__atomic_load_n(&serving, __ATOMIC_SEQ_CST) != ticket)
-            asm("pause");
-    }
-
-    void unlock() {
-        __atomic_add_fetch(&serving, 1, __ATOMIC_SEQ_CST);
-    }
-
-    private:
-    volatile uint64_t serving;
-    volatile uint64_t next_ticket;
-};
-
-struct IrqTicketLock {
-    constexpr IrqTicketLock(): saved_if{false}, _lock{} {}
-
-    void lock() {
-        uint64_t rflags = 0;
-        asm volatile("pushfq\r\npop %0" : "=r"(rflags));
-        bool tmp_if = (rflags >> 9) & 1;
-
-        asm volatile("cli");
-        _lock.lock();
-
-        saved_if = tmp_if;
-    }
-
-    void unlock() {
-        bool tmp_if = saved_if;
-        _lock.unlock();
-
-        if(tmp_if)
-            asm volatile("sti");
-        else
-            asm volatile("cli");
-    }
-
-    bool saved_if;
-    private:
-    TicketLock _lock;
-};

@@ -1,7 +1,6 @@
 #include <Luna/mm/pmm.hpp>
 #include <Luna/misc/log.hpp>
 
-#include <Luna/cpu/cpu.hpp>
 #include <std/mutex.hpp>
 
 static std::span<uint8_t> bitmap;

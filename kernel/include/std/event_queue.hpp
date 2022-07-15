@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Luna/cpu/cpu.hpp>
+#include <Luna/common.hpp>
 #include <std/mutex.hpp>
 
 namespace std {

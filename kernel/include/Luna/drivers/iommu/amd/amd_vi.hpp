@@ -2,8 +2,6 @@
 
 #include <Luna/common.hpp>
 
-#include <Luna/cpu/cpu.hpp>
-
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/pci.hpp>
 

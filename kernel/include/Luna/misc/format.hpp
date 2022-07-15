@@ -3,8 +3,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <Luna/cpu/cpu.hpp>
-
 #include <std/string.hpp>
 #include <std/utility.hpp>
 #include <std/mutex.hpp>

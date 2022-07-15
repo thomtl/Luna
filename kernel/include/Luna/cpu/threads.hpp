@@ -1,8 +1,10 @@
 #pragma once
 
 #include <Luna/common.hpp>
+
 #include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/stack.hpp>
+
 #include <Luna/misc/log.hpp>
 #include <std/mutex.hpp>
 #include <std/vector.hpp>

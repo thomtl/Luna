@@ -19,7 +19,8 @@ namespace cpu {
 
         Stack(const Stack&) = delete;
         Stack(Stack&& b) = delete;
-        Stack& operator=(Stack other) = delete;
+        Stack& operator=(const Stack& other) = delete;
+        Stack& operator=(Stack&& other) = delete;
 
         void* top() { return _top; }
         void* bottom() { return _bottom; }

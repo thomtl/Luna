@@ -2,7 +2,6 @@
 
 #include <Luna/common.hpp>
 #include <Luna/misc/format.hpp>
-#include <Luna/cpu/cpu.hpp>
 
 namespace log
 {

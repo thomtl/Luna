@@ -4,7 +4,9 @@
 #include <Luna/mm/pmm.hpp>
 #include <Luna/mm/vmm.hpp>
 
+#include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/idt.hpp>
+
 #include <Luna/drivers/pci.hpp>
 #include <Luna/drivers/ioapic.hpp>
 

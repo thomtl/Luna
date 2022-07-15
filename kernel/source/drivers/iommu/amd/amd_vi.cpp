@@ -1,5 +1,6 @@
 #include <Luna/drivers/iommu/amd/amd_vi.hpp>
 
+#include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/idt.hpp>
 
 #include <Luna/misc/log.hpp>

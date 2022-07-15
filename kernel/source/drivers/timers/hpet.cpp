@@ -2,6 +2,7 @@
 #include <Luna/drivers/pci.hpp>
 #include <Luna/drivers/ioapic.hpp>
 
+#include <Luna/cpu/cpu.hpp>
 #include <Luna/cpu/idt.hpp>
 
 #include <Luna/misc/log.hpp>

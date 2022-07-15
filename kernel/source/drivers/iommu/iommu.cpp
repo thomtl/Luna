@@ -1,13 +1,16 @@
 #include <Luna/drivers/iommu/iommu.hpp>
-#include <std/utility.hpp>
+
+#include <Luna/cpu/cpu.hpp>
 
 #include <Luna/drivers/iommu/intel/vt_d.hpp>
 #include <Luna/drivers/iommu/amd/amd_vi.hpp>
 
-CpuVendor vendor;
+#include <std/utility.hpp>
 
-std::lazy_initializer<vt_d::IOMMU> intel_iommu;
-std::lazy_initializer<amd_vi::IOMMU> amd_iommu;
+static constinit CpuVendor vendor = CpuVendor::Unknown;
+
+static constinit std::lazy_initializer<vt_d::IOMMU> intel_iommu;
+static constinit std::lazy_initializer<amd_vi::IOMMU> amd_iommu;
 
 void iommu::init() {
     if(vt_d::has_iommu()) {
