@@ -92,7 +92,7 @@ static void get_configuration(usb::Device& dev, uint8_t i) {
 
 static void print_string(usb::Device& dev, uint8_t i, const char* prefix, uint32_t alternative) {
     if(i == 0) {
-        print("{}{}\n", prefix, alternative);
+        print("{}{:x}\n", prefix, alternative);
     } else {
         StringUnicodeDescriptor str{};
         get_descriptor(dev, 2, (uint8_t*)&str, descriptor_types::string, i, dev.langid); // First the the size
