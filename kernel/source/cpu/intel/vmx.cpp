@@ -217,10 +217,9 @@ vmx::Vm::Vm(vm::AbstractMM* mm, vm::VCPU* vcpu): mm{mm}, vcpu{vcpu} {
 
     {
         uint32_t min = (uint32_t)ProcBasedControls2::EPTEnable \
-                     | (uint32_t)ProcBasedControls2::EnableInvpcid \
-                     | (uint32_t)ProcBasedControls2::RDTSCPEnable \
                      | (uint32_t)ProcBasedControls2::UnrestrictedGuest;
-        uint32_t opt = 0;
+                     
+        uint32_t opt = (uint32_t)ProcBasedControls2::RDTSCPEnable | (uint32_t)ProcBasedControls2::EnableInvpcid;
         write(proc_based_vm_exec_controls2, adjust_controls(min, opt, msr::ia32_vmx_procbased_ctls2));
     }
     
