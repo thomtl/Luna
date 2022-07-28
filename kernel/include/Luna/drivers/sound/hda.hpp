@@ -7,8 +7,21 @@
 #include <std/vector.hpp>
 #include <std/unordered_map.hpp>
 #include <std/bitmap.hpp>
+#include <std/optional.hpp>
 
 namespace hda {
+    enum class WidgetType : uint8_t {
+        DAC = 0,
+        ADC = 1,
+        Mixer = 2,
+        Selector = 3,
+        PinComplex = 4,
+        PowerWidget = 5,
+        VolumeKnob = 6,
+        BeepGenerator = 7,
+        VendorDefined = 0xF,
+    };
+
     enum class WidgetParameter : uint8_t {
         VendorID = 0,
         RevisionID = 2,
@@ -25,7 +38,58 @@ namespace hda {
         SupportedPowerStates = 0xF,
         ProcessingCap = 0x10,
         GPIOCount = 0x11,
-        VolumeKnobCap = 0x12
+        VolumeKnobCap = 0x13
+    };
+
+    enum class Verb : uint16_t {
+        GetParameter = 0xF00,
+
+        GetConnectionSelect = 0xF01,
+        SetConnectionSelect = 0x701,
+
+        GetConnectionListEntry = 0xF02,
+
+        GetProcessingState = 0xF03,
+        SetProcessingState = 0x703,
+
+        GetCoefficientIndex = 0xD,
+        SetCoefficientIndex = 0x5,
+        
+        GetProcessingCoefficient = 0xC,
+        SetProcessingCoefficient = 0x4,
+
+        GetAmpGainMute = 0xB,
+        SetAmpGainMute = 0x3,
+
+        GetStreamFormat = 0xA,
+        SetStreamFormat = 0x2,
+
+        GetPowerState = 0xF05,
+        SetPowerState = 0x705,
+
+        GetChannelStreamID = 0xF06,
+        SetChannelStreamID = 0x706,
+
+        GetPinWidgetControl = 0xF07,
+        SetPinWidgetControl = 0x707,
+
+        GetPinSense = 0xF09,
+        SetPinSense = 0x709,
+
+        GetEAPDEnable = 0xF0C,
+        SetEAPDEnable = 0x70C,
+
+        GetConfigDefault = 0xF1C,
+    };
+
+    enum class ProcessingMode : uint8_t {
+        Off = 0,
+        On = 1,
+        Benign = 2,
+    };
+
+    enum class PowerState {
+        D0, D1, D2, D3hot, D3cold
     };
 
     struct [[gnu::packed]] Regs {
@@ -104,19 +168,48 @@ namespace hda {
     };
 
     struct Widget {
-        uint8_t nid, type, function_group;
+        uint8_t codec_id, nid, function_group;
+        WidgetType type;
 
-        uint32_t cap, pin_cap, in_amp_cap, out_amp_cap, volume_knob_cap, config_default;
+        uint32_t cap, pin_cap, in_amp_cap, out_amp_cap, volume_knob_cap, processing_cap, config_default;
+        uint32_t supported_power_states;
         std::vector<uint16_t> connection_list;
     };
 
     struct Path {
         uint8_t codec;
-        uint8_t pin, dac;
+        std::vector<uint16_t> path;
+
+        std::optional<uint16_t> nid_pin, nid_dac, nid_mixer;
+
         enum class Location { External, Internal, Both };
+        constexpr static const char* location_to_str(Location loc) {
+            using enum Location;
+            switch(loc) {
+                case External: return "External";
+                case Internal: return "Internal";
+                case Both: return "Internal / External";
+                default: return "Unknown";
+            }
+        }
+
         Location loc;
         uint8_t type;
     };
+
+    struct Codec {
+        uint16_t vid, did;
+        uint16_t version_major, verion_minor;
+
+        uint16_t starting_node, n_nodes;
+
+        std::unordered_map<uint8_t, Widget> widgets;
+        std::vector<Path> paths;
+
+        volatile bool have_response; // Is modified from IRQ context
+        uint32_t curr_response; // TODO: This should probably be a FIFO
+    };
+
 
     // TODO: This should probably be generic
     struct StreamParameters {
@@ -127,7 +220,8 @@ namespace hda {
     };
 
     struct Stream {
-        uint8_t index;
+        uint8_t stream_id;
+        uint8_t stream_descriptor_index;
         size_t entries, entries_i, total_size;
         
         StreamParameters params;
@@ -146,12 +240,13 @@ namespace hda {
         HDAController(pci::Device& device, uint16_t vid, uint32_t quirks);
         ~HDAController();
 
-        HDAController(const HDAController& src) = delete;
+        HDAController(const HDAController&) = delete;
+        HDAController& operator=(const HDAController&) = delete;
 
         HDAController(HDAController&&) = delete;
-        HDAController& operator=(HDAController) = delete;
+        HDAController& operator=(HDAController&&) = delete;
 
-        bool stream_create(const StreamParameters& params, size_t entries, Path& device, Stream& stream);
+        std::optional<Stream> stream_create(const StreamParameters& params, size_t entries, Path& device);
         bool stream_push(Stream& stream, size_t size, uint8_t* pcm);
         bool streams_start(size_t n_streams, Stream** streams);
 
@@ -165,23 +260,28 @@ namespace hda {
 
         uint32_t corb_cmd(uint8_t codec, uint8_t node, uint32_t cmd);
 
-        uint32_t verb_get_parameter(uint8_t codec, uint8_t node, WidgetParameter param);
-        uint32_t verb_get_config_default(uint8_t codec, uint8_t node);
-        void verb_set_config_default(uint8_t codec, uint8_t node, uint32_t v);
-        uint16_t verb_get_converter_format(uint8_t codec, uint8_t node);
-        void verb_set_converter_format(uint8_t codec, uint8_t node, uint16_t v);
-        std::pair<uint8_t, uint8_t> verb_get_converter_control(uint8_t codec, uint8_t node);
-        void verb_set_converter_control(uint8_t codec, uint8_t node, uint8_t stream, uint8_t channel);
-        void verb_set_pin_control(uint8_t codec, uint8_t node, uint8_t v);
-        void verb_set_eapd_control(uint8_t codec, uint8_t node, uint8_t v);
-        void verb_set_dac_amplifier_gain(uint8_t codec, uint8_t node, uint16_t v);
+        void verb_set_pin_widget_control(const Widget& node, uint8_t v);
+        void verb_set_eapd_enable(const Widget& node, uint8_t v);
+        void verb_set_amp_gain_mute(const Widget& node, uint16_t v);
+        void verb_set_processing_state(const Widget& node, ProcessingMode mode);
+        void verb_set_connection_select(const Widget& node, uint8_t connection);
+        void verb_set_coefficient(const Widget& node, uint16_t coefficient, uint16_t value);
+        void verb_set_power_state(uint8_t codec, uint8_t node, uint8_t state);
+        void verb_set_power_state(const Widget& node, uint8_t state);
+        void verb_set_stream_format(const Widget& node, uint16_t v);
+        void verb_set_converter_stream_channel(const Widget& node, uint8_t stream, uint8_t channel);
 
-        void update_ssync(bool set, uint32_t mask);
+        uint32_t verb_get_parameter(uint8_t codec, uint8_t node, WidgetParameter param);
+        uint32_t verb_get_parameter(const Widget& node, WidgetParameter param);
+        uint16_t verb_get_coefficient(const Widget& node, uint16_t coefficient);
+        uint32_t verb_get_power_state(const Widget& node);
+        uint32_t verb_get_config_default(const Widget& node);
 
         uint32_t quirks;
 
         iovmm::Iovmm mm;
         volatile Regs* regs;
+        volatile uint32_t* ssync;
         volatile StreamDescriptor* in_descriptors;
         volatile StreamDescriptor* out_descriptors;
         volatile StreamDescriptor* bi_descriptors;
@@ -203,25 +303,14 @@ namespace hda {
             iovmm::Iovmm::Allocation alloc;
         } rirb;
 
-        struct {
-            uint16_t vid, did;
-            uint16_t version_major, verion_minor;
-
-            uint16_t starting_node, n_nodes;
-
-            std::unordered_map<uint8_t, Widget> widgets;
-            std::vector<Path> paths;
-
-            volatile bool have_response; // Is modified from IRQ context
-            uint32_t curr_response; // TODO: This should probably be a FIFO
-        } codecs[15];
+        Codec codecs[15];
     };
 
     enum {
         quirkSnoopSCH = (1 << 0),
         quirkSnoopATI = (1 << 1),
         quirkNoSnoop = (1 << 2),
-        quirkNoTCSEL = (1 << 3),
+        quirkTCSEL = (1 << 3),
         quirkOldSsync = (1 << 4),
     };
 } // namespace hda

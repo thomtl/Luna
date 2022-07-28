@@ -11,8 +11,8 @@
 
 
 constexpr const char* widget_type_strs[] = {
-    "Audio Output",
-    "Audio Input",
+    "Audio Output (DAC)",
+    "Audio Input (ADC)",
     "Audio Mixer",
     "Audio Selector",
     "Pin Complex",
@@ -83,16 +83,19 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
     vmm::get_kernel_context().map(bar.base, bar.base + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite, msr::pat::uc);
 
     regs = (volatile Regs*)(bar.base + phys_mem_map);
+    ssync = (quirks & quirkOldSsync) ? &regs->old_ssync : &regs->ssync;
 
     uint16_t major = regs->vmaj, minor = regs->vmin;
     print("hda: Controller {}.{}\n", major, minor);
 
     (void)vendor;
-    if(!(quirks & quirkNoTCSEL)) {
+    if(quirks & hda::quirkTCSEL) {
         constexpr uint16_t tcsel = 0x44;
         auto v = device.read<uint8_t>(tcsel);
         v &= ~0b111;
         device.write<uint8_t>(tcsel, v);
+
+        print("     TCSEL: Cleared\n");
     }
 
     if(quirks & hda::quirkSnoopATI) {
@@ -143,7 +146,9 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
     bss = (regs->gcap >> 3) & 0x1F;
     print("     OSS: {}, ISS: {}, BSS: {}\n", oss, iss, bss);
 
-    stream_ids = std::bitmap{30}; // 30 Stream IDs to allocate
+    stream_ids = std::bitmap{16}; // 15 StreamIDs to allocate, excluding 0
+    stream_ids.set(0); // StreamID 0 is reserved
+
     oss_bitmap = std::bitmap{oss};
     iss_bitmap = std::bitmap{iss};
     bss_bitmap = std::bitmap{bss};
@@ -154,7 +159,7 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
 
     regs->wakeen = 0; // Allow no Codecs to generate Wake events
 
-    update_ssync(true, 0x3FFF'FFFF); // Make sure all streams are halted
+    *ssync = 0x3FFF'FFFF;
 
     regs->rirbsts = (1 << 0) | (1 << 2);
 
@@ -271,50 +276,70 @@ uint32_t hda::HDAController::corb_cmd(uint8_t codec, uint8_t node, uint32_t cmd)
     return codecs[codec].curr_response;
 }
 
+
+#define VERB(c) static_cast<uint16_t>(c)
+void hda::HDAController::verb_set_pin_widget_control(const Widget& node, uint8_t v) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetPinWidgetControl) << 8) | v) == 0);
+}
+
+void hda::HDAController::verb_set_eapd_enable(const Widget& node, uint8_t v) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetEAPDEnable) << 8) | v) == 0);
+}
+
+void hda::HDAController::verb_set_amp_gain_mute(const Widget& node, uint16_t v) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetAmpGainMute) << 16) | v) == 0);
+}
+
+void hda::HDAController::verb_set_processing_state(const Widget& node, ProcessingMode mode) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetProcessingState) << 8) | static_cast<uint8_t>(mode)) == 0);
+}
+
+void hda::HDAController::verb_set_connection_select(const Widget& node, uint8_t connection) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetConnectionSelect) << 8) | connection) == 0);
+}
+
+void hda::HDAController::verb_set_coefficient(const Widget& node, uint16_t coefficient, uint16_t value) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetCoefficientIndex) << 16) | coefficient) == 0);
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetProcessingCoefficient) << 16) | value) == 0);
+}
+
+uint16_t hda::HDAController::verb_get_coefficient(const Widget& node, uint16_t coefficient) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetCoefficientIndex) << 16) | coefficient) == 0);
+    return corb_cmd(node.codec_id, node.nid, (VERB(Verb::GetProcessingCoefficient) << 16));
+}
+
+void hda::HDAController::verb_set_power_state(uint8_t codec, uint8_t node, uint8_t state) {
+    ASSERT(corb_cmd(codec, node, (VERB(Verb::SetPowerState) << 8) | (state & 0xF)) == 0);
+}
+
+void hda::HDAController::verb_set_power_state(const Widget& node, uint8_t state) {
+    verb_set_power_state(node.codec_id, node.nid, state);
+}
+
+uint32_t hda::HDAController::verb_get_power_state(const Widget& node) {
+    return corb_cmd(node.codec_id, node.nid, (VERB(Verb::GetPowerState) << 8));
+}
+
 uint32_t hda::HDAController::verb_get_parameter(uint8_t codec, uint8_t node, WidgetParameter param) {
-    return corb_cmd(codec, node, (0xF00 << 8) | (uint8_t)param);
+    return corb_cmd(codec, node, (VERB(Verb::GetParameter) << 8) | static_cast<uint16_t>(param));
 }
 
-uint32_t hda::HDAController::verb_get_config_default(uint8_t codec, uint8_t node) {
-    return corb_cmd(codec, node, (0xF1C << 8));
+uint32_t hda::HDAController::verb_get_parameter(const Widget& node, WidgetParameter param) {
+    return verb_get_parameter(node.codec_id, node.nid, param);
 }
 
-void hda::HDAController::verb_set_config_default(uint8_t codec, uint8_t node, uint32_t v) {
-    ASSERT(corb_cmd(codec, node, (0x71C << 8) | (v & 0xFF)) == 0);
-    ASSERT(corb_cmd(codec, node, (0x71D << 8) | ((v >> 8) & 0xFF)) == 0);
-    ASSERT(corb_cmd(codec, node, (0x71E << 8) | ((v >> 16) & 0xFF)) == 0);
-    ASSERT(corb_cmd(codec, node, (0x71F << 8) | ((v >> 24) & 0xFF)) == 0);
+uint32_t hda::HDAController::verb_get_config_default(const Widget& node) {
+    return corb_cmd(node.codec_id, node.nid, (VERB(Verb::GetConfigDefault) << 8));
 }
 
-uint16_t hda::HDAController::verb_get_converter_format(uint8_t codec, uint8_t node) {
-    return corb_cmd(codec, node, (0xA << 8)) & 0xFFFF;
+void hda::HDAController::verb_set_stream_format(const Widget& node, uint16_t v) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetStreamFormat) << 16) | v) == 0);
 }
 
-void hda::HDAController::verb_set_converter_format(uint8_t codec, uint8_t node, uint16_t v) {
-    ASSERT(corb_cmd(codec, node, (0x2 << 16) | v) == 0);
+void hda::HDAController::verb_set_converter_stream_channel(const Widget& node, uint8_t stream, uint8_t channel) {
+    ASSERT(corb_cmd(node.codec_id, node.nid, (VERB(Verb::SetChannelStreamID) << 8) | (stream << 4) | (channel)) == 0);
 }
-
-std::pair<uint8_t, uint8_t> hda::HDAController::verb_get_converter_control(uint8_t codec, uint8_t node) {
-    auto res = corb_cmd(codec, node, (0xF06 << 8));
-
-    return {(res >> 4) & 0xF, res & 0xF};
-}
-void hda::HDAController::verb_set_converter_control(uint8_t codec, uint8_t node, uint8_t stream, uint8_t channel) {
-    uint8_t param = (stream << 4) | channel;
-    ASSERT(corb_cmd(codec, node, (0x706 << 8) | param) == 0);
-}
-
-void hda::HDAController::verb_set_pin_control(uint8_t codec, uint8_t node, uint8_t v) {
-    ASSERT(corb_cmd(codec, node, (0x707 << 8) | v) == 0);
-}
-
-void hda::HDAController::verb_set_eapd_control(uint8_t codec, uint8_t node, uint8_t v) {
-    ASSERT(corb_cmd(codec, node, (0x70C << 8) | v) == 0);
-}
-
-void hda::HDAController::verb_set_dac_amplifier_gain(uint8_t codec, uint8_t node, uint16_t v) {
-    ASSERT(corb_cmd(codec, node, (0x3 << 16) | v) == 0);
-}
+#undef VERB
 
 void hda::HDAController::enumerate_codec(uint8_t index) {
     print("   - Codec {}:\n", (uint16_t)index);
@@ -336,13 +361,15 @@ void hda::HDAController::enumerate_codec(uint8_t index) {
     print("     Revision: {}.{}\n", codec.version_major, codec.verion_minor);
     print("     Subordinate Nodes: {} -> {}\n", codec.starting_node, codec.starting_node + codec.n_nodes);
 
-
     for(uint8_t func_group_node = codec.starting_node; func_group_node < (codec.starting_node + codec.n_nodes); func_group_node++) {
         res = verb_get_parameter(index, func_group_node, WidgetParameter::FunctionGroupType);
         res &= ~0x100; // Clear Unsolicited capable bit
 
         if(res == 1) {
             print("     - Node {}: Audio Function Group\n", (uint16_t)func_group_node);
+
+            verb_set_power_state(index, func_group_node, 0); // Wake up
+            tsc::poll_msleep(200);
 
             res = verb_get_parameter(index, func_group_node, WidgetParameter::SubordinateNodeCount);
             auto start = (res >> 16) & 0xFF;
@@ -357,91 +384,120 @@ void hda::HDAController::enumerate_codec(uint8_t index) {
         }
     }
 
-    for(auto& tmp : codec.widgets) {
-        auto& widget = tmp.second;
-        if(widget.type == 4) { // Pin Complex, Enumerate Paths
-            Path path{};
-            path.codec = index;
-            path.pin = widget.nid;
+    for(auto& [_, widget] : codec.widgets) {
+        if(widget.type != WidgetType::PinComplex) // Ignore all non Pin Complexes
+            continue;
 
-            auto connectivity = (widget.config_default >> 30) & 0b11;
-            if(connectivity == 0b00) path.loc = Path::Location::External;
-            else if(connectivity == 0b10) path.loc = Path::Location::Internal;
-            else if(connectivity == 0b11) path.loc = Path::Location::Both;
-            //else if(connectivity == 0b01) continue; // Nothing attached(/)
+        Path path{};
+        path.codec = index;
+        path.type = (widget.config_default >> 20) & 0xF;
 
-            path.type = (widget.config_default >> 20) & 0xF;
+        auto connectivity = (widget.config_default >> 30) & 0b11;
 
-            // TODO: Do this recursively, to resolve nested pin chains
-            constexpr size_t max_depth = 10; // TODO: Is this a good pick?
-            size_t depth = 0;
-            auto solve = [&](uint8_t nid) {
-                auto solve_impl = [&](auto& self, uint8_t nid) -> void {
-                    if(depth++ > max_depth)
-                        return;
+        if(connectivity == 0b00) path.loc = Path::Location::External;
+        else if(connectivity == 0b10) path.loc = Path::Location::Internal;
+        else if(connectivity == 0b11) path.loc = Path::Location::Both;
+        //else if(connectivity == 0b01) continue; // Nothing attached(/)
+
+        constexpr size_t max_depth = 10; // TODO: Is this a good pick?
+
+        size_t depth = 0;
+        auto solve = [&](uint8_t nid) {
+            auto solve_impl = [&](auto& self, uint8_t nid) -> void {
+                path.path.push_back(nid);
+                
+                if(depth++ > max_depth)
+                    return;
+                
+                auto& curr = codec.widgets[nid];
+                switch(curr.type) {
+                    using enum WidgetType;
+                    case DAC: // DAC, Should have no further connections, begin return chain
+                        path.nid_dac = nid;
+
+                        ASSERT(curr.connection_list.size() == 0);
+                        break;
                     
-                    auto& curr = codec.widgets[nid];
-                    if(curr.type == 0) // DAC
-                        path.dac = nid;
-                    else if(curr.type == 2) // Mixer
-                        ;
-                    else if(curr.type == 4) // Pin complex
-                        path.pin = nid;
-                    else {
-                        print("hda: Unknown {} in list\n", widget_type_strs[curr.type]);
-                        PANIC("Unknown entry");
-                    }
+                    case Mixer: // Mixer, "Sums" N signals into 1, for now only support 1st node
+                        path.nid_mixer = nid;
 
-                    for(auto connection : curr.connection_list)
-                        self(self, connection);
-                };
+                        ASSERT(curr.connection_list.size() >= 1);
+                        if(path.nid_mixer.has_value())
+                            print("hda: TODO: Support multiple mixers\n");
+                        
+                        self(self, curr.connection_list[0]);
+                        break;
 
-                solve_impl(solve_impl, nid);
+                    case PinComplex: // Pin Complex
+                        path.nid_pin = nid;
+                        
+                        self(self, curr.connection_list[0]); // Select the first connection, we'll select that one later on in stream_create
+                        break;
+
+                    default:
+                        print("hda: Unknown {} in path\n", widget_type_strs[static_cast<uint8_t>(curr.type)]);
+                        break;
+                }
             };
 
-            solve(path.pin);
+            if(widget.connection_list.size() >= 1) // Audio outputs will have 1 connection at least
+                solve_impl(solve_impl, nid);
+        };
+
+        solve(widget.nid); // Try to parse path for every node
             
+        if(!path.nid_dac.has_value())
+            continue; // Couldn't find a DAC
 
-            if(path.dac == 0)
-                continue; // Couldn't find a DAC
-
-            codec.paths.push_back(path);
-        }
+        codec.paths.push_back(path);
     }
 
     for(auto& path : codec.paths) {
-        print("     Device: {}\n", default_device_strs[path.type]);
+        print("     Device: {} - {}\n", default_device_strs[path.type], Path::location_to_str(path.loc));
     }
 }
 
 void hda::HDAController::enumerate_widget(uint8_t codec, uint8_t node, uint8_t function_group) {
-    auto res = verb_get_parameter(codec, node, WidgetParameter::AudioWidgetCap);
+    auto& widget = codecs[codec].widgets[node];
+    widget.codec_id = codec;
+    widget.nid = node;
+
+    auto res = verb_get_parameter(widget, WidgetParameter::AudioWidgetCap);
 
     auto type = (res >> 20) & 0xF;
     print("       - Node {}: {} ", (uint16_t)node, widget_type_strs[type]);
 
-    Widget widget{};
-    widget.nid = node;
-    widget.type = type;
+    widget.type = static_cast<WidgetType>(type);
     widget.function_group = function_group;
 
     widget.cap = res;
-    widget.pin_cap = verb_get_parameter(codec, node, WidgetParameter::PinCap);
-    widget.in_amp_cap = verb_get_parameter(codec, node, WidgetParameter::InAmpCap);
-    widget.out_amp_cap = verb_get_parameter(codec, node, WidgetParameter::OutAmpCap);
-    
-    widget.volume_knob_cap = verb_get_parameter(codec, node, WidgetParameter::VolumeKnobCap);
+    widget.pin_cap = verb_get_parameter(widget, WidgetParameter::PinCap);
 
-    widget.config_default = verb_get_config_default(codec, node);
+    if(!(widget.cap & (1 << 3))) {
+        widget.in_amp_cap = verb_get_parameter(codec, function_group, WidgetParameter::InAmpCap);
+        widget.out_amp_cap = verb_get_parameter(codec, function_group, WidgetParameter::OutAmpCap);
+    } else {
+        widget.in_amp_cap = verb_get_parameter(widget, WidgetParameter::InAmpCap);
+        widget.out_amp_cap = verb_get_parameter(widget, WidgetParameter::OutAmpCap);
+    }
+
+    widget.processing_cap = verb_get_parameter(widget, WidgetParameter::ProcessingCap);
+    widget.supported_power_states = verb_get_parameter(widget, WidgetParameter::SupportedPowerStates);
+    
+    widget.volume_knob_cap = verb_get_parameter(widget, WidgetParameter::VolumeKnobCap);
+
+    widget.config_default = verb_get_config_default(widget);
 
     if(widget.cap & (1 << 8)) { // Connection list present
-        res = verb_get_parameter(codec, node, WidgetParameter::ConnectionListLength);
+        res = verb_get_parameter(widget, WidgetParameter::ConnectionListLength);
         auto long_form = (res >> 7) & 1;
         uint8_t len = res & 0x7F;
 
         auto push = [&](uint16_t v) {
-            if(v) // Connection list entries are only valid if they're non-null
-                widget.connection_list.push_back(v);
+            if(!v) // Connection list entries are only valid if they're non-null
+                return;
+            
+            widget.connection_list.push_back(v);
         };
 
         if(long_form) {
@@ -468,13 +524,11 @@ void hda::HDAController::enumerate_widget(uint8_t codec, uint8_t node, uint8_t f
             print("{} ", entry);
     }
     print("\n");
-
-    codecs[codec].widgets[node] = widget;
 }
 
 void hda::HDAController::handle_irq() {
-    
     constexpr uint8_t mask = (1 << 0) | (1 << 2);
+
     if(regs->rirbsts & mask) {
         regs->rirbsts = mask; // Clear RIRB Overrun status if needed
 
@@ -497,31 +551,33 @@ void hda::HDAController::handle_irq() {
     }
 }
 
-bool hda::HDAController::stream_create(const hda::StreamParameters& params, size_t entries, Path& device, hda::Stream& stream) {
+std::optional<hda::Stream> hda::HDAController::stream_create(const hda::StreamParameters& params, size_t entries, Path& device) {
+    Stream stream{};
     stream.params = params;
     stream.device = &device;
 
     auto stream_id = stream_ids.get_free_bit();
     if(stream_id == ~0ull)
-        return false; // Was not able to allocate StreamID
+        return std::nullopt; // Was not able to allocate StreamID
     stream_ids.set(stream_id);
 
-    stream.index = stream_id;
+    stream.stream_id = stream_id;
 
     auto reset_stream = [&]() {
         stream.desc->ctl &= ~(1 << 1); // Clear DMA Run
 
-        // This seems to be what linux does and the spec says, however it doesn't work on qemu
-        /*stream.desc->ctl |= 1; // Enter Reset
-        while(!(stream.desc->ctl & 1)) // Wait Device to enter reset state
+        stream.desc->ctl |= 1; // Enter Reset
+        tsc::poll_usleep(3);
+
+        uint64_t timeout = 300;
+        while(!(stream.desc->ctl & 1) && timeout-- >= 1) // Wait Device to enter reset state
             asm("pause");
 
         stream.desc->ctl &= ~1; // Leave Reset mode
-        while(stream.desc->ctl & 1) // Wait Device to enter reset state
-            asm("pause");*/
-        
-        stream.desc->ctl |= 1; // Set Reset
-        while(stream.desc->ctl & 1) // Wait for reset to complete
+        tsc::poll_usleep(3);
+
+        timeout = 300;
+        while((stream.desc->ctl & 1) && timeout-- >= 1) // Wait Device to enter reset state
             asm("pause");
     };
 
@@ -543,7 +599,7 @@ bool hda::HDAController::stream_create(const hda::StreamParameters& params, size
         auto oss_id = oss_bitmap.get_free_bit();
         if(oss_id == ~0ull) {
             if(!try_bidir())
-                return false;
+                return std::nullopt;
         } else {
             oss_bitmap.set(oss_id);
 
@@ -554,7 +610,7 @@ bool hda::HDAController::stream_create(const hda::StreamParameters& params, size
         auto iss_id = iss_bitmap.get_free_bit();
         if(iss_id == ~0ull) {
             if(!try_bidir())
-                return false;
+                return std::nullopt;
         } else {
             iss_bitmap.set(iss_id);
 
@@ -562,6 +618,8 @@ bool hda::HDAController::stream_create(const hda::StreamParameters& params, size
             reset_stream();
         }
     }
+
+    stream.stream_descriptor_index = (stream.desc - in_descriptors) / sizeof(StreamDescriptor);
 
     stream.desc->ctl_high |= (stream_id << 4) | (1 << 2); // Set StreamID, Attempt to treat as Preffered Trafic
 
@@ -578,7 +636,7 @@ bool hda::HDAController::stream_create(const hda::StreamParameters& params, size
         }
     }
     if(!found)
-        return false; // Unknown sample size
+        return std::nullopt; // Unknown sample size
 
     stream.fmt |= ((base & 1) << 14);
     stream.fmt |= (((mult - 1) & 0x7) << 11);
@@ -612,17 +670,86 @@ bool hda::HDAController::stream_create(const hda::StreamParameters& params, size
     stream.desc->lvi = entries - 1;
     stream.desc->cbl = 0;
 
-    verb_set_converter_format(device.codec, device.dac, stream.fmt);
-    verb_set_converter_control(device.codec, device.dac, stream.index, 1);
+    auto& codec = codecs[device.codec];
 
-    auto max_gain = (codecs[device.codec].widgets[device.dac].out_amp_cap >> 8) & 0x7F;
-    verb_set_dac_amplifier_gain(device.codec, device.dac, (1 << 15) | (1 << 13) | (1 << 12) | max_gain);
+    {
+        auto dac_nid = device.nid_dac.value();
+        auto& dac = codec.widgets[dac_nid];
 
-    verb_set_pin_control(device.codec, device.pin, (1 << 6)); // Enable Pin Out
-    if(codecs[device.codec].widgets[device.pin].pin_cap & (1 << 16)) // EAPD Capable
-        verb_set_eapd_control(device.codec, device.pin, (1 << 1)); // Set EAPD
+        if(dac.cap & (1 << 10)) {
+            verb_set_power_state(dac, 0); // Wake up
+            while(((verb_get_power_state(dac) >> 4) & 0xF) != 0)
+                tsc::poll_msleep(100);
+        }
 
-    return true;
+        verb_set_stream_format(dac, stream.fmt);
+        verb_set_converter_stream_channel(dac, stream.stream_id, 0);
+
+        if(dac.cap & (1 << 6))
+            verb_set_processing_state(dac, ProcessingMode::Benign);
+
+        if(dac.cap & (1 << 2)) { // Out Amp Present
+            auto amp_cap = dac.out_amp_cap;
+
+            auto max_gain = (amp_cap >> 8) & 0x7F;
+            max_gain /= 4; // Half volume
+            max_gain *= 3;
+            verb_set_amp_gain_mute(dac, (1 << 15) | (1 << 13) | (1 << 12) | max_gain);
+        }
+    }
+
+    {
+        if(device.nid_mixer.has_value()) {
+            auto& mixer = codec.widgets[*device.nid_mixer];
+            if(mixer.cap & (1 << 10)) {
+                verb_set_power_state(mixer, 0); // Wake up
+                while(((verb_get_power_state(mixer) >> 4) & 0xF) != 0)
+                    tsc::poll_msleep(100);
+            }
+
+            verb_set_connection_select(mixer, 0);
+
+            if(mixer.cap & (1 << 2)) { // Out Amp Present
+                auto amp_cap = mixer.out_amp_cap;
+
+                auto max_gain = (amp_cap >> 8) & 0x7F;
+                verb_set_amp_gain_mute(mixer, (1 << 15) | (1 << 13) | (1 << 12) | max_gain);
+            }
+        }
+    }
+    
+    {
+        auto pin_nid = device.nid_pin.value();
+        auto& pin = codec.widgets[pin_nid];
+
+        if(pin.cap & (1 << 10)) {
+            verb_set_power_state(pin, 0); // Wake up
+            while(((verb_get_power_state(pin) >> 4) & 0xF) != 0)
+                tsc::poll_msleep(100);
+        }
+
+        if(!(pin.pin_cap & (1 << 4)))
+            print("hda: Warning: Pin is not Output Capable\n");
+
+        if(pin.connection_list.size() > 1)
+            verb_set_connection_select(pin, 0);
+        
+        verb_set_pin_widget_control(pin, (1 << 7) | (1 << 6)); // Enable HighPower, Pin Out
+        if(pin.pin_cap & (1 << 16)) // EAPD Capable
+            verb_set_eapd_enable(pin, (1 << 1)); // Set EAPD
+
+        if(pin.cap & (1 << 6))
+            verb_set_processing_state(pin, ProcessingMode::Benign);
+        
+        if(pin.cap & (1 << 2)) { // Out Amp Present
+            auto amp_cap = pin.out_amp_cap;
+            
+            auto max_gain = (amp_cap >> 8) & 0x7F;
+            verb_set_amp_gain_mute(pin, (1 << 15) | (1 << 13) | (1 << 12) | max_gain);
+        }
+    }
+
+    return stream;
 }
 
 bool hda::HDAController::stream_push(hda::Stream& stream, size_t size, uint8_t* pcm) {
@@ -643,29 +770,25 @@ bool hda::HDAController::stream_push(hda::Stream& stream, size_t size, uint8_t* 
 }
 
 bool hda::HDAController::streams_start(size_t n_streams, hda::Stream** streams) {
-    uint16_t stream_mask = 0;
+    uint32_t stream_mask = 0;
     for(size_t i = 0; i < n_streams; i++) {
         streams[i]->desc->cbl = streams[i]->total_size;
 
-        stream_mask |= (1 << streams[i]->index);
+        stream_mask |= (1 << streams[i]->stream_descriptor_index);
     }
 
-    update_ssync(true, stream_mask);
+    *ssync |= stream_mask;
 
-    for(size_t i = 0; i < n_streams; i++)
+    for(size_t i = 0; i < n_streams; i++) {
         streams[i]->desc->ctl |= (1 << 1); // Start stream DMA Engine
 
-    update_ssync(false, stream_mask);
+        while(!(streams[i]->desc->sts & (1 << 5))) // Wait for FIFORDY to be set
+            asm("pause");
+    }
+
+    *ssync &= ~stream_mask;
 
     return true;
-}
-
-void hda::HDAController::update_ssync(bool set, uint32_t mask) {
-    volatile auto* ssync = (quirks & quirkOldSsync) ? &regs->old_ssync : &regs->ssync;
-    if(set)
-        *ssync |= mask;
-    else
-        *ssync &= ~mask;
 }
 
 hda::Path* hda::HDAController::get_device(uint8_t codec, uint8_t path) {
@@ -679,14 +802,17 @@ struct {
     uint16_t vid, did;
     uint32_t quirks;
 } hda_quirks[] = {
-    {0x8086, 0x2668, hda::quirkOldSsync},
-    {0x8086, 0x293E, hda::quirkOldSsync},
-    {0x8086, 0x1E20, hda::quirkSnoopSCH},
+    {0x8086, 0x2668, hda::quirkTCSEL | hda::quirkOldSsync},
+    {0x8086, 0x293E, hda::quirkTCSEL | hda::quirkOldSsync},
+    {0x8086, 0x1E20, hda::quirkTCSEL | hda::quirkSnoopSCH},
+    {0x8086, 0x9D71, hda::quirkTCSEL | hda::quirkSnoopSCH},
+    {0x8086, 0x9C20, hda::quirkTCSEL | hda::quirkSnoopSCH},
 
-    {0x1022, 0x15E3, hda::quirkNoTCSEL | hda::quirkSnoopATI}
+    {0x1022, 0x1457, hda::quirkSnoopATI},
+    {0x1022, 0x15E3, hda::quirkSnoopATI},
 };
 
-static std::linked_list<hda::HDAController> controllers;
+static constinit std::linked_list<hda::HDAController> controllers;
 
 static void init(pci::Device& dev) {
     auto vid = dev.read<uint16_t>(0);
@@ -698,12 +824,15 @@ static void init(pci::Device& dev) {
             break;
         }
     }
+
     controllers.emplace_back(dev, vid, quirks);
+}
 
-    /*auto& path = *controllers[0].get_device(0, 0);
+/*void hda::hda_test() {
+    //ffmpeg -i input.mp3 -f s16le -acodec pcm_s16le output.pcm
+    auto& path = *controllers[0].get_device(0, 0);
 
-    hda::Stream stream{};
-    ASSERT(controllers[0].stream_create({.dir = true, .sample_rate = 44100, .sample_size = 16, .channels = 2}, 1, path, stream));
+    auto stream = controllers[0].stream_create({.dir = true, .sample_rate = 44100, .sample_size = 16, .channels = 2}, 1, path).value();
 
     auto* file = vfs::get_vfs().open("A:/music.pcm");
     auto size = file->get_size();
@@ -713,21 +842,28 @@ static void init(pci::Device& dev) {
 
     ASSERT(controllers[0].stream_push(stream, size, data));
 
-    Stream* streams[] = {
+    hda::Stream* streams[] = {
         &stream
     };
     ASSERT(controllers[0].streams_start(1, streams));
 
     delete[] data;
-    file->close();*/
-}
+    file->close();
+}*/
 
 static std::pair<uint16_t, uint16_t> known_cards[] = {
     {0x8086, 0x2668}, // Intel ICH6 HDA
     {0x8086, 0x293E}, // Intel ICH9 HDA
     {0x8086, 0x1E20}, // Intel 7 Series HDA (Ivy Bridge Mobile)
 
-    {0x1022, 0x15E3} // AMD Family 17h (Models 10h-1fh) HDA Controller
+    {0x8086, 0x9C20}, // Intel 8 Series HDA
+    //{0x8086, 0x0A0C}, // Intel Haswell-ULT HDA Controller
+
+    {0x8086, 0x9D71}, // Intel SunrisePoint LP HDA
+
+    {0x1022, 0x1457}, // AMD Family 17h (Models 00h-0fh) HDA Controller
+    {0x1022, 0x15E3}, // AMD Family 17h (Models 10h-1fh) HDA Controller
+
 };
 
 static pci::Driver driver = {
