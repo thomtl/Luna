@@ -27,9 +27,12 @@ namespace cpu {
 enum class CpuVendor { Unknown, AMD, Intel };
 
 struct CpuData {
-    CpuData() = default;
-    CpuData(const CpuData& b) = delete;
+    constexpr CpuData() = default;
+    
+    CpuData(const CpuData&) = delete;
+    CpuData(CpuData&&) = delete;
     CpuData& operator=(const CpuData&) = delete;
+    CpuData& operator=(CpuData&&) = delete;
 
     void* self;
     uint32_t lapic_id;

@@ -8,14 +8,10 @@ namespace std
 {
     template<typename T, size_t N>
     class minimal_vector {
-        size_t _size;
-        std::lazy_initializer<T> _array[N];
-        std::lazy_initializer<std::linked_list<T>> _vector;
-
         public:
         constexpr minimal_vector(): _size{0} {}
 
-        size_t length() { return _size; }
+        size_t length() const { return _size; }
 
         [[nodiscard]]
         T& operator[](size_t i){
@@ -42,5 +38,10 @@ namespace std
                 return _vector->emplace_back(std::forward<Args>(args)...);
             }
         }
+
+        private:
+        size_t _size;
+        std::lazy_initializer<T> _array[N];
+        std::lazy_initializer<std::linked_list<T>> _vector;
     };
 } // namespace std

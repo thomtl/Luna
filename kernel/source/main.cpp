@@ -63,8 +63,8 @@
 #include <std/mutex.hpp>
 #include <std/event_queue.hpp>
 
-static std::minimal_vector<CpuData, 1> per_cpu_data{};
-static IrqTicketLock cpu_data_lock{};
+static constinit std::minimal_vector<CpuData, 1> per_cpu_data{};
+static constinit IrqTicketLock cpu_data_lock{};
 
 static CpuData& allocate_cpu_data() {
     std::lock_guard guard{cpu_data_lock};

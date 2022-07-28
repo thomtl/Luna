@@ -35,7 +35,7 @@ namespace lapic
 
     class Lapic {
         public:
-        Lapic() : x2apic{false}, mmio_base{0}, ticks_per_ms{0} {};
+        constexpr Lapic() : x2apic{false}, mmio_base{0}, ticks_per_ms{0} {};
         void init();
         void ipi(uint32_t id, uint8_t vector);
         void eoi();

@@ -3,10 +3,12 @@
 #include <Luna/common.hpp>
 #include <std/string.hpp>
 
+#include <std/bits/move.hpp>
+
 namespace std {
     class bitmap {
         public:
-        bitmap() = default;
+        constexpr bitmap() = default;
         bitmap(size_t n) {
             n_bytes = div_ceil(n, 8);
             data = new uint8_t[n_bytes];
@@ -24,6 +26,17 @@ namespace std {
             this->n_bytes = other.n_bytes;
             this->data = new uint8_t[other.n_bytes];
             memcpy(this->data, other.data, other.n_bytes);
+
+            return *this;
+        }
+
+        bitmap(bitmap&&) = delete;
+        bitmap& operator=(bitmap&& other) {
+            n_bytes = std::move(other.n_bytes);
+            data = std::move(other.data);
+
+            other.n_bytes = 0;
+            other.data = nullptr;
 
             return *this;
         }
