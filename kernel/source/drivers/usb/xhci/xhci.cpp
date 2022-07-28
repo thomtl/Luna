@@ -855,7 +855,12 @@ void xhci::HCI::handle_irq() {
 }
 
 static void handoff_bios(pci::Device& dev) {
-    auto va = dev.read_bar(0).base + phys_mem_map;
+    auto bar = dev.read_bar(0);
+    auto va = bar.base + phys_mem_map;
+
+    for(size_t i = 0; i < div_ceil(bar.len, 0x1000); i++)
+        vmm::get_kernel_context().map(bar.base + (i * 0x1000), bar.base + (i * 0x1000) + phys_mem_map, paging::mapPagePresent | paging::mapPageWrite);
+    
     auto* cap = (xhci::CapabilityRegs*)va;
 
     uint16_t off = (cap->hccparams1 >> 16) & 0xFFFF;
