@@ -48,57 +48,49 @@ namespace std
         }
 
         struct Iterator {
-            using entry_type = std::pair<Key, T>;
-
-            Iterator(unordered_map* map, entry_type* entry): map{map}, entry{entry} {}
-            Iterator(unordered_map* map): map{map} {
-                list = &map->_map[bucket_i];
-
-                while(list->size() == 0 && bucket_i < bucket_size)
-                    list = &map->_map[++bucket_i];
-
-                entry = &((*list)[list_i]);
+            Iterator(unordered_map* map, size_t bucket_i, size_t list_i): bucket_i{bucket_i}, list_i{list_i}, map{map} {}
+            Iterator(unordered_map* map): bucket_i{0}, list_i{0}, map{map} {
+                while(bucket_i < bucket_size && map->_map[bucket_i].size() == 0)
+                    bucket_i++;
             }
 
-            entry_type& operator*() { return *entry; }
-            entry_type* operator->() const noexcept {
-                return entry;
-            }
-            bool operator!=(Iterator it) { return entry != it.entry; }
+            entry_type& operator*() { return map->_map[bucket_i][list_i]; }
+            entry_type* operator->() { return &map->_map[bucket_i][list_i]; }
+            bool operator!=(Iterator it) { return !((bucket_i == it.bucket_i) && (list_i == it.list_i)); }
 
             void operator++() {
+                if(bucket_i == bucket_size)
+                    return;
+                
                 list_i++;
-                if(list_i >= list->size()) {
+                if(list_i >= map->_map[bucket_i].size()) {
                     bucket_i++;
-                    if(bucket_i >= bucket_size) {
-                        entry = nullptr;
-                        return;
-                    }
-                    
                     list_i = 0;
-                }
 
-                entry = &((*list)[list_i]);
+                    while(bucket_i < bucket_size && map->_map[bucket_i].size() == 0)
+                        bucket_i++;
+                }
             }
 
             private:
-            size_t bucket_i = 0, list_i = 0;
+            size_t bucket_i, list_i;
             unordered_map* map;
-            std::vector<entry_type>* list;
-            entry_type* entry;
         };
 
         Iterator begin() { return Iterator{this}; }
         const Iterator begin() const { return Iterator{this}; }
-        Iterator end() { return Iterator{this, nullptr}; }
-        const Iterator end() const { return Iterator{this, nullptr}; }
+
+        Iterator end() { return Iterator{this, bucket_size, 0}; }
+        const Iterator end() const { return Iterator{this, bucket_size, 0}; }
 
         Iterator find(const Key& key) {
-            auto& list = _map[_hasher(key) % bucket_size];
+            size_t bucket_i = _hasher(key) % bucket_size;
+            auto& list = _map[bucket_i];
 
-            for(auto& entry : list)
-                if(entry.first == key)
-                    return Iterator{this, &entry};
+            for(size_t list_i = 0; list_i < list.size(); list_i++)
+                if(list[list_i].first == key)
+                    return Iterator{this, bucket_i, list_i};
+
             return end();
         }
 
