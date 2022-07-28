@@ -136,9 +136,20 @@ ahci::Controller::Controller(pci::Device* device): device{device}, iommu_vmm{dev
 void ahci::Controller::Port::handle_irq() {
     std::lock_guard guard{lock};
 
-    for(size_t i = 0; i < 32; i++)
-        if(command_promises[i] && !(regs->ci & (1 << i)) && allocated_slots & (1 << i))
-            command_promises[i]->set_value((regs->is >> 30) & 1);
+    if(regs->is & (1 << 30)) {
+        // Handle TaskFile Error
+        for(size_t i = 0; i < 32; i++) {
+            if(command_promises[i] && allocated_slots & (1 << i)) {
+                command_promises[i]->set_value(true);
+            }
+        }
+    } else {
+        for(size_t i = 0; i < 32; i++) {
+            if(command_promises[i] && !(regs->ci & (1 << i)) && allocated_slots & (1 << i)) {
+                command_promises[i]->set_value(false);
+            }
+        }
+    }
 
     regs->is = (1 << 1) | (1 << 2); // Uninterested
     regs->is = (1 << 0) | (1 << 5) | (1 << 30); // Clear known bits
@@ -265,12 +276,12 @@ bool ahci::Controller::Port::send_ata_cmd(const ata::ATACommand& cmd, uint8_t* d
     std::lock_guard guard{lock};
 
     command_promises[slot.index] = nullptr;
-    ASSERT(!((regs->ci >> slot.index) & 1));
     if(err) {
-        if(regs->tfd & (1 << 0)) {
-            print("ahci: Error on CMD, code {:#x}\n", regs->tfd >> 8);
-            return false;
-        }
+        ASSERT(regs->tfd & (1 << 0));
+        print("ahci: Error on CMD, code {:#x}\n", regs->tfd >> 8);
+        return false;
+    } else {
+        ASSERT(!((regs->ci >> slot.index) & 1));
     }
 
     if(!cmd.write)
@@ -340,13 +351,12 @@ bool ahci::Controller::Port::send_atapi_cmd(const ata::ATAPICommand& cmd, uint8_
     std::lock_guard guard{lock};
 
     command_promises[slot.index] = nullptr;
-    ASSERT(!((regs->ci >> slot.index) & 1));
     if(err) {
-        if(regs->tfd & (1 << 0)) {
-            if(!((regs->tfd >> 8) & (1 << 5))) // Ignore Media Changed errors, they happen when there's no CD inserted
-                print("ahci: Error on CMD, code {:#x}\n", regs->tfd >> 8);
-            return false;
-        }
+        ASSERT(regs->tfd & (1 << 0));
+        print("ahci: Error on CMD, code {:#x}\n", regs->tfd >> 8);
+        return false;
+    } else {
+        ASSERT(!((regs->ci >> slot.index) & 1));
     }
 
     if(!cmd.write)
