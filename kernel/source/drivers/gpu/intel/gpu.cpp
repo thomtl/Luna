@@ -39,6 +39,8 @@ intel_gpu::Gpu::Gpu(pci::Device* dev): dev{dev}, mm{dev} {
             mode.bpp = 32;
             mode.pitch = mode.width * (mode.bpp / 8);
             mode.pitch = align_up(mode.pitch, 64);
+
+            //print("Mode: {}x{}x{}\n", mode.width, mode.height, mode.bpp);
         }
     
         this->connector = &connector;
@@ -120,8 +122,7 @@ static void init(pci::Device& dev) {
         return;
     
     gpu::get_gpu().register_gpu(igpu);
-    gpu::get_gpu().make_gpu_main(igpu);
-    gpu::get_gpu().set_mode(igpu->get_modes()[0]);
+    gpu::get_gpu().set_mode_and_make_main(igpu, igpu->get_modes()[0]);
     print("gpu: Using Native Intel GPU driver\n");
 }
 

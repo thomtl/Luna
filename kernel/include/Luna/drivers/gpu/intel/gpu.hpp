@@ -15,9 +15,9 @@ namespace intel_gpu {
         public:
         Gpu(pci::Device* dev);
 
-        const std::span<gpu::Mode> get_modes();
-        bool set_mode(const gpu::Mode& mode);
-        uint8_t* get_lfb() const;
+        const std::span<gpu::Mode> get_modes() override;
+        bool set_mode(const gpu::Mode& mode) override;
+        uint8_t* get_lfb() const override;
 
         bool is_connected() const {
             return connector != nullptr;

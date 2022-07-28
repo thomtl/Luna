@@ -35,6 +35,5 @@ void lfb::init(stivale2::Parser& boot) {
     auto* lfb_gpu = new Gpu{boot};
 
     gpu::get_gpu().register_gpu(lfb_gpu);
-    gpu::get_gpu().make_gpu_main(lfb_gpu);
-    gpu::get_gpu().set_mode(lfb_gpu->get_modes()[0]);
+    gpu::get_gpu().set_mode_and_make_main(lfb_gpu, lfb_gpu->get_modes()[0]);
 }

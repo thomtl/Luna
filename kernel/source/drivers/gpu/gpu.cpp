@@ -1,4 +1,5 @@
 #include <Luna/drivers/gpu/gpu.hpp>
+#include <Luna/misc/log.hpp>
 #include <std/string.hpp>
 
 static gpu::GpuManager manager;
@@ -11,12 +12,13 @@ void gpu::GpuManager::register_gpu(gpu::AbstractGpu* gpu) {
     gpus.push_back(gpu);
 }
 
-void gpu::GpuManager::make_gpu_main(gpu::AbstractGpu* gpu) {
-    main_gpu = gpu;
-}
+void gpu::GpuManager::set_mode_and_make_main(AbstractGpu* gpu, const gpu::Mode& mode) {
+    if(!gpu->set_mode(mode)) {
+        print("gpu: Failed to set mode, keeping old GPU\n");
+        return;
+    }
 
-void gpu::GpuManager::set_mode(const gpu::Mode& mode) {
-    main_gpu->set_mode(mode);
+    main_gpu = gpu;
    
     // If modes are compatible, which they likely are when switching from VBE LFB to Native, we don't have to reallocate the backbuffer and trash its contents
     if(mode != curr_mode) {

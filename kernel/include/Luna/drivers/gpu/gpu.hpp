@@ -36,10 +36,9 @@ namespace gpu
 
     struct GpuManager {
         void register_gpu(AbstractGpu* gpu);
-        void make_gpu_main(AbstractGpu* gpu);
         AbstractGpu* get_main_gpu() { return main_gpu; }
 
-        void set_mode(const gpu::Mode& mode);
+        void set_mode_and_make_main(AbstractGpu* gpu, const gpu::Mode& mode);
         Mode get_mode() const;
 
         std::span<uint8_t> get_fb();
