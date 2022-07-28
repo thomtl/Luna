@@ -9,6 +9,7 @@
 #include <std/linked_list.hpp>
 
 constexpr uint64_t femto_per_milli = 1'000'000'000'000ull;
+constexpr uint64_t femto_per_micro = 1'000'000'000ull;
 constexpr uint64_t femto_per_nano = 1'000'000ull;
 
 static constinit IrqTicketLock lock;
@@ -164,6 +165,13 @@ void hpet::Device::poll_msleep(uint64_t ms) {
         asm("pause");
 }
 
+void hpet::Device::poll_usleep(uint64_t us) {
+    auto goal = regs->main_counter + ((us * femto_per_micro) / period);
+
+    while(regs->main_counter < goal)
+        asm("pause");
+}
+
 void hpet::Device::poll_nsleep(uint64_t ns) {
     auto goal = regs->main_counter + ((ns * femto_per_nano) / period);
 
@@ -218,6 +226,7 @@ void hpet::Comparator::cancel_timer() {
 }
 
 void hpet::poll_msleep(uint64_t ms) { devices.front().poll_msleep(ms); }
+void hpet::poll_usleep(uint64_t us) { devices.front().poll_usleep(us); }
 void hpet::poll_nsleep(uint64_t ns) { devices.front().poll_nsleep(ns); }
 uint64_t hpet::time_ns() { return devices.front().time_ns(); }
 

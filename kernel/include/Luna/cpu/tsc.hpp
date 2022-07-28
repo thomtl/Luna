@@ -11,5 +11,6 @@ namespace tsc {
     uint64_t time_ns_at(uint64_t count);
 
     void poll_nsleep(uint64_t ns);
+    void poll_usleep(uint64_t us);
     void poll_msleep(uint64_t ms);
 } // namespace tsc

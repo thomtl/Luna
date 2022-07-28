@@ -51,6 +51,7 @@ namespace hpet {
         Device(acpi::Hpet* table);
 
         void poll_msleep(uint64_t ms);
+        void poll_usleep(uint64_t us);
         void poll_nsleep(uint64_t ns);
         uint64_t time_ns();
 
@@ -73,6 +74,7 @@ namespace hpet {
     void init();
 
     void poll_msleep(uint64_t ms);
+    void poll_usleep(uint64_t us);
     void poll_nsleep(uint64_t ns);
     uint64_t time_ns();
 

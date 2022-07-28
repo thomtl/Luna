@@ -2,9 +2,11 @@
 
 #include <Luna/cpu/cpu.hpp>
 #include <Luna/drivers/timers/hpet.hpp>
+
 #include <Luna/misc/log.hpp>
 
 constexpr uint64_t nano_per_milli = 1'000'000ull;
+constexpr uint64_t nano_per_micro = 1'000ull;
 
 uint64_t tsc::rdtsc() {
     uint32_t a, d;
@@ -15,6 +17,14 @@ uint64_t tsc::rdtsc() {
 
 void tsc::poll_msleep(size_t ms) {
     auto delta = ms * get_cpu().cpu.tsc.period_ms;
+    auto goal = rdtsc() + delta;
+
+    while(rdtsc() < goal)
+        asm("pause");
+}
+
+void tsc::poll_usleep(uint64_t us) {
+    auto delta = (us * nano_per_micro) * get_cpu().cpu.tsc.period_ns;
     auto goal = rdtsc() + delta;
 
     while(rdtsc() < goal)
