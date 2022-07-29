@@ -7,78 +7,145 @@ namespace std {
     struct linked_list {
         constexpr linked_list(): head{nullptr}, tail{nullptr}, length{0} {}
 
-        template<typename... Args>
-        T& emplace_back(Args&&... args) {
-            auto* new_entry = new item{std::forward<Args>(args)...};
-
-            new_entry->next = nullptr;
+        ~linked_list() {
+            if(length == 0)
+                return;
             
-            if(length == 0) {
-                head = new_entry;
-                tail = new_entry;
-
-                new_entry->prev = nullptr;
-            } else {
-                tail->next = new_entry;
-                new_entry->prev = tail;
-                tail = new_entry;
-                length++;
+            for(auto* curr = head; curr != nullptr;) {
+                auto* ptr = curr;
+                curr = curr->next;
+                delete ptr;
             }
-
-            length++;
-
-            return new_entry->entry; 
         }
+
+        linked_list(const linked_list&) = delete;
+        linked_list(linked_list&&) = delete;
+        linked_list& operator=(const linked_list&) = delete;
+        linked_list& operator=(linked_list&&) = delete;
 
         struct item {
             template<typename... Args>
-            item(Args&&... args): entry{T{std::forward<Args>(args)...}} {}
+            item(Args&&... args): entry{T{std::forward<Args>(args)...}}, prev{nullptr}, next{nullptr} {}
+            item(const T& entry): entry{entry}, prev{nullptr}, next{nullptr} {}
+
             T entry;
             item* prev, *next;
         };
 
         struct iterator {
             iterator(item* entry): entry{entry} {}
-            T& operator*() { return entry->entry; }
-            void operator++() { if(entry) entry = entry->next; }
-            bool operator!=(iterator it) { return entry != it.entry; }
 
-            private:
+            T& operator*() { return entry->entry; }
+            T* operator->() const { return &entry->entry; }
+
+            void operator++() { if(entry) entry = entry->next; }
+            bool operator==(const iterator& it) { return entry == it.entry; }
+            bool operator!=(const iterator& it) { return entry != it.entry; }
+
+            //private:
             item* entry;
         };
 
-        struct const_iterator {
-            const_iterator(const item* entry): entry{entry} {}
-            const T& operator*() { return entry->entry; }
-            void operator++() { if(entry) entry = entry->next; }
-            bool operator!=(const_iterator it) { return entry != it.entry; }
+        iterator insert(iterator pos, const T& value) {
+            if(pos == begin()) {
+                push_front(value);
+                return iterator{head};
+            } else if(pos == end()) {
+                push_back(value);
+                return iterator{tail};
+            }
 
-            private:
-            const item* entry;
-        };
+            auto* new_entry = new item{value};
+            DEBUG_ASSERT(pos.entry->prev);// && pos.entry->next);
+
+            auto* previous = pos.entry->prev;
+
+            pos.entry->prev->next = new_entry;                
+            pos.entry->prev = new_entry;
+            new_entry->prev = previous;
+            new_entry->next = pos.entry;
+            length++;
+
+            return iterator{new_entry};
+        }
+
+        void push_front(const T& value) {
+            auto* new_entry = new item{value};
+
+            new_entry->next = head;
+            new_entry->prev = nullptr;        
+
+            if(head)
+                head->prev = new_entry;
+
+            if(!tail)
+                tail = new_entry;
+
+            head = new_entry;
+
+            length++;
+        }
+
+        void push_back(const T& value) {
+            auto* new_entry = new item{value};
+
+            new_entry->next = nullptr;
+            new_entry->prev = tail;
+
+            if(tail)
+                tail->next = new_entry;
+
+            if(!head)
+                head = new_entry;
+
+            tail = new_entry;
+            length++;
+        }
+
+        void pop_front() {
+            auto* ptr = head;
+            if(head->next) {
+                head->next->prev = nullptr;
+                head = head->next;
+            } else {
+                head = nullptr;
+                tail = nullptr;
+            }
+
+            length--;
+            delete ptr;
+        }
+
+        template<typename... Args>
+        T& emplace_back(Args&&... args) {
+            auto* new_entry = new item{std::forward<Args>(args)...};
+
+            new_entry->next = nullptr;
+            new_entry->prev = tail;
+
+            if(tail)
+                tail->next = new_entry;
+
+            if(!head)
+                head = new_entry;
+
+            tail = new_entry;
+            length++;
+
+            return new_entry->entry; 
+        }
 
         iterator begin() { return iterator{head}; }
+        iterator begin() const { return iterator{head}; }
+
         iterator end() { return iterator{nullptr}; }
+        iterator end() const { return iterator{nullptr}; }
 
-        const_iterator begin() const { return const_iterator{head}; }
-        const_iterator end() const { return const_iterator{nullptr}; }
+        T& front() { DEBUG_ASSERT(head); return head->entry; }
+        const T& front() const { DEBUG_ASSERT(head); return head->entry; }
 
-        T& front() { return *begin(); }
-        const T& front() const { return *begin(); }
-
-        const T& operator[](size_t index) const { 
-            auto it = begin();
-            for(size_t i = 0; i < index; i++)
-                ++it;
-            return *it;
-        }
-
-        T& operator[](size_t index) { 
-            auto it = begin();
-            for(size_t i = 0; i < index; i++)
-                ++it;
-            return *it;
-        }
+        T& back() { DEBUG_ASSERT(tail); return tail->entry; }
+        const T& back() const { DEBUG_ASSERT(tail); return tail->entry; }
 
         size_t size() const { return length; }
 

@@ -2,8 +2,6 @@
 #include <Luna/net/eth.hpp>
 #include <Luna/cpu/idt.hpp>
 
-#include <std/linked_list.hpp>
-
 rtl81x9::Nic::Nic(pci::Device& device, uint16_t did): mm{&device}, regs{nullptr} {
     checksum_offload = net::cs_offload::ipv4 | net::cs_offload::udp;
 

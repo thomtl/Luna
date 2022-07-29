@@ -3,7 +3,6 @@
 #include <std/functional.hpp>
 #include <std/utility.hpp>
 #include <std/vector.hpp>
-#include <std/linked_list.hpp>
 
 #include <Luna/misc/log.hpp>
 

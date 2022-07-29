@@ -16,5 +16,5 @@ void net::register_nic(Nic* nic) {
 net::Interface* net::get_default_if() {
     ASSERT(interfaces.size() >= 1);
 
-    return &interfaces[0]; // TODO
+    return &interfaces.front(); // TODO
 }

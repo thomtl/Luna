@@ -4,10 +4,7 @@
 
 #include <Luna/mm/vmm.hpp>
 
-
-#include <std/linked_list.hpp>
 #include <std/span.hpp>
-
 #include <std/string.hpp>
 
 struct Mode {
