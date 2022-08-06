@@ -104,6 +104,8 @@ namespace vm::gpu::bga {
 
                         while(1) {
                             promise.await();
+                            promise.reset();
+
                             window->update();
                         }
                     });

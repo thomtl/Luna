@@ -173,6 +173,10 @@ struct Promise<void> {
         event.trigger();
     }
 
+    void reset() {
+        event.reset();
+    }
+
     bool is_done() const {
         return event.is_triggered();
     }
