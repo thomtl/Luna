@@ -5,9 +5,6 @@
 
 #include <Luna/misc/log.hpp>
 
-constexpr uint64_t nano_per_milli = 1'000'000ull;
-constexpr uint64_t nano_per_micro = 1'000ull;
-
 uint64_t tsc::rdtsc() {
     uint32_t a, d;
     asm volatile("lfence\nrdtsc" : "=a"(a), "=d"(d) : : "memory");
@@ -15,24 +12,8 @@ uint64_t tsc::rdtsc() {
     return a | ((uint64_t)d << 32);
 }
 
-void tsc::poll_msleep(size_t ms) {
-    auto delta = ms * get_cpu().cpu.tsc.period_ms;
-    auto goal = rdtsc() + delta;
-
-    while(rdtsc() < goal)
-        asm("pause");
-}
-
-void tsc::poll_usleep(uint64_t us) {
-    auto delta = (us * nano_per_micro) * get_cpu().cpu.tsc.period_ns;
-    auto goal = rdtsc() + delta;
-
-    while(rdtsc() < goal)
-        asm("pause");
-}
-
-void tsc::poll_nsleep(size_t ns) {
-    auto delta = ns * get_cpu().cpu.tsc.period_ns;
+void tsc::poll_sleep(const TimePoint& duration) {
+    auto delta = duration.ns() * get_cpu().cpu.tsc.period_ns;
     auto goal = rdtsc() + delta;
 
     while(rdtsc() < goal)
@@ -53,22 +34,22 @@ void tsc::init_per_cpu() {
     ASSERT(cpu::cpuid(0x8000'0007, a, b, c, d));
     ASSERT(d & (1 << 8)); // Invariant TSC
     
-    constexpr size_t calibration_time = 10; // ms
+    constexpr TimePoint calibration_time = 10_ms;
 
     IrqTicketLock lock{};
     {
         std::lock_guard guard{lock}; // Disable IRQs
 
         auto start = rdtsc();
-        hpet::poll_msleep(calibration_time);
+        hpet::poll_sleep(calibration_time);
         auto end = rdtsc();
 
 
         auto& info = get_cpu().cpu.tsc;
-        info.period_ms = (end - start) / calibration_time;
-        info.period_ns = info.period_ms / nano_per_milli;
-    }
+        auto period_ms = (end - start) / calibration_time.ms();
+        info.period_ns = period_ms / TimePoint::nano_per_milli;
 
-    //print("tsc: Frequency: {}.{} MHz\n", ticks_per_ms / 1000, ticks_per_ms % 1000);
-    //print("tsc: {} /ns {} /ms", get_cpu().cpu.tsc.period_ns, get_cpu().cpu.tsc.period_ms);
+        //print("tsc: Frequency: {}.{} MHz\n", period_ms / 1000, period_ms % 1000);
+        //print("tsc: {} ticks/ns {} ticks/ms\n", info.period_ns, period_ms);
+    }
 }

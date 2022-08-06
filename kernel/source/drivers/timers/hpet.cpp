@@ -158,22 +158,8 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
     start_timer();
 }
 
-void hpet::Device::poll_msleep(uint64_t ms) {
-    auto goal = regs->main_counter + (ms * (femto_per_milli / period));
-
-    while(regs->main_counter < goal)
-        asm("pause");
-}
-
-void hpet::Device::poll_usleep(uint64_t us) {
-    auto goal = regs->main_counter + ((us * femto_per_micro) / period);
-
-    while(regs->main_counter < goal)
-        asm("pause");
-}
-
-void hpet::Device::poll_nsleep(uint64_t ns) {
-    auto goal = regs->main_counter + ((ns * femto_per_nano) / period);
+void hpet::Device::poll_sleep(const TimePoint& duration) {
+    auto goal = regs->main_counter + ((duration.ns() * femto_per_nano) / period);
 
     while(regs->main_counter < goal)
         asm("pause");
@@ -225,9 +211,7 @@ void hpet::Comparator::cancel_timer() {
     this->f = nullptr;
 }
 
-void hpet::poll_msleep(uint64_t ms) { devices.front().poll_msleep(ms); }
-void hpet::poll_usleep(uint64_t us) { devices.front().poll_usleep(us); }
-void hpet::poll_nsleep(uint64_t ns) { devices.front().poll_nsleep(ns); }
+void hpet::poll_sleep(const TimePoint& duration) { devices.front().poll_sleep(duration); }
 uint64_t hpet::time_ns() { return devices.front().time_ns(); }
 
 std::optional<uint32_t> hpet::start_timer_ms(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) { return start_timer_ns(periodic, ms * 1'000'000, f, userptr); }

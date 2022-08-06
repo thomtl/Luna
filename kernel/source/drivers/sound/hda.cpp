@@ -139,7 +139,7 @@ hda::HDAController::HDAController(pci::Device& device, uint16_t vendor, uint32_t
         mm.push_region({0x1000, 0xFFFF'FFFF - 0x1000});
 
     // Only really need to wait 521us for codecs to wake up, but give it a little bit of time
-    tsc::poll_msleep(10);
+    tsc::poll_sleep(10_ms);
 
     oss = (regs->gcap >> 12) & 0xF;
     iss = (regs->gcap >> 8) & 0xF;
@@ -369,7 +369,7 @@ void hda::HDAController::enumerate_codec(uint8_t index) {
             print("     - Node {}: Audio Function Group\n", (uint16_t)func_group_node);
 
             verb_set_power_state(index, func_group_node, 0); // Wake up
-            tsc::poll_msleep(200);
+            tsc::poll_sleep(200_ms);
 
             res = verb_get_parameter(index, func_group_node, WidgetParameter::SubordinateNodeCount);
             auto start = (res >> 16) & 0xFF;
@@ -567,14 +567,14 @@ std::optional<hda::Stream> hda::HDAController::stream_create(const hda::StreamPa
         stream.desc->ctl &= ~(1 << 1); // Clear DMA Run
 
         stream.desc->ctl |= 1; // Enter Reset
-        tsc::poll_usleep(3);
+        tsc::poll_sleep(3_us);
 
         uint64_t timeout = 300;
         while(!(stream.desc->ctl & 1) && timeout-- >= 1) // Wait Device to enter reset state
             asm("pause");
 
         stream.desc->ctl &= ~1; // Leave Reset mode
-        tsc::poll_usleep(3);
+        tsc::poll_sleep(3_us);
 
         timeout = 300;
         while((stream.desc->ctl & 1) && timeout-- >= 1) // Wait Device to enter reset state
@@ -679,7 +679,7 @@ std::optional<hda::Stream> hda::HDAController::stream_create(const hda::StreamPa
         if(dac.cap & (1 << 10)) {
             verb_set_power_state(dac, 0); // Wake up
             while(((verb_get_power_state(dac) >> 4) & 0xF) != 0)
-                tsc::poll_msleep(100);
+                tsc::poll_sleep(100_ms);
         }
 
         verb_set_stream_format(dac, stream.fmt);
@@ -704,7 +704,7 @@ std::optional<hda::Stream> hda::HDAController::stream_create(const hda::StreamPa
             if(mixer.cap & (1 << 10)) {
                 verb_set_power_state(mixer, 0); // Wake up
                 while(((verb_get_power_state(mixer) >> 4) & 0xF) != 0)
-                    tsc::poll_msleep(100);
+                    tsc::poll_sleep(100_ms);
             }
 
             verb_set_connection_select(mixer, 0);
@@ -725,7 +725,7 @@ std::optional<hda::Stream> hda::HDAController::stream_create(const hda::StreamPa
         if(pin.cap & (1 << 10)) {
             verb_set_power_state(pin, 0); // Wake up
             while(((verb_get_power_state(pin) >> 4) & 0xF) != 0)
-                tsc::poll_msleep(100);
+                tsc::poll_sleep(100_ms);
         }
 
         if(!(pin.pin_cap & (1 << 4)))

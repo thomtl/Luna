@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Luna/common.hpp>
+#include <Luna/misc/time.hpp>
 #include <Luna/drivers/acpi.hpp>
 
 #include <std/array.hpp>
@@ -50,9 +51,7 @@ namespace hpet {
     struct Device {
         Device(acpi::Hpet* table);
 
-        void poll_msleep(uint64_t ms);
-        void poll_usleep(uint64_t us);
-        void poll_nsleep(uint64_t ns);
+        void poll_sleep(const TimePoint& duration);
         uint64_t time_ns();
 
         private:
@@ -73,9 +72,7 @@ namespace hpet {
 
     void init();
 
-    void poll_msleep(uint64_t ms);
-    void poll_usleep(uint64_t us);
-    void poll_nsleep(uint64_t ns);
+    void poll_sleep(const TimePoint& duration);
     uint64_t time_ns();
 
     std::optional<uint32_t> start_timer_ms(bool periodic, uint64_t ms, void(*f)(void*), void* userptr);

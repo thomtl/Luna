@@ -69,7 +69,7 @@ extern "C" {
     uint32_t laihost_pci_readd(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t func, uint16_t offset) { return pci::read<uint32_t>(seg, bus, slot, func, offset); }
     
     void laihost_sleep(uint64_t ms) {
-        tsc::poll_msleep(ms);
+        tsc::poll_sleep(TimePoint::from_ms(ms));
     }
 
     uint64_t laihost_timer() {

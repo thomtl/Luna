@@ -80,7 +80,7 @@ void lapic::Lapic::calibrate_timer() {
     write(regs::timer_initial_count, ~0u);
 
     write(regs::lvt_timer, read(regs::lvt_timer) & ~(1 << 16)); // Clear timer mask
-    tsc::poll_msleep(10);
+    tsc::poll_sleep(10_ms);
     write(regs::lvt_timer, read(regs::lvt_timer) | (1 << 16)); // Set timer mask
 
     ticks_per_ms = (~0 - read(regs::timer_current_count)) / 10;

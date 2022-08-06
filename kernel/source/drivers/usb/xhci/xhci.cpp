@@ -14,7 +14,7 @@ bool timeout(uint64_t ms, F f) {
         if(ms == 0)
             return false;
 
-        tsc::poll_msleep(1);
+        tsc::poll_sleep(1_ms);
     }
 
     return true;
@@ -381,7 +381,7 @@ void xhci::HCI::enumerate_ports() {
 }
 
 bool xhci::HCI::send_ep0_control(Port& port, const usb::spec::DeviceRequestPacket& packet, bool write, size_t len, uint8_t* buf) {
-    tsc::poll_msleep(5); // For some reason this sleep is needed to make it work on USB 1.1 devices????
+    tsc::poll_sleep(5_ms); // For some reason this sleep is needed to make it work on USB 1.1 devices????
     
     uint8_t type = 0;
     if(len > 0 && write) type = 2; // OUT Data Stage
@@ -736,14 +736,14 @@ void xhci::HCI::reset_controller() {
     op->usbcmd &= ~(usbcmd::run | usbcmd::irq_enable); // Stop controller
 
     if(quirks & quirkIntel)
-        tsc::poll_msleep(2); // Intel controllers need some time here
+        tsc::poll_sleep(2_ms); // Intel controllers need some time here
 
     ASSERT(timeout(20, [&]{ return (op->usbsts & usbsts::halted) != 0; }));
 
     op->usbcmd |= usbcmd::reset;
     while(op->usbcmd & usbcmd::reset || op->usbsts & usbsts::not_ready)
         asm("pause");
-    tsc::poll_msleep(10); // Recovery time
+    tsc::poll_sleep(10_ms); // Recovery time
 }
 
 bool xhci::HCI::reset_port(Port& port) {
@@ -761,7 +761,7 @@ bool xhci::HCI::reset_port(Port& port) {
     reg.portsc = portsc::port_power | reset_bit;
 
     if(timeout(500, [&]{ return (reg.portsc & reset_change_bit) != 0; })) {
-        tsc::poll_msleep(3); // Recovery time
+        tsc::poll_sleep(3_ms); // Recovery time
 
         if(reg.portsc & portsc::enabled) {
             reg.portsc = portsc::port_power | portsc::status_change_bits;

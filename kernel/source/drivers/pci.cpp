@@ -460,21 +460,21 @@ bool pci::Device::set_power(uint8_t state) {
         return false;
 
     // PCI Bus Power Management Interface Specification 1.1 Paragraph 5.6.1
-    uint64_t delay = 0;
+    TimePoint delay{};
     if((power.state == 0 || power.state == 1) && state == 2)
-        delay = 1; // 200 μs
+        delay = 200_us;
     else if(state == 3)
-        delay = 10;
+        delay = 10_ms;
     else if(power.state == 2 && state == 0)
-        delay = 1; // 200 μs
+        delay = 200_us;
     else if(power.state == 3 && state == 0)
-        delay = 10;
+        delay = 10_ms;
 
     pci::power::Control control{.raw = read<uint16_t>(power.offset + pci::power::control)};
     control.power_state = state;
     write<uint16_t>(power.offset + pci::power::control, control.raw);
 
-    tsc::poll_msleep(delay);
+    tsc::poll_sleep(delay);
 
     control.raw = read<uint16_t>(power.offset + pci::power::control);
 
