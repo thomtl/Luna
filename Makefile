@@ -11,7 +11,7 @@ configure:
 	git clone https://git.seabios.org/seabios.git build/seabios
 	cd build/seabios && git checkout ef88eeaf052c8a7d28c5f85e790c5e45bcffa45e
 	cp misc/seabios-config.ini build/seabios/.config
-	make -C build/seabios -j8
+	make -C build/seabios -j8 PYTHON=python2
 
 	dd if=/dev/zero of=luna.hdd bs=4M count=32
 	parted -s luna.hdd mklabel msdos
