@@ -284,16 +284,33 @@ bool vm::VCPU::handle_vmexit(const VmExit& exit) {
             if(subleaf == 0) {
                 passthrough();
 
+                regs.rbx &= ~(1 << 2); // Remove Intel SGX support
+                regs.rbx &= ~(1 << 12); // Remove Intel Resource Director support
+                regs.rbx &= ~(1 << 25); // Remove Intel Processor Trace support
+                regs.rcx &= ~(1 << 23); // Remove Intel Key Locker Support
+
                 os_support_bit(regs.rcx, 22, 4);
             } else if(subleaf == 1) {
                 passthrough();
             } else {
                 print("vcpu: Unhandled CPUID 0x7 subleaf {:#x}\n", subleaf);
             }
+        } else if(leaf == 0xA) { // Architectural Performance Monitoring Leaf
+            zero_cpuid();
         } else if(leaf == 0xB) {
             passthrough();
         } else if(leaf == 0xD) {
             passthrough(); // Subleaf isn't interesting
+        } else if(leaf == 0xF) { // Intel Resource Director Technology
+            zero_cpuid(); // We don't care about leaf 0 or 1
+        } else if(leaf == 0x10) { // Intel Resource Director Technology
+            zero_cpuid();
+        } else if(leaf == 0x12) { // Intel SGX Leaf
+            zero_cpuid();
+        } else if(leaf == 0x14) { // Intel Processor Trace Leaf
+            zero_cpuid();
+        } else if(leaf == 0x19) { // Intel KeyLocker Leaf
+            zero_cpuid();
         } else if(leaf == 0x4000'0000) {
             write_low32(regs.rax, 0x4000'0000);
             write_low32(regs.rbx, luna_sig);
