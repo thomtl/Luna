@@ -10,6 +10,11 @@ Driver::Driver(Vm* vm): vm{vm} {
     vm->pio_map[cmd] = this;
 
     vm->pio_map[channel2_status] = this;
+
+    ch0_timer.set_handler([](void* userptr) {
+        auto& self = *(vm::pit::Driver*)userptr;
+        self.irq_handler();
+    }, this);
 }
 
 void Driver::pio_write(uint16_t port, uint32_t value, uint8_t size) {
@@ -45,6 +50,16 @@ void Driver::pio_write(uint16_t port, uint32_t value, uint8_t size) {
         channels[ch].mode = mode;
         channels[ch].read_state = AccessMode::FlipFlopLow;
         channels[ch].write_state = AccessMode::FlipFlopLow;
+    } else if(port == channel2_status) {
+        channels[2].gate = value & 1;
+
+        switch(channels[2].mode) { // Set ch2 gate
+            case 0: [[fallthrough]];
+            case 4:
+                break;
+            default:
+                PANIC("TODO");
+        }
     } else {
         print("pit: Unhandled write to port {:#x}: {:#x}\n", port, value);
     }
@@ -69,7 +84,7 @@ uint32_t Driver::pio_read(uint16_t port, uint8_t size) {
             __builtin_unreachable();
         }
     } else if(port == channel2_status) {
-        return (get_channel_output(2) << 5); // GRUB hack
+        return (get_channel_output(2) << 5) | (channels[2].gate);
     } else {
         print("pit: Unhandled read from port {:#x}\n", port);
 
@@ -78,27 +93,15 @@ uint32_t Driver::pio_read(uint16_t port, uint8_t size) {
 }
 
 void Driver::setup_channel(uint8_t ch) {
-    auto irq_functor = [](void* userptr) {
-        auto& self = *(vm::pit::Driver*)userptr;
-
-        self.vm->cpus[0].thread->queue_apc([](void* vm) {
-            ((vm::Vm*)vm)->set_irq(irq_line, true);
-            ((vm::Vm*)vm)->set_irq(irq_line, false);
-        }, self.vm);
-        self.vm->cpus[0].thread->invoke_apcs();
-    };
-            
+    if(channels[ch].count == 0)
+		channels[ch].count = 0x10000;
+    
     switch (channels[ch].mode) {
         case 4: [[fallthrough]];
         case 0: { // Interrupt on Terminal Count
             if(ch == 0) {
                 auto ns = ((uint64_t)channels[ch].count * 1'000'000'000) / clock_frequency;
-
-                if(channels[ch].timer_idx.has_value())
-                    ::hpet::cancel_timer(*channels[ch].timer_idx);
-
-                channels[ch].timer_idx = ::hpet::start_timer_ns(false, ns, irq_functor, this);
-                ASSERT(channels[ch].timer_idx.has_value());
+                ch0_timer.setup(TimePoint::from_ns(ns), false);
             }
 
             channels[ch].start_tick = vm->cpus[0].get_guest_clock_ns();
@@ -108,11 +111,7 @@ void Driver::setup_channel(uint8_t ch) {
         case 2: {
             ASSERT(ch == 0);
             auto ns = ((uint64_t)channels[ch].count * 1'000'000'000) / clock_frequency;
-            if(channels[ch].timer_idx.has_value())
-                ::hpet::cancel_timer(*channels[ch].timer_idx);
-
-            channels[ch].timer_idx = ::hpet::start_timer_ns(true, ns, irq_functor, this);
-            ASSERT(channels[ch].timer_idx.has_value());
+            ch0_timer.setup(TimePoint::from_ns(ns), true);
             break;
         }
 
@@ -122,6 +121,8 @@ void Driver::setup_channel(uint8_t ch) {
 }
 
 bool Driver::get_channel_output(uint8_t ch) {
+    ASSERT(ch == 2);
+    
     auto tick = get_tick(ch);
 
     switch (channels[ch].mode) {
@@ -148,6 +149,13 @@ uint64_t Driver::get_tick(uint8_t ch) {
         elapsed -= 1000;
             
     auto tick = (elapsed * clock_frequency) / 1'000'000'000;
-    //print("Elapsed: {}, Tick: {}\n", elapsed, tick);
     return tick;
+}
+
+void Driver::irq_handler() {
+    vm->cpus[0].thread->queue_apc([](void* vm) {
+        ((vm::Vm*)vm)->set_irq(irq_line, true);
+        ((vm::Vm*)vm)->set_irq(irq_line, false);
+    }, vm);
+    vm->cpus[0].thread->invoke_apcs();
 }

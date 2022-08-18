@@ -3,6 +3,7 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
+#include <Luna/drivers/timers/timers.hpp>
 #include <Luna/misc/log.hpp>
 
 namespace vm::pit {
@@ -18,10 +19,18 @@ namespace vm::pit {
 
     struct Driver final : public vm::AbstractPIODriver {
         Driver(Vm* vm);
+
+        Driver(Driver&&) = delete;
+        Driver(const Driver&) = delete;
+        Driver& operator=(Driver&&) = delete;
+        Driver& operator=(const Driver&) = delete;
+
         void pio_write(uint16_t port, uint32_t value, uint8_t size);
         uint32_t pio_read(uint16_t port, uint8_t size);
 
         private:
+        void irq_handler();
+
         struct Channel;
 
         void setup_channel(uint8_t ch);
@@ -33,14 +42,17 @@ namespace vm::pit {
 
         struct Channel {
             uint64_t start_tick;
-            std::optional<uint32_t> timer_idx;
             uint32_t count;
 
             uint8_t mode;
             uint8_t count_latch;
 
+            bool gate;
+
             AccessMode write_state, read_state;
         } channels[3] = {};
+
+        timer::Timer ch0_timer;
 
         Vm* vm;
     };

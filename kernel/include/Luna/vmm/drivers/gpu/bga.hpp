@@ -3,7 +3,7 @@
 #include <Luna/common.hpp>
 #include <Luna/vmm/vm.hpp>
 
-#include <Luna/drivers/timers/hpet.hpp>
+#include <Luna/drivers/timers/timers.hpp>
 #include <Luna/misc/log.hpp>
 
 #include <Luna/vmm/drivers/pci/pci_driver.hpp>
@@ -95,17 +95,19 @@ namespace vm::gpu::bga {
                     spawn([this] {
                         Promise<void> promise{};
 
-                        auto success = ::hpet::start_timer_ms(true, 20, [](void* promise) {
-                            ((Promise<void>*)promise)->complete();
-                        }, &promise).has_value();
+                        constexpr size_t refresh_rate_hz = 50;
+                        constexpr size_t refresh_rate_ms = 1000 / refresh_rate_hz;
 
-                        if(!success)
-                            PANIC("Failed to start timer");
+                        timer::Timer timer{TimePoint::from_ms(refresh_rate_ms), true, [](void* promise) {
+                            ((Promise<void>*)promise)->complete();
+                        }, &promise};
+
+                        timer.start();
 
                         while(1) {
                             promise.await();
                             promise.reset();
-
+                            
                             window->update();
                         }
                     });

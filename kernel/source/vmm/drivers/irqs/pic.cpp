@@ -31,6 +31,8 @@ void Driver::pio_write(uint16_t port, uint32_t value, uint8_t size) {
                 dev.icw4 = value & icw1_icw4;
                 dev.imr = 0;
                 dev.last_irr = 0;
+                dev.priority_add = 0;
+                dev.reg_read_select = 0;
                 dev.irr &= dev.elcr;
                 dev.init_state = 1;
 
@@ -150,13 +152,11 @@ uint8_t Driver::get_priority(uint8_t device, uint8_t mask) {
 
 std::optional<uint8_t> Driver::get_irq(uint8_t device) {
     auto& dev = pics[device];
-    auto mask = dev.irr & ~dev.imr;
-    auto priority = get_priority(device, mask);
+    auto priority = get_priority(device, dev.irr & ~dev.imr);
     if(priority == 8)
         return std::nullopt;
-
-    mask = dev.isr;
-    auto cur_priority = get_priority(device, mask);
+    
+    auto cur_priority = get_priority(device, dev.isr);
     if(priority < cur_priority)
         return (priority + dev.priority_add) & 7;
     else

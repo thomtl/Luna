@@ -24,6 +24,8 @@
 #include <Luna/drivers/acpi.hpp>
 #include <Luna/drivers/ioapic.hpp>
 #include <Luna/drivers/pci.hpp>
+
+#include <Luna/drivers/timers/timers.hpp>
 #include <Luna/drivers/timers/hpet.hpp>
 
 #include <Luna/fs/vfs.hpp>
@@ -126,6 +128,7 @@ void kernel_main(const stivale2_struct* info) {
 
     hpet::init();
     tsc::init_per_cpu(); // TODO: Unify timer init?
+    timer::init();
 
     acpi::init_system();
 

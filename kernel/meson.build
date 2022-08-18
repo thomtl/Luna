@@ -47,6 +47,7 @@ main_sources = files(
     'source/drivers/storage/usb_msd.cpp',
 
     'source/drivers/timers/hpet.cpp',
+    'source/drivers/timers/timers.cpp',
 
     'source/drivers/usb/ehci/ehci.cpp',
     'source/drivers/usb/hid/boot_mouse.cpp',

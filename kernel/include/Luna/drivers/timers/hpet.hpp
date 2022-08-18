@@ -28,7 +28,7 @@ namespace hpet {
     struct Device;
 
     struct Comparator {
-        bool start_timer(bool periodic, uint64_t ns, void(*f)(void*), void* userptr);
+        bool start_timer(bool periodic, const TimePoint& period, void(*f)(void*), void* userptr);
         void cancel_timer();
         
         private:
@@ -75,7 +75,5 @@ namespace hpet {
     void poll_sleep(const TimePoint& duration);
     uint64_t time_ns();
 
-    std::optional<uint32_t> start_timer_ms(bool periodic, uint64_t ms, void(*f)(void*), void* userptr);
-    std::optional<uint32_t> start_timer_ns(bool periodic, uint64_t ns, void(*f)(void*), void* userptr);
-    void cancel_timer(uint32_t i);
+    Comparator* allocate_comparator(bool require_periodic = false);
 } // namespace hpet

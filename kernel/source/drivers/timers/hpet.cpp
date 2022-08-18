@@ -7,6 +7,7 @@
 
 #include <Luna/misc/log.hpp>
 #include <std/linked_list.hpp>
+#include <std/algorithm.hpp>
 
 constexpr uint64_t femto_per_milli = 1'000'000'000'000ull;
 constexpr uint64_t femto_per_micro = 1'000'000'000ull;
@@ -14,7 +15,7 @@ constexpr uint64_t femto_per_nano = 1'000'000ull;
 
 static constinit IrqTicketLock lock;
 static constinit std::linked_list<hpet::Device> devices;
-static constinit std::vector<hpet::Comparator*> comparators;
+static constinit std::vector<std::pair<hpet::Comparator*, bool>> periodic_comparators, oneshot_comparators; // Pointer, is_allocated
 
 void hpet::init() {
     acpi::Hpet* table = nullptr;
@@ -80,12 +81,15 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
                 auto& comparator = *(hpet::Comparator*)userptr;
                 auto& self = *comparator._device;
 
-                std::lock_guard guard{comparator.lock};
+                comparator.lock.lock();
 
-                if(!comparator.f)
+                if(!comparator.f) {
+                    comparator.lock.unlock();
                     return;
+                }
 
-                comparator.f(comparator.userptr);
+                auto f = comparator.f;
+                auto usrptr = comparator.userptr;
                         
                 if(!comparator.is_periodic) { // If One-shot make sure the IRQ doesn't happen again
                     self.regs->comparators[comparator._i].cmd &= ~(1 << 2);
@@ -93,6 +97,9 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
                     comparator.userptr = nullptr;
                     comparator.f = nullptr;
                 }
+                comparator.lock.unlock();
+
+                f(usrptr);
             }, .is_irq = true, .should_iret = true, .userptr = &timer});
 
             pci::msi::Address addr{};
@@ -123,12 +130,16 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
 
                     for(size_t i = 0; i < self.n_comparators; i++) {
                         if(irq & (1 << i)) {
-                            std::lock_guard guard{self.comparators[i].lock};
-
-                            if(!self.comparators[i].f)
+                            auto& lock = self.comparators[i].lock;
+                            lock.lock();
+                            
+                            if(!self.comparators[i].f) {
+                                lock.unlock();
                                 return;
+                            }
 
-                            self.comparators[i].f(self.comparators[i].userptr);
+                            auto f = self.comparators[i].f;
+                            auto usrptr = self.comparators[i].userptr;
                         
                             if(!self.comparators[i].is_periodic) { // If One-shot make sure the IRQ doesn't happen again
                                 self.regs->comparators[i].cmd &= ~(1 << 2);
@@ -137,6 +148,9 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
                                 self.comparators[i].f = nullptr;
                             }
                             self.regs->irq_status = (1 << i); // Clear IRQ status
+
+                            lock.unlock();
+                            f(usrptr);
                         }
                     }
                 }, .is_irq = true, .should_iret = true, .userptr = this});
@@ -152,7 +166,10 @@ hpet::Device::Device(acpi::Hpet* table): table{table} {
             ASSERT(((regs->comparators[i].cmd >> 9) & 0x1F) == gsi); // If GSI was successfully set the read value should equal the written value
         }
 
-        ::comparators.push_back(&comparators[i]);
+        if(comparators[i].supports_periodic)
+            periodic_comparators.emplace_back(&comparators[i], false); // false => Not allocated yet
+        else
+            oneshot_comparators.emplace_back(&comparators[i], false);
     }
 
     start_timer();
@@ -169,7 +186,7 @@ uint64_t hpet::Device::time_ns() {
     return (regs->main_counter * period) / femto_per_nano;
 }
 
-bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), void* userptr) {
+bool hpet::Comparator::start_timer(bool periodic, const TimePoint& period, void(*f)(void*), void* userptr) {
     std::lock_guard guard{lock};
 
     if(!supports_periodic && periodic)
@@ -178,17 +195,16 @@ bool hpet::Comparator::start_timer(bool periodic, uint64_t ns, void(*f)(void*), 
     if(this->f)
         return false;
 
-    _device->stop_timer();
+    auto delta = (period.ns() * femto_per_nano) / _device->period; // Order of multiplication alone does matter here due to integer division
+    auto& reg = _device->regs->comparators[this->_i];
+    reg.cmd &= ~((1 << 6) | (1 << 3) | (1 << 2));
+    _device->regs->irq_status = (1 << this->_i);
 
     this->f = f;
     this->userptr = userptr;
     this->is_periodic = periodic;
 
-    auto& reg = _device->regs->comparators[this->_i];
-    reg.cmd &= ~((1 << 6) | (1 << 3) | (1 << 2));
-    _device->regs->irq_status = (1 << this->_i);
-
-    auto delta = (ns * femto_per_nano) / _device->period; // Order of multiplication alone does matter here due to integer division
+    _device->stop_timer();
 
     if(periodic) {
         reg.cmd |= (1 << 6) | (1 << 3) | (1 << 2);
@@ -214,20 +230,22 @@ void hpet::Comparator::cancel_timer() {
 void hpet::poll_sleep(const TimePoint& duration) { devices.front().poll_sleep(duration); }
 uint64_t hpet::time_ns() { return devices.front().time_ns(); }
 
-std::optional<uint32_t> hpet::start_timer_ms(bool periodic, uint64_t ms, void(*f)(void*), void* userptr) { return start_timer_ns(periodic, ms * 1'000'000, f, userptr); }
-std::optional<uint32_t> hpet::start_timer_ns(bool periodic, uint64_t ns, void(*f)(void*), void* userptr) {
+hpet::Comparator* hpet::allocate_comparator(bool require_periodic) {
     std::lock_guard guard{lock};
-    
-    for(size_t i = 0; i < comparators.size(); i++) {
-        if(comparators[i]->start_timer(periodic, ns, f, userptr))
-            return i;
+
+    if(!require_periodic) {
+        auto it = std::find_if(oneshot_comparators.begin(), oneshot_comparators.end(), [](const auto& item) { return !item.second; });
+        if(it != oneshot_comparators.end()) {
+            it->second = true;
+            return it->first;
+        }
     }
 
-    return std::nullopt;
-}
+    auto it = std::find_if(periodic_comparators.begin(), periodic_comparators.end(), [](const auto& item) { return !item.second; });
+    if(it != periodic_comparators.end()) {
+        it->second = true;
+        return it->first;
+    }
 
-void hpet::cancel_timer(uint32_t i) { 
-    std::lock_guard guard{lock};
-    
-    comparators[i]->cancel_timer(); 
+    return nullptr;
 }
