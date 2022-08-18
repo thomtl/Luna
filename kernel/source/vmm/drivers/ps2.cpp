@@ -296,6 +296,12 @@ void Driver::port_send(Port& port) {
             push_obf(0xFA); // Ack
             inject_irq(port);
             break;
+        case 0xF6: // Set default parameters
+            // TODO: Set typematic rate 10.9cps, delay 500ms
+            port.scancode_set = 2;
+            push_obf(0xFA);
+            inject_irq(port);
+            break;
         case 0xF5: // Disable Scanning
             port.scanning = false;
 
