@@ -352,7 +352,6 @@ bool vmx::Vm::run() {
             write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) | (uint64_t)ProcBasedControls::IRQWindowExiting);
 
         if(irq_dev->read_irq_pin() && (read(guest_rflags) & (1 << 9))) {
-            write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) & ~(uint64_t)ProcBasedControls::IRQWindowExiting);
             auto vector = irq_dev->read_irq_vector();
 
             inject_int(vm::AbstractVm::InjectType::ExtInt, vector, false);
@@ -446,7 +445,9 @@ bool vmx::Vm::run() {
             // CPU does not acknowledge the interrupt, so it should have occurred just after the sti
             continue;
         } else if(basic_reason == VMExitReasons::IRQWindow) {
-            // Will be handled at top of loop
+            write(proc_based_vm_exec_controls, read(proc_based_vm_exec_controls) & ~(uint64_t)ProcBasedControls::IRQWindowExiting);
+
+            // IRQ Injection will be handled at top of loop
             continue;
         } else if(basic_reason == VMExitReasons::TripleFault) {
             print("vmx: Guest Triple Fault\n");
