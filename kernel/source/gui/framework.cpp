@@ -18,6 +18,7 @@ void gui::draw::text(gui::NonOwningCanvas& canvas, Vec2i pos, const char* text, 
     if(align == TextAlign::Center)
         pos.x -= (size * font::width) / 2;
 
-    for(size_t i = 0; i < size; i++)
-        canvas.put_char(pos + Vec2i{(int32_t)(8 * i), 0}, text[i], fg, bg);
+    int32_t limit = min(canvas.size.x, pos.x + size * 8);
+    for(int32_t x_off = pos.x; x_off < limit; x_off += 8)
+        canvas.put_char({x_off, pos.y}, *text++, fg, bg);
 }

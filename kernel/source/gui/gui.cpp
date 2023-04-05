@@ -225,7 +225,7 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
 
         Rect top_bar{rect.pos - Vec2i{decoration_side_width, decoration_top_width}, Vec2i{rect.size.x + 2 * decoration_side_width, decoration_top_width}};
         draw::rect(fb_canvas, top_bar, decoration_colour); // Top bar
-        draw::text(fb_canvas, rect.pos - Vec2i{decoration_side_width, decoration_top_width - 1} + Vec2i{rect.size.x / 2, 0}, window->get_title(), Colour{0, 0, 0}, decoration_colour, draw::TextAlign::Center);
+        draw::text(fb_canvas, rect.pos - Vec2i{decoration_side_width, decoration_top_width - 1} + Vec2i{absolute_rect.size.x / 2, 0}, window->get_title(), Colour{0, 0, 0}, decoration_colour, draw::TextAlign::Center);
 
         // Actually blit screen
         fb_canvas.blit_noalpha(rect.pos, {0, 0}, rect.size, window->get_canvas());
@@ -242,7 +242,7 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
 }
 
 
-static Desktop* desktop;
+static constinit Desktop* desktop = nullptr;
 
 void gui::init() {
     auto& gpu = gpu::get_gpu();

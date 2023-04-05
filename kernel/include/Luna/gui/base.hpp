@@ -142,13 +142,15 @@ namespace gui {
 
         [[gnu::always_inline]]
         inline void put_char(const Vec2i& c, const char v, Colour fg, Colour bg) {
+            auto y_cutoff = min(font::width, size.x - c.x); // Partially draw the character if it is cutoff before the end of the scanline
+
             auto* line = fb.data() + c.y * pitch + c.x;
 
             auto dc = (v >= 32) ? v : 127;
             for(uint8_t i = 0; i < font::height; i++) {
                 auto* dest = line;
                 auto bits = font::bitmap[(dc - 32) * font::height + i];
-                for(uint8_t j = 0; j < font::width; j++) {
+                for(uint8_t j = 0; j < y_cutoff; j++) {
                     auto bit = (1 << ((font::width - 1) - j));
                     dest->raw = (bits & bit) ? (fg.a == 255 ? fg.raw : dest->raw) : (bg.a == 255 ? bg.raw : dest->raw);
                     dest++;
