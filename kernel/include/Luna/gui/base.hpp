@@ -142,7 +142,7 @@ namespace gui {
 
         [[gnu::always_inline]]
         inline void put_char(const Vec2i& c, const char v, Colour fg, Colour bg) {
-            auto y_cutoff = min(font::width, size.x - c.x); // Partially draw the character if it is cutoff before the end of the scanline
+            auto y_cutoff = min((int64_t)font::width, size.x - c.x); // Partially draw the character if it is cutoff before the end of the scanline
 
             auto* line = fb.data() + c.y * pitch + c.x;
 

@@ -1,7 +1,7 @@
 #include <Luna/misc/font.hpp>
 
-constinit uint8_t font::width = 8;
-constinit uint8_t font::height = 16;
+constinit int32_t font::width = 8;
+constinit int32_t font::height = 16;
 
 // Same data as the Linux kernel uses, extracted from the PC VGA font.
 constinit uint8_t font::bitmap[] = {
