@@ -182,18 +182,13 @@ bool svm::Vm::run() {
 
             vmcb->v_intr_vector = 0;
             vmcb->v_intr_priority = 0xF;
-            //vmcb->v_ignore_tpr = 1;
+            vmcb->v_ignore_tpr = 1;
             vmcb->v_irq = 1;
         }
 
         if(irq_dev->read_irq_pin() && (vmcb->rflags & (1 << 9))) {
             auto v = irq_dev->read_irq_vector();
             inject_int(vm::AbstractVm::InjectType::ExtInt, v);
-
-            if(vmcb->v_irq) {
-                vmcb->v_irq = 0;
-                vmcb->icept_vintr = false;
-            }
         }
 
         asm("clgi");
@@ -266,7 +261,11 @@ bool svm::Vm::run() {
             continue;
 
         case 0x64: // vINTR
-            DEBUG_ASSERT(vmcb->icept_vintr);
+            DEBUG_ASSERT(vmcb->icept_vintr && vmcb->v_irq);
+
+            vmcb->v_irq = 0;
+            vmcb->v_ignore_tpr = 0;
+            vmcb->icept_vintr = false;
             continue;
 
         case 0x72: { // CPUID
