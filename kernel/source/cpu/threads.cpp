@@ -54,15 +54,22 @@ threading::Thread* this_thread() {
     return get_cpu().current_thread;
 }
 
-void await(threading::Event* event) {   
-    if(event->is_triggered())
-        return;
-
+void await(threading::Event* event) {
     auto* old = this_thread();
     old->lock.lock();
+    event->lock.lock();
+
+    if(event->is_triggered()) {
+        event->lock.unlock();
+        old->lock.unlock();
+
+        return;
+    }
 
     old->state = threading::ThreadState::Blocked;
+    
     event->add_to_waiters(old);
+    event->lock.unlock();
 
     old->lock.saved_if = false;
     old->lock.unlock();

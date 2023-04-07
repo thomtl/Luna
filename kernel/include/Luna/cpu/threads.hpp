@@ -73,6 +73,7 @@ namespace threading {
         } cpu_pin;
     };
 
+    // Do not use this struct or API directly, use Promise<T>
     struct Event {
         constexpr Event(): value(0), waiter(nullptr) {}
 
@@ -95,13 +96,10 @@ namespace threading {
         }
 
         void add_to_waiters(Thread* thread) {
-            std::lock_guard guard{lock};
-
             ASSERT(!waiter);
             waiter = thread;
         }
 
-        private:
         IrqTicketLock lock;
         uint64_t value;
 
