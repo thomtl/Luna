@@ -34,27 +34,34 @@ namespace timer {
         }
 
         void setup(const TimePoint& period, bool periodic) {
-            std::lock_guard guard{_lock};
+            {
+                std::lock_guard guard{_lock};
 
-            if(_is_queued) {
-                dequeue_event(this);
-                _is_queued = false;
-            }
+                if(_is_queued) {
+                    dequeue_event(this);
+                    _is_queued = false;
+                }
 
-            _period = period;
-            _periodic = periodic;
+                _period = period;
+                _periodic = periodic;
             
+                _is_queued = true;
+            }
             queue_event(this);
-            _is_queued = true;
         }
 
         void start() {
-            std::lock_guard guard{_lock};
+            _lock.lock();
 
             if(!_is_queued) {
-                queue_event(this);
                 _is_queued = true;
+                _lock.unlock();
+                queue_event(this);
+
+                return;
             }
+
+            _lock.unlock();
         }
         
         void stop() {
@@ -68,6 +75,8 @@ namespace timer {
 
         void complete() {
             std::lock_guard guard{_lock};
+
+            DEBUG_ASSERT(_is_queued);
 
             _f(_userptr);
 
