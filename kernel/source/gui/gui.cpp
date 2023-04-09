@@ -152,7 +152,7 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
         }
     }
 
-    for(auto it = windows.begin(); it != windows.end(); ++it) {
+    for(auto it = windows.rbegin(); it != windows.rend(); ++it) {
         auto* window = *it;
         auto rect = window->get_rect();
         Rect top_bar{rect.pos - Vec2i{decoration_side_width, decoration_top_width}, Vec2i{rect.size.x + 2 * decoration_side_width, decoration_top_width}};
