@@ -172,11 +172,13 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
             windows.erase(it);
             windows.push_back(window);
 
-            if(focused_window)
-                focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Unfocus, .none = {}});
+            if(focused_window != window) {
+                if(focused_window)
+                    focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Unfocus, .none = {}});
 
-            focused_window = window;
-            focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Focus, .none = {}});
+                focused_window = window;
+                focused_window->send_event(WindowEvent{.type = WindowEvent::Type::Focus, .none = {}});
+            }
 
             break; // Iterators invalidated
         }
@@ -209,8 +211,15 @@ void gui::Desktop::redraw_desktop(bool mouse_click) {
             rect = Rect{clipped_pos, clipped_size};
         }
 
-        if(is_focussed && rect.collides_with(mouse.pos))
+        if(is_focussed && rect.collides_with(mouse.pos)) {
+            mouse_has_left_window = false;
             window->send_event(WindowEvent{.type = WindowEvent::Type::MouseOver, .mouse = {.pos = mouse.pos - rect.pos}});
+        }
+
+        if(is_focussed && !rect.collides_with(mouse.pos) && !mouse_has_left_window) {
+            window->send_event(WindowEvent{.type = WindowEvent::Type::MouseExit, .none = {}});
+            mouse_has_left_window = true;
+        }
 
         if(is_focussed && mouse_click)
             window->send_event(WindowEvent{.type = WindowEvent::Type::MouseClick, .none = {}});

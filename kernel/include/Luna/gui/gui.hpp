@@ -50,7 +50,7 @@ namespace gui {
     };
 
     struct WindowEvent {
-        enum class Type { Focus, Unfocus, MouseOver, MouseClick, KeyboardOp };
+        enum class Type { Focus, Unfocus, MouseOver, MouseExit, MouseClick, KeyboardOp };
         Type type;
         union {
             struct {
@@ -131,6 +131,9 @@ namespace gui {
                         case MouseOver:
                             handle_mouse_over(event.mouse.pos);
                             break;
+                        case MouseExit:
+                            handle_mouse_exit();
+                            break;
                         case MouseClick:
                             handle_mouse_click();
                             break;
@@ -152,6 +155,7 @@ namespace gui {
 
         virtual void handle_unfocus() override { root->mouse_exit(); }
         virtual void handle_mouse_over(const Vec2i& pos) override { root->mouse_over(pos); }
+        virtual void handle_mouse_exit() override { root->mouse_exit(); }
         virtual void handle_mouse_click() override { root->mouse_click(); }
 
         protected:
@@ -189,6 +193,7 @@ namespace gui {
         IrqTicketLock compositor_lock;
         std::vector<RawWindow*> windows;
         RawWindow* focused_window;
+        bool mouse_has_left_window;
 
         Image background, cursor;
 

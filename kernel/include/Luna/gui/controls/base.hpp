@@ -90,6 +90,7 @@ namespace gui::controls {
                     }
 
                     last_mouse_over = item;
+                    last_mouse_extent = extent;
                     break;
                 }
             }
