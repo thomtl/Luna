@@ -19,8 +19,6 @@ constinit static RunQueue queue1, queue2;
 constinit static RunQueue* active_ptr = &queue1, *expired_ptr = &queue2;
 constinit static std::lazy_initializer<std::unordered_map<uint32_t, RunQueue>> per_cpu_queue;
 
-static void idle();
-
 static void rearm_preemption() {
     get_cpu().lapic.start_timer(threading::quantum_irq_vector, threading::quantum_time, lapic::regs::LapicTimerModes::OneShot);
 }
@@ -155,26 +153,7 @@ threading::Thread* spawn(void (*f)(void*), void* arg) {
     return thread;
 }
 
-static void idle() {
-    auto idle_epilogue = +[] {
-        // It is possible that another IRQ arrives that won't reschedule us
-        // TODO: In that case should we force reschedule?
-        while(1)
-            asm("sti\r\nhlt");
-
-        __builtin_trap();
-    };
-
-    asm volatile(
-            "mov %[new_stack], %%rsp\n"
-            "xor %%rbp, %%rbp\n"
-            "call *%[func]" 
-            : : [new_stack] "r"(get_cpu().thread_kill_stack->top()), [func] "r"(idle_epilogue) : "memory");
-
-    __builtin_trap();
-}
-
-static void quantum_irq_handler(uint8_t, idt::Regs* regs, void*) {
+static void quantum_irq_schedule(const idt::Regs* regs) {
     auto entry_time = tsc::time_ns();
 
     auto& cpu = get_cpu();
@@ -203,28 +182,49 @@ static void quantum_irq_handler(uint8_t, idt::Regs* regs, void*) {
         cpu.lapic.eoi();
 
         rearm_preemption();
-        idle();
+        
+        // We're already on a different stack, so this is ok
+        while(1)
+            asm("sti\r\nhlt");
 
-        __builtin_trap();
+        PANIC("Unreachable");
     }
 
-    std::lock_guard guard{next->lock};
+    next->lock.lock();
 
     next->state = threading::ThreadState::Running;
     next->running_on_cpu = &cpu;
-    next->ctx.restore(regs);
     cpu.current_thread = next;
 
     if(next->apc_queue.size() > 0) {
-        next->apc_real_ret = regs->rip;
+        next->apc_real_ret = next->ctx.rip;
 
-        regs->rip = (uint64_t)threading::thread_apc_trampoline;
-        regs->rflags &= ~(1 << 9);
+        next->ctx.rip = (uint64_t)threading::thread_apc_trampoline;
+        next->ctx.rflags &= ~(1 << 9); // APC trampoline will renable interrupts
     }
 
     rearm_preemption();
 
     next->cpu_time_at_scheduled_in = tsc::time_ns();
+
+    next->lock.unlock();
+
+    cpu.lapic.eoi();
+
+    thread_invoke(&next->ctx);
+
+    PANIC("Unreachable");
+}
+
+static void quantum_irq_handler(uint8_t, idt::Regs* regs, void*) {
+    // Switch to clean stack to avoid using the old thread's stack while there is a chance it might be scheduled in again
+    asm volatile(
+            "mov %[new_stack], %%rsp\n"
+            "xor %%rbp, %%rbp\n"
+            "call *%[func]" 
+            : : [new_stack] "r"(get_cpu().thread_kill_stack->top()), [regs] "D"((uint64_t)regs), [func] "r"(quantum_irq_schedule): "memory");
+
+    PANIC("Unreachable");
 }
 
 void threading::start_on_cpu() {

@@ -88,6 +88,8 @@ namespace threading {
         }
 
         void reset() {
+            std::lock_guard guard{lock};
+
             __atomic_store_n(&value, 0, __ATOMIC_SEQ_CST);
         }
 
@@ -96,7 +98,13 @@ namespace threading {
         }
 
         void add_to_waiters(Thread* thread) {
-            ASSERT(!waiter);
+            //ASSERT(!waiter);
+            // TODO: Some weird bug is causing this very rarely
+            if(waiter) {
+                print("Waiter check failed, Corrupt value = {:#x}, Attempted value to set = {:#x}\n", (void*)waiter, (void*)thread);
+                PANIC("Waiter check failed");
+            }
+            
             waiter = thread;
         }
 
