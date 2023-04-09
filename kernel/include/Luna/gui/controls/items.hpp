@@ -204,18 +204,21 @@ namespace gui::controls {
         Colour fg, bg;
     };
 
-    /*struct Space final : public Control {
-        constexpr Space() = default;
+    struct Spacing final : public Control {
+        constexpr Spacing(): size{0, 0}, colour{0, 0, 0} {}
+        constexpr Spacing(const Vec2i& size, const Colour& colour = {0, 0, 0}): size{size}, colour{colour} {}
 
-        Space(const Vec2i& space): space{space} { }
+        Vec2i preferred_size() const override { return size; }
 
-        void resize(NonOwningCanvas) override { }
+        void resize(NonOwningCanvas canvas) override {
+            DEBUG_ASSERT(canvas.size == size);
+            DEBUG_ASSERT(canvas.fb.data());
 
-        Vec2i preferred_size() const override {
-            return space;
+            draw::rect(canvas, {{0, 0}, size}, colour);
         }
 
         private:
-        Vec2i space;
-    };*/
+        Vec2i size;
+        Colour colour;
+    };
 } // namespace gui::controls
