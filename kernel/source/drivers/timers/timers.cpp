@@ -70,16 +70,33 @@ static void queue_event_(timer::Timer* event) {
 void timer::queue_event(timer::Timer* event) {
     std::lock_guard guard{lock};
 
-    event->current_deadline = hpet::time_ns() + event->period().ns();
-    queue_event_(event);
+    {
+        std::lock_guard node_guard{event->_lock};
+        if(event->_is_queued)
+            return;
+        
+        event->current_deadline = hpet::time_ns() + event->period().ns();
+        queue_event_(event);
+
+        event->_is_queued = true;
+    }
+
 
     handle_events();
 }
 
 void timer::dequeue_event(Timer* timer) {
     std::lock_guard guard{lock};
+    
+    {
+        std::lock_guard node_guard{timer->_lock};
+        if(!timer->_is_queued)
+            return;
 
-    queue.erase(timer);
+        queue.erase(timer);
+        timer->_is_queued = false;
+    }
+
     handle_events();
 }
 

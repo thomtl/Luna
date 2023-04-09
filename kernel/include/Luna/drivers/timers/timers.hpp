@@ -34,43 +34,24 @@ namespace timer {
         }
 
         void setup(const TimePoint& period, bool periodic) {
+            dequeue_event(this);
+
             {
                 std::lock_guard guard{_lock};
 
-                if(_is_queued) {
-                    dequeue_event(this);
-                    _is_queued = false;
-                }
-
                 _period = period;
                 _periodic = periodic;
-            
-                _is_queued = true;
             }
+            
             queue_event(this);
         }
 
         void start() {
-            _lock.lock();
-
-            if(!_is_queued) {
-                _is_queued = true;
-                _lock.unlock();
-                queue_event(this);
-
-                return;
-            }
-
-            _lock.unlock();
+            queue_event(this);
         }
         
         void stop() {
-            std::lock_guard guard{_lock};
-
-            if(_is_queued) {
-                dequeue_event(this); 
-                _is_queued = false;
-            }
+            dequeue_event(this);
         }
 
         void complete() {
@@ -90,6 +71,9 @@ namespace timer {
         
 
         private:
+        friend void queue_event(Timer* timer);
+        friend void dequeue_event(Timer* timer);
+
         IrqTicketLock _lock;
 
         TimePoint _period;
