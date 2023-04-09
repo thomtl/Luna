@@ -56,9 +56,9 @@ namespace gui::controls {
         NonOwningCanvas canvas;
     };
         
-    struct Button final : public Control {
-        Button() = default;
-        Button(const Image& unclicked, const Image& hover, void (*f)(void*), void* userptr): fn{f}, userptr{userptr}, state{State::Undrawn} {
+    struct ImageButton final : public Control {
+        ImageButton() = default;
+        ImageButton(const Image& unclicked, const Image& hover, void (*f)(void*), void* userptr): fn{f}, userptr{userptr}, state{State::Undrawn} {
             this->unclicked_glyph = unclicked;
             this->hover_glyph = hover;
 
@@ -104,6 +104,67 @@ namespace gui::controls {
 
         Image unclicked_glyph, hover_glyph;
         Vec2i res;
+
+        void (*fn)(void*);
+        void* userptr;
+
+        State state;
+
+        NonOwningCanvas canvas;
+    };
+
+    struct TextButton final : public Control {
+        TextButton() = default;
+        TextButton(Vec2i size, const char* text, Colour bg_unclicked, Colour bg_hover, Colour fg_unclicked, Colour fg_hover, void (*f)(void*), void* userptr): bg_unclicked{bg_unclicked}, bg_hover{bg_hover}, fg_unclicked{fg_unclicked}, fg_hover{fg_hover}, size{size}, text{text}, fn{f}, userptr{userptr}, state{State::Undrawn} {
+            text_offset = {(int32_t)(size.x - (strlen(text) * font::width)) / 2, (size.y - font::height) / 2};
+        }
+
+        void resize(NonOwningCanvas canvas) override {
+            this->canvas = canvas;
+
+            ASSERT(canvas.size == size);
+
+            update(State::Unclicked);
+        }
+
+        Vec2i preferred_size() const override { return size; }
+
+        void mouse_over(const Vec2i&) override {
+            static int i = 0;
+            print("Over{}\n", i++);
+            update(State::Hover);
+        }
+
+        void mouse_exit() override {
+            static int i = 0;
+            print("Under{}\n",i++);
+            update(State::Unclicked);
+        }
+
+        void mouse_click() override {
+            fn(userptr);
+        }
+
+        private:
+        enum class State { Undrawn, Hover, Unclicked };
+
+        void update(State new_state) {
+            if(new_state != state) {
+                state = new_state;
+
+                Colour bg = (state == State::Hover) ? bg_hover : bg_unclicked;
+                Colour fg = (state == State::Hover) ? fg_hover : fg_unclicked;
+
+                draw::rect(canvas, {{0, 0}, size}, bg);
+                draw::text(canvas, text_offset, text, fg, bg);
+            }
+        }
+
+        Colour bg_unclicked, bg_hover;
+        Colour fg_unclicked, fg_hover;
+        Vec2i text_offset, size;
+
+        const char* text;
 
         void (*fn)(void*);
         void* userptr;
