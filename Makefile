@@ -14,8 +14,8 @@ configure:
 	make -C build/seabios -j8 PYTHON=python2
 
 	dd if=/dev/zero of=luna.hdd bs=4M count=32
-	parted -s luna.hdd mklabel msdos
-	parted -s luna.hdd mkpart primary 2048s 100%
+	/usr/sbin/parted -s luna.hdd mklabel msdos
+	/usr/sbin/parted -s luna.hdd mkpart primary 2048s 100%
 
 	./build/limine/limine-deploy luna.hdd
 
