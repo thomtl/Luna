@@ -14,8 +14,8 @@ namespace e9 {
             pio::outb(port_addr, c);
         }
 
-        void puts(const char* str) {
-            while(*str)
+        void puts(const char* str, size_t len) {
+            for(size_t i = 0; i < len; i++)
                 pio::outb(port_addr, *str++);
         }
     };

@@ -40,7 +40,7 @@ namespace gui {
             return *this;
         }
 
-        bool operator==(const Vec& b) {
+        bool operator==(const Vec& b) const {
             return (x == b.x) && (y == b.y);
         }
 
