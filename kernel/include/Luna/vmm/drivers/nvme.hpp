@@ -121,6 +121,17 @@ namespace vm::nvme {
         } lbaf[16];
     };
 
+    struct [[gnu::packed]] NVMSpecificIdentifyCNS06hCSI00h {
+        uint8_t vsl;
+        uint8_t wzsl;
+        uint8_t wusl;
+        uint8_t dmrl;
+        uint32_t dmrsl;
+        uint64_t dmsl;
+        uint8_t reserved[4096 - 16];
+    };
+    static_assert(sizeof(NVMSpecificIdentifyCNS06hCSI00h) == 4096);
+
     struct Driver : vm::pci::PCIDriver, public vm::AbstractMMIODriver {
         Driver(Vm* vm, pci::HostBridge* bridge, uint8_t slot, uint8_t func, vfs::File* file);
 

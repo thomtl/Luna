@@ -291,6 +291,7 @@ void Driver::cq_push(uint16_t qid, CompletionEntry entry) {
 
 bool Driver::handle_admin_identify(const SubmissionEntry& cmd) {
     auto cns = cmd.cmd_data[0] & 0xFF;
+    auto csi = (cmd.cmd_data[1] >> 24) & 0xFF;
 
     if(cns == 0) {
         if(cmd.nsid != 1)
@@ -342,6 +343,16 @@ bool Driver::handle_admin_identify(const SubmissionEntry& cmd) {
         memcpy(buf + 4, uuid.span().data(), uuid.span().size_bytes());
 
         vm->cpus[0].dma_write(cmd.prp0, {(uint8_t*)buf, 20 * sizeof(uint8_t)});
+    } else if(cns == 0x6 && csi == 0x0) {
+        NVMSpecificIdentifyCNS06hCSI00h data{};
+        data.vsl = 0; // Do not support Verify command
+        data.wzsl = 0; // Do not support WriteZeroes command
+        data.wusl = 0; // Do not support WriteUncorrectable command
+        data.dmrl = 0; // Do not support Dataset Management command
+        data.dmrsl = 0; // ^
+        data.dmsl = 0; // ^
+
+        vm->cpus[0].dma_write(cmd.prp0, {(uint8_t*)&data, sizeof(data)});
     } else {
         print("nvme: Identify Unknown CNS {}\n", cns);
         return false;
