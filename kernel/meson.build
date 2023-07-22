@@ -64,6 +64,7 @@ main_sources = files(
 
     'source/fs/echfs.cpp',
     'source/fs/fs.cpp',
+    'source/fs/gpt.cpp',
     'source/fs/mbr.cpp',
     'source/fs/storage_dev.cpp',
     'source/fs/vfs.cpp',

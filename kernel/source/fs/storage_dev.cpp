@@ -1,6 +1,7 @@
 #include <Luna/fs/storage_dev.hpp>
 
 #include <Luna/fs/mbr.hpp>
+#include <Luna/fs/gpt.hpp>
 
 #include <Luna/misc/log.hpp>
 
@@ -111,10 +112,11 @@ void storage_dev::register_device(const DriverDevice& driver) {
     devices.emplace_back(device);
 
 
+    // TODO: More robust detection?
     uint8_t magic[8] = {0};
     device->read(driver.sector_size, 8, magic); // LBA1
     if(strncmp((char*)magic, "EFI PART", 8) == 0)
-        print("disk: TODO: Implement GPT\n");
+        gpt::parse_gpt(*device);
     else
         mbr::parse_mbr(*device);
 }
