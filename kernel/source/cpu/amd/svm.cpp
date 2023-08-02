@@ -174,6 +174,8 @@ void svm::Vm::set(vm::VmCap cap, uint64_t value) {
 }
 
 bool svm::Vm::run() {
+    asm volatile("vmsave" : : "a"(host_save_vmcb_pa) : "memory");
+
     while(true) {
         ASSERT(vcpu->vm->irq_listeners.size() == 1); // TODO
         auto& irq_dev = vcpu->vm->irq_listeners[0];
@@ -193,9 +195,8 @@ bool svm::Vm::run() {
 
         asm("clgi");
 
-        asm volatile("vmsave" : : "a"(host_save_vmcb_pa) : "memory");
 
-        host_simd.store();
+        //host_simd.store();
         guest_simd.load();
 
         vcpu->adjust_guest_tsc(vcpu->host_tsc_at_vmexit - tsc::rdtsc()); // On first entry this will be 0 - tsc, so it will adjust the guest's TSC to 0
@@ -212,7 +213,7 @@ bool svm::Vm::run() {
         vcpu->time_spent_in_vm += tsc::time_ns_at(vcpu->host_tsc_at_vmexit - tsc_at_entry);
 
         guest_simd.store();
-        host_simd.load();
+        //host_simd.load();
 
         //auto& cpu_data = get_cpu();
         //cpu_data.tss_table.load(cpu_data.gdt_table.push_tss(&cpu_data.tss_table, cpu_data.tss_sel));
@@ -257,7 +258,8 @@ bool svm::Vm::run() {
             return false;
         }
         case 0x60: // External Interrupt
-            DEBUG_ASSERT(vmcb->icept_intr);
+            continue;
+        case 0x61: // NMI
             continue;
 
         case 0x64: // vINTR
@@ -345,13 +347,13 @@ bool svm::Vm::run() {
             exit.mmu.access.x = info.execute;
             exit.mmu.access.user = info.user;
 
-            auto page = static_cast<npt::Context*>(mm)->get_page(addr); // This downcast should be safe
+            /*auto page = static_cast<npt::Context*>(mm)->get_page(addr); // This downcast should be safe
 
             exit.mmu.page.present = info.present;
             exit.mmu.page.r = page.present;
             exit.mmu.page.w = page.writeable;
             exit.mmu.page.x = !page.no_execute;
-            exit.mmu.page.user = page.user;
+            exit.mmu.page.user = page.user;*/
 
             exit.mmu.gpa = addr;
             exit.mmu.reserved_bits_set = info.reserved_bit_set;
