@@ -8,12 +8,7 @@ namespace gui {
         FbWindow(Vec2i size, uint8_t* fb, const char* title, void (*key_handler)(void*, KeyOp, KeyCodes), void* userptr): RawWindow{size, title}, size{size}, fb{(uint32_t*)fb}, key_handler{key_handler}, userptr{userptr} { }
 
         void update() {
-            for(int64_t y = 0; y < size.y; y++) {
-                for(int64_t x = 0; x < size.x; x++) {
-                    auto off = y * canvas.size.x + x;
-                    canvas.fb[off] = Colour{fb[off], 255};
-                }
-            }
+            memcpy(canvas.fb.data(), fb, size.x * size.y * sizeof(uint32_t));
 
             request_redraw();
         }
