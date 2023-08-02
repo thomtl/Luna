@@ -6,6 +6,7 @@ main_sources = files(
 
     'source/cpu/amd/asid.cpp',
     'source/cpu/amd/npt.cpp',
+    'source/cpu/amd/pmc.cpp',
     'source/cpu/amd/svm.cpp',
 
     'source/cpu/intel/ept.cpp',

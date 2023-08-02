@@ -5,7 +5,7 @@
 
 #include <Luna/mm/vmm.hpp>
 
-uint64_t lapic::Lapic::read(uint32_t reg) {
+uint64_t lapic::Lapic::read(uint32_t reg) const {
     if(x2apic)
         return msr::read(msr::x2apic_base + (reg >> 4));
     else
@@ -84,4 +84,15 @@ void lapic::Lapic::calibrate_timer() {
     write(regs::lvt_timer, read(regs::lvt_timer) | (1 << 16)); // Set timer mask
 
     ticks_per_ms = (~0 - read(regs::timer_current_count)) / 10;
+}
+
+void lapic::Lapic::install_pmc_irq(bool nmi, uint8_t vector) {
+    uint32_t lvt = nmi ? (0b100 << 8) : (0b000 << 8) |
+                   (vector & 0xFF);
+
+    write(regs::lvt_pmc, lvt);
+}
+
+bool lapic::Lapic::pmc_irq_is_pending() const {
+    return (read(regs::lvt_pmc) >> 12) & 1;
 }

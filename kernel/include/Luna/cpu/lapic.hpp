@@ -22,6 +22,7 @@ namespace lapic
         constexpr uint64_t icr_low = 0x300;
         constexpr uint64_t icr_high = 0x310;
         constexpr uint64_t lvt_timer = 0x320;
+        constexpr uint64_t lvt_pmc = 0x340;
         constexpr uint64_t lvt_lint0 = 0x350;
         constexpr uint64_t lvt_lint1 = 0x360;
 
@@ -41,9 +42,11 @@ namespace lapic
         void eoi();
 
         void start_timer(uint8_t vector, uint64_t ms, regs::LapicTimerModes mode);
+        void install_pmc_irq(bool nmi, uint8_t vector = 0);
+        bool pmc_irq_is_pending() const;
 
         private:
-        uint64_t read(uint32_t reg);
+        uint64_t read(uint32_t reg) const;
         void write(uint32_t reg, uint64_t v);
 
         void calibrate_timer();

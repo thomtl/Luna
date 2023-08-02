@@ -65,6 +65,11 @@ struct CpuData {
         } vm;
 
         struct {
+            bool present;
+            CpuVendor vendor;
+        } pmc;
+
+        struct {
             uint8_t ept_levels;
             bool ept_dirty_accessed;
         } vmx;

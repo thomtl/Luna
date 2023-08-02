@@ -77,6 +77,22 @@ namespace msr {
     constexpr uint32_t gs_base = 0xC0000101;
     constexpr uint32_t kernel_gs_base = 0xC0000102;
 
+    // AMD PMC
+    constexpr uint32_t perf_evt_sel0 = 0xC001'0200;
+    constexpr uint32_t perf_evt_sel1 = 0xC001'0202;
+    constexpr uint32_t perf_evt_sel2 = 0xC001'0204;
+    constexpr uint32_t perf_evt_sel3 = 0xC001'0206;
+    constexpr uint32_t perf_evt_sel4 = 0xC001'0208;
+    constexpr uint32_t perf_evt_sel5 = 0xC001'020A;
+
+    constexpr uint32_t perf_ctr_0 = 0xC001'0201;
+    constexpr uint32_t perf_ctr_1 = 0xC001'0203;
+    constexpr uint32_t perf_ctr_2 = 0xC001'0205;
+    constexpr uint32_t perf_ctr_3 = 0xC001'0207;
+    constexpr uint32_t perf_ctr_4 = 0xC001'0209;
+    constexpr uint32_t perf_ctr_5 = 0xC001'0209;
+
+
     constexpr uint32_t syscfg = 0xC0010010;
 
     constexpr uint32_t vm_cr = 0xC0010114;

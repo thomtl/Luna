@@ -2,6 +2,8 @@
 #include <Luna/cpu/regs.hpp>
 #include <cpuid.h>
 
+#include <Luna/cpu/amd/pmc.hpp>
+
 void CpuData::set() {
     self = this;
     msr::write(msr::gs_base, (uint64_t)&self);
@@ -81,6 +83,8 @@ void cpu::init() {
 
         ASSERT(cpu_data.cpu.cache.flush);
     }
+
+    amd_pmc::init();
 }
 
 void cpu::cache_flush(void* addr, size_t size) {
