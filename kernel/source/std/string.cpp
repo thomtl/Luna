@@ -22,10 +22,12 @@ extern "C" int strncmp(const char* s1, const char* s2, size_t n) {
 }
 
 extern "C" void* memset(void* s, int c, size_t n) {
-    uint8_t* buf = (uint8_t*)s;
+    /*uint8_t* buf = (uint8_t*)s;
 
     for(size_t i = 0; i < n; i++)
-        buf[i] = (uint8_t)c;
+        buf[i] = (uint8_t)c;*/
+
+    asm ("rep stosb" : "+c"(n), "+D"(s) : "a"(c) : "memory");
 
     return s;
 }
@@ -45,11 +47,13 @@ extern "C" int memcmp(const void* s1, const void* s2, size_t n) {
 }
 
 extern "C" void* memcpy(void* dst, const void* src, size_t n) {
-    uint8_t* _dst = (uint8_t*)dst;
+    /*uint8_t* _dst = (uint8_t*)dst;
     const uint8_t* _src = (const uint8_t*)src;
 
     for(size_t i = 0; i < n; i++)
-        _dst[i] = _src[i];
+        _dst[i] = _src[i];*/
+    
+    asm ("rep movsb" : "+c"(n), "+D"(dst), "+S"(src) : : "memory");
     
     return dst;
 }
